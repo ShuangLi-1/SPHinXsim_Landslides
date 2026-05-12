@@ -25,12 +25,54 @@ CI sets `SPHINXSIM_LLM_PROVIDER=mock` so the workflow never depends on an extern
 To exercise the mock and Ollama paths locally:
 
 ```bash
-source setup-local-env.sh
+# Test with mock LLM (no Ollama needed)
 pytest tests/test_ollama_llm.py -v
+
+# Test with live Ollama (requires Ollama running locally)
 pytest tests/test_ollama_llm_integration.py -v
+
+# Run end-to-end example with both mock and Ollama
 pytest examples/test_nlp_to_simulation.py -v
+
+# Or use the interactive shell with Ollama
+source setup-local-env.sh
+sphinxsim shell
+# Then issue commands like: generate "...", update "...", validate, run
 ```
 
 ## How CI behaves
 
 CI runs the mocked tests everywhere and skips the live Ollama cases automatically. This keeps the pipeline stable while still validating the example workflow and the Ollama adapter logic that does not require a live server.
+
+## Interactive shell with Ollama
+
+For interactive development, use the shell mode with Ollama:
+
+```bash
+source setup-local-env.sh  # Sets SPHINXSIM_LLM_PROVIDER=ollama and other vars
+sphinxsim shell
+```
+
+Inside the shell, you can generate and update configs using the live Ollama backend:
+
+```
+> generate "2D water dam break simulation"
+✓ Config generated and saved to config.json
+✓ Schema validation passed
+
+> validate
+Configuration: WaterBody (fluid) + WallBoundary (solid)
+  Domain: [0, 0] to [5.37, 5.37]
+  Resolution: 0.025 m
+  End time: 0.5 s
+
+> update "increase end time to 2 seconds"
+✓ Config updated and saved to config.json
+✓ Schema validation passed
+
+> run
+Building simulation...
+Running SPH simulation...
+```
+
+See [CLI Usage](cli-usage.md) for full shell command reference.

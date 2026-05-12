@@ -16,16 +16,29 @@ The project is designed around explicit simulation configuration rather than opa
 
 ## Core workflow
 
-The current user loop is:
+The recommended user workflow is to use the **interactive shell**:
 
-1. Describe a simulation in natural language.
-2. Generate a JSON config with `sphinxsim generate`.
-3. Refine an existing config with `sphinxsim update`.
-4. Validate structure and cross-field consistency with `sphinxsim validate`.
-5. Run the validated case with `sphinxsim run`.
-6. Iterate on geometry, materials, solver settings, and rerun.
+```bash
+sphinxsim shell
+```
 
-This keeps simulation inputs reproducible and reviewable while still allowing fast iteration through LLM assistance.
+Inside the shell, you can:
+
+1. **Generate** a simulation config from natural language: `generate "water dam break"`
+2. **Validate** the config structure: `validate`
+3. **Update** it with further instructions: `update "simulate for 2 s"`
+4. **Run** the validated simulation: `run`
+
+Each command auto-validates and auto-saves, so you always have a working config on disk.
+
+Alternatively, you can use direct commands for non-interactive workflows:
+
+- `sphinxsim generate` — Create a config from description
+- `sphinxsim update` — Modify an existing config
+- `sphinxsim validate` — Check config validity
+- `sphinxsim run` — Execute a validated simulation
+
+For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 
 ## High-level architecture
 

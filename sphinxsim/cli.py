@@ -40,6 +40,7 @@ original_dir = os.getcwd()
 # NOW import everything else
 import argparse
 import json
+import shlex
 from pathlib import Path
 from typing import Tuple
 
@@ -239,7 +240,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     try:
         sim = sph.SPHSimulation(validated_config_path)
-        
+
         # Create temp directory in project root, not relative to cwd
         output_dir = PROJECT_ROOT / ".build-temp" / "test_simulation"
         output_dir.mkdir(exist_ok=True, parents=True)
@@ -250,12 +251,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         print("✅ Simulation configuration loaded")
 
         sim.initializeSimulation()
-        print("✅ Simulation initialized")        
+        print("✅ Simulation initialized")
 
         # Run simulation
         print("\n🚀 Running simulation...")
         sim.run()
-        
+
         print("✅ Simulation completed successfully!")
         print(f"\n📊 Run summary:")
         configured_end_time = config.solver_parameters.end_time
@@ -269,13 +270,13 @@ def cmd_run(args: argparse.Namespace) -> int:
         else:
             first_body_name = "simulation"
         print(f"   Run config: {config_path}")
-        
+
         # Show output location
         safe_name = first_body_name.replace(' ', '_').replace('/', '_')[:50]
         output_dir = PROJECT_ROOT / ".build-temp" / "simulations" / safe_name
         print(f"\n📁 Simulation output saved to:")
         print(f"   {output_dir}")
-        
+
         return 0
 
     except RuntimeError as e:
@@ -308,6 +309,119 @@ def cmd_run(args: argparse.Namespace) -> int:
         except OSError:
             pass
         os.chdir(original_dir)
+
+
+def _shell_resolve_config_path(config_file: str) -> Path:
+    path = Path(config_file)
+    if not path.is_absolute():
+        path = PROJECT_ROOT / ".build-temp" / path
+    return path
+
+
+def _shell_auto_validate(config_path: Path) -> bool:
+    cfg, rc = _load_config(config_path)
+    if rc != 0 or cfg is None:
+        print("❌ Auto-validation failed", file=sys.stderr)
+        return False
+    print(f"✅ Auto-validation passed: {config_path}")
+    return True
+
+
+def cmd_shell(args: argparse.Namespace) -> int:
+    """Interactive shell for generate/update/validate/run workflow."""
+    config_path = _shell_resolve_config_path(args.config_file)
+    print("SPHinXsim interactive shell")
+    print(f"Config file: {config_path}")
+    print("Type: generate \"...\", update \"...\", validate, run, exit")
+
+    while True:
+        try:
+            line = input("sphinxsim> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print()
+            return 0
+
+        if not line:
+            continue
+
+        if line in {"exit", "quit"}:
+            return 0
+
+        if line == "help":
+            print("Commands:")
+            print("  generate \"DESCRIPTION\"")
+            print("  update \"INSTRUCTION\"")
+            print("  validate")
+            print("  run")
+            print("  exit")
+            continue
+
+        try:
+            parts = shlex.split(line)
+        except ValueError as exc:
+            print(f"Invalid command syntax: {exc}", file=sys.stderr)
+            continue
+
+        if not parts:
+            continue
+
+        cmd = parts[0]
+
+        if cmd == "generate":
+            description = " ".join(parts[1:]).strip()
+            if not description:
+                print("Usage: generate \"DESCRIPTION\"", file=sys.stderr)
+                continue
+            llm = get_llm()
+            try:
+                config = llm.generate(description)
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_text(config.model_dump_json(indent=2, exclude_none=True))
+                print(f"Config written to {config_path}")
+                _shell_auto_validate(config_path)
+            except (ValueError, ValidationError) as exc:
+                print(f"Error generating config: {exc}", file=sys.stderr)
+            except OSError as exc:
+                print(f"Error writing config to {config_path}: {exc}", file=sys.stderr)
+            continue
+
+        if cmd == "update":
+            instruction = " ".join(parts[1:]).strip()
+            if not instruction:
+                print("Usage: update \"INSTRUCTION\"", file=sys.stderr)
+                continue
+            current, rc = _load_config(config_path)
+            if rc != 0 or current is None:
+                print("No valid config found. Run generate first.", file=sys.stderr)
+                continue
+            llm = get_llm()
+            if not hasattr(llm, "update"):
+                print(
+                    "The selected LLM provider does not support config updates.",
+                    file=sys.stderr,
+                )
+                continue
+            try:
+                updated = llm.update(current, instruction)
+                config_path.parent.mkdir(parents=True, exist_ok=True)
+                config_path.write_text(updated.model_dump_json(indent=2, exclude_none=True))
+                print(f"Updated config written to {config_path}")
+                _shell_auto_validate(config_path)
+            except (ValueError, ValidationError) as exc:
+                print(f"Error updating config: {exc}", file=sys.stderr)
+            except OSError as exc:
+                print(f"Error writing config to {config_path}: {exc}", file=sys.stderr)
+            continue
+
+        if cmd == "validate":
+            _ = cmd_validate(argparse.Namespace(config_file=str(config_path)))
+            continue
+
+        if cmd == "run":
+            _ = cmd_run(argparse.Namespace(config_file=str(config_path)))
+            continue
+
+        print(f"Unknown command: {cmd}. Type 'help' for commands.", file=sys.stderr)
 
 # ---------------------------------------------------------------------------
 # Argument parser
@@ -361,6 +475,19 @@ def _build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="Run a simulation from a JSON config file.")
     run.add_argument("config_file", nargs='?', default="config.json", help="Path to JSON config file.")
     run.set_defaults(func=cmd_run)
+
+    # shell
+    shell = subparsers.add_parser(
+        "shell",
+        help="Interactive command loop with auto-save and auto-validate.",
+    )
+    shell.add_argument(
+        "--config",
+        dest="config_file",
+        default="config.json",
+        help="Config file used by interactive commands (default: config.json).",
+    )
+    shell.set_defaults(func=cmd_shell)
 
     return parser
 
