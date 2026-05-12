@@ -33,4 +33,7 @@ addopts = "-p no:cacheprovider"
 python_files = "test_*.py conftest.py"
 testpaths = ["tests"]
 tmp_path_retention_policy = "none"
+markers = [
+    "integration: integration tests requiring live services (skipped in CI and when services unavailable)",
+]
 

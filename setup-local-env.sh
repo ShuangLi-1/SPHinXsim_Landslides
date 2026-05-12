@@ -5,7 +5,9 @@
 export PYTHONDONTWRITEBYTECODE=1
 
 # Set LLM provider and API keys for local development
-export SPHINXSIM_LLM_PROVIDER=mock
+export SPHINXSIM_LLM_PROVIDER=ollama
+export OLLAMA_BASE_URL="${OLLAMA_BASE_URL:-http://localhost:11434}"
+export OLLAMA_MODEL="${OLLAMA_MODEL:-qwen2.5:3b}"
 
 # Set VCPKG_ROOT for local development
 export VCPKG_ROOT="$HOME/vcpkg"

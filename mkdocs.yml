@@ -1,5 +1,9 @@
 site_name: SPHinXsim
 
+nav:
+  - Home: index.md
+  - LLM Testing: llm-testing.md
+
 theme:
   name: material
   favicon: images/logo-16x16.ico

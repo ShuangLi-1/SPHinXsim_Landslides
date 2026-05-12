@@ -54,6 +54,15 @@ The repository remains config-first: natural-language generation is useful for i
 
 The codebase is positioned for richer multi-physics growth while staying strict about validation boundaries. In practice, that means expanding benchmark coverage, continuing to improve continuum and coupled workflows, and strengthening the path from prompt to executable, testable simulation assets.
 
+## LLM test matrix
+
+The repository now supports two LLM testing modes:
+
+- Mocked tests are always safe for CI and run without any external service.
+- Ollama integration tests run locally when Ollama is available and are skipped in CI.
+
+See [LLM testing](llm-testing.md) for the exact test matrix, environment variables, and local commands.
+
 ## Why this project matters
 
 SPHinXsys provides strong performance and physical modeling, but direct setup can be expensive for rapid iteration. SPHinXsim narrows that gap by combining:
