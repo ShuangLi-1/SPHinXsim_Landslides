@@ -452,17 +452,6 @@ class MockLLM:
 
         physics = _detect_physics(description)
         template = _apply_overrides(_TEMPLATES[physics], description)
-        if template.get("fluid_bodies"):
-            template["fluid_bodies"][0]["name"] = _extract_name(description)
-            template["geometries"]["shapes"][0]["name"] = template["fluid_bodies"][0]["name"]
-            if template.get("observers"):
-                template["observers"][0]["observed_body"] = template["fluid_bodies"][0]["name"]
-
-            # Keep particle-generation body list in sync with body name.
-            settings = template.get("particle_generation", {}).get("settings", {})
-            for body in settings.get("bodies", []):
-                if body.get("name") == "WaterBody":
-                    body["name"] = template["fluid_bodies"][0]["name"]
 
         return SimulationConfig(**template)
 
