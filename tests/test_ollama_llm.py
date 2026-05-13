@@ -202,7 +202,7 @@ class TestOllamaLLMUpdate:
         resp = _make_response(_mock_raw(_FLUID_CONFIG))
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
             self.llm.update(_FLUID_CONFIG, "simulate for 3 s")
-        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        body = json.loads(mock_open.call_args_list[0][0][0].data.decode("utf-8"))
         # The instruction is embedded in the system message; the user message is the raw config JSON.
         system_content = body["messages"][0]["content"]
         assert "simulate for 3 s" in system_content

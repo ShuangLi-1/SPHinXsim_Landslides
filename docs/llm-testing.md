@@ -37,7 +37,7 @@ pytest examples/test_nlp_to_simulation.py -v
 # Or use the interactive shell with Ollama
 source setup-local-env.sh
 sphinxsim shell
-# Then issue commands like: generate "...", update "...", validate, run
+# Then issue commands like: generate ..., update ..., explore ..., validate, run
 ```
 
 ## How CI behaves
@@ -70,9 +70,12 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
 ✓ Config updated and saved to config.json
 ✓ Schema validation passed
 
+> explore what body types are supported?
+Supported body types include fluid bodies, continuum bodies, and rigid solid bodies, depending on the schema fields present.
+
 > run
 Building simulation...
 Running SPH simulation...
 ```
 
-See [CLI Usage](cli-usage.md) for full shell command reference.
+See [CLI Usage](cli-usage.md) for full shell command reference, including `explore`.

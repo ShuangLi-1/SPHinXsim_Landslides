@@ -311,6 +311,49 @@ def cmd_run(args: argparse.Namespace) -> int:
         os.chdir(original_dir)
 
 
+def _schema_explore_context() -> str:
+    schema = json.dumps(SimulationConfig.model_json_schema(), indent=2)
+    return (
+        "You are helping a user understand the SPHinXsim simulator schema and capabilities. "
+        "Answer clearly and concisely using the schema as the source of truth. "
+        "When relevant, include practical command examples.\n\n"
+        "CLI capabilities:\n"
+        "- generate: create a config from natural language\n"
+        "- update: revise an existing config with natural language\n"
+        "- validate: schema-validate and summarize a config\n"
+        "- run: execute simulation from validated config\n"
+        "- shell: interactive mode for generate/update/validate/run\n\n"
+        "SimulationConfig JSON schema:\n"
+        f"{schema}"
+    )
+
+
+def cmd_explore(args: argparse.Namespace) -> int:
+    """Answer schema/functionality questions using the configured LLM provider."""
+    question = args.question.strip() if args.question else ""
+    if not question:
+        print("question must not be empty", file=sys.stderr)
+        return 1
+
+    llm = get_llm()
+    if not hasattr(llm, "explore"):
+        print(
+            "The selected LLM provider does not support schema exploration.",
+            file=sys.stderr,
+        )
+        return 1
+
+    try:
+        answer = llm.explore(question, context=_schema_explore_context())
+    except Exception as exc:
+        print(f"Error exploring schema: {exc}", file=sys.stderr)
+        return 1
+
+    print("Top-level SimulationConfig fields and guidance:")
+    print(answer)
+    return 0
+
+
 def _shell_resolve_config_path(config_file: str) -> Path:
     path = Path(config_file)
     if not path.is_absolute():
@@ -332,7 +375,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
     config_path = _shell_resolve_config_path(args.config_file)
     print("SPHinXsim interactive shell")
     print(f"Config file: {config_path}")
-    print("Type: generate \"...\", update \"...\", validate, run, exit")
+    print("Type: generate ..., update ..., explore ..., validate, run, exit")
 
     while True:
         try:
@@ -349,8 +392,9 @@ def cmd_shell(args: argparse.Namespace) -> int:
 
         if line == "help":
             print("Commands:")
-            print("  generate \"DESCRIPTION\"")
-            print("  update \"INSTRUCTION\"")
+            print("  generate DESCRIPTION")
+            print("  update INSTRUCTION")
+            print("  explore QUESTION")
             print("  validate")
             print("  run")
             print("  exit")
@@ -370,7 +414,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
         if cmd == "generate":
             description = " ".join(parts[1:]).strip()
             if not description:
-                print("Usage: generate \"DESCRIPTION\"", file=sys.stderr)
+                print("Usage: generate DESCRIPTION", file=sys.stderr)
                 continue
             llm = get_llm()
             try:
@@ -388,7 +432,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
         if cmd == "update":
             instruction = " ".join(parts[1:]).strip()
             if not instruction:
-                print("Usage: update \"INSTRUCTION\"", file=sys.stderr)
+                print("Usage: update INSTRUCTION", file=sys.stderr)
                 continue
             current, rc = _load_config(config_path)
             if rc != 0 or current is None:
@@ -411,6 +455,14 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print(f"Error updating config: {exc}", file=sys.stderr)
             except OSError as exc:
                 print(f"Error writing config to {config_path}: {exc}", file=sys.stderr)
+            continue
+
+        if cmd == "explore":
+            question = " ".join(parts[1:]).strip()
+            if not question:
+                print("Usage: explore QUESTION", file=sys.stderr)
+                continue
+            _ = cmd_explore(argparse.Namespace(question=question))
             continue
 
         if cmd == "validate":
@@ -475,6 +527,14 @@ def _build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="Run a simulation from a JSON config file.")
     run.add_argument("config_file", nargs='?', default="config.json", help="Path to JSON config file.")
     run.set_defaults(func=cmd_run)
+
+    # explore
+    exp = subparsers.add_parser(
+        "explore",
+        help="Ask schema/functionality questions using the configured LLM provider.",
+    )
+    exp.add_argument("question", help="Question about the simulator schema or functionality.")
+    exp.set_defaults(func=cmd_explore)
 
     # shell
     shell = subparsers.add_parser(

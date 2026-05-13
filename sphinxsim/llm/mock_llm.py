@@ -462,3 +462,16 @@ class MockLLM:
 
         updated = _apply_updates(existing.model_dump(), description)
         return SimulationConfig(**updated)
+
+    def explore(self, question: str, context: str | None = None) -> str:
+        """Return a deterministic schema/functionality explanation for local usage."""
+        if not question or not question.strip():
+            raise ValueError("question must not be empty")
+
+        top_level_fields = sorted(SimulationConfig.model_json_schema().get("properties", {}).keys())
+        return (
+            "Mock exploration mode (deterministic). "
+            "SPHinXsim supports generate, update, validate, run, and shell workflows. "
+            f"Top-level SimulationConfig fields: {', '.join(top_level_fields)}. "
+            f"Question received: {question.strip()}"
+        )

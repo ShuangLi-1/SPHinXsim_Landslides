@@ -30,6 +30,9 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
 ✓ Config updated and saved to config.json
 ✓ Schema validation passed
 
+> explore what bodies and materials does this simulation support?
+SPHinXsim supports fluid, continuum, and solid body definitions, with schema-validated material types.
+
 > validate
 Configuration: WaterBody (fluid) + WallBoundary (solid)
   Domain: [0, 0] to [5.37, 5.37]
@@ -60,6 +63,7 @@ Inside the shell, you can use the following commands:
 | --- | --- |
 | `generate "description"` | Generate a new config from natural language description |
 | `update "instruction"` | Modify the current config with an instruction (e.g., "change end time to 5 s") |
+| `explore "question"` | Ask the configured LLM questions about the simulator schema and capabilities |
 | `validate` | Display the current config structure and validate it |
 | `run` | Build and execute the validated simulation |
 | `help` | Show available commands |
@@ -114,6 +118,19 @@ This:
 4. Validates the updated config
 5. Saves the result to `config_updated.json`
 
+### Explore
+
+Ask the configured LLM questions about the simulator schema, supported bodies, materials, and workflow behavior:
+
+```bash
+sphinxsim explore "What body types are valid in SimulationConfig?"
+```
+
+This:
+1. Sends your question and schema context to the selected LLM provider
+2. Returns a plain-text explanation of the simulator schema and capabilities
+3. Uses the same provider selection as `generate` and `update`
+
 ### Run
 
 Execute a validated simulation:
@@ -159,6 +176,7 @@ sphinxsim run --config config_v1.json
 sphinxsim shell --config config.json
 > validate
 > update "change particle spacing to 1 cm"
+> explore what materials can I use for solid bodies?
 > validate
 > run
 ```
@@ -211,6 +229,7 @@ sphinxsim generate --description "water dam break"
 ## Output locations
 
 - **Generated configs**: Saved to the path specified by `--output` (default: `config.json`)
+- **Explore answers**: Printed to stdout; no files are written
 - **Simulation output**: Saved to `build-integrated/output/`
 - **Temporary files**: Stored in `.build-temp/`
 
@@ -220,7 +239,8 @@ If config generation or validation fails:
 
 1. **Generation fails**: The LLM response did not match the expected JSON schema. Check the error message for details, or try rephrasing your description.
 2. **Validation fails**: The config violates a schema constraint (e.g., body type mismatch). Use `sphinxsim validate` to see which field is invalid.
-3. **Execution fails**: The config is valid but the simulation failed. Check simulation output in `build-integrated/output/`.
+3. **Explore fails**: The LLM could not answer using the schema context. Rephrase the question to focus on supported bodies, materials, solver settings, or CLI workflow.
+4. **Execution fails**: The config is valid but the simulation failed. Check simulation output in `build-integrated/output/`.
 
 ## See also
 

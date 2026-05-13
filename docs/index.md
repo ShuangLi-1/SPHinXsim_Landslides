@@ -27,7 +27,8 @@ Inside the shell, you can:
 1. **Generate** a simulation config from natural language: `generate "water dam break"`
 2. **Validate** the config structure: `validate`
 3. **Update** it with further instructions: `update "simulate for 2 s"`
-4. **Run** the validated simulation: `run`
+4. **Explore** the simulator schema and capabilities: `explore what body types are supported?`
+5. **Run** the validated simulation: `run`
 
 Each command auto-validates and auto-saves, so you always have a working config on disk.
 
@@ -35,6 +36,7 @@ Alternatively, you can use direct commands for non-interactive workflows:
 
 - `sphinxsim generate` — Create a config from description
 - `sphinxsim update` — Modify an existing config
+- `sphinxsim explore` — Ask schema and functionality questions
 - `sphinxsim validate` — Check config validity
 - `sphinxsim run` — Execute a validated simulation
 
@@ -47,7 +49,7 @@ For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 - `sphinxsim/config/schemas.py`:
   Defines the top-level `SimulationConfig` and the typed config surface for system domains, global resolution, shapes, aligned boxes, particle generation, fluid bodies, continuum bodies, solid bodies, boundary conditions, observers, restart settings, body constraints, and extra state recording.
 - `sphinxsim/llm/`:
-  Provides LLM backends that translate natural-language prompts into schema-compliant configs. The default mock backend supports deterministic local testing, while the OpenAI backend can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
+  Provides LLM backends that translate natural-language prompts into schema-compliant configs and answer schema exploration questions. The default mock backend supports deterministic local testing, while the OpenAI backend can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 - `sphinxsim/sph_simulation/` and native bindings:
   Build and load SPHinXsys-backed simulation objects from validated JSON, including fluid and continuum-oriented workflows exposed through the Python package.
 
@@ -60,6 +62,7 @@ SPHinXsim currently supports a broader config surface than a basic fluid-only de
 - Solid boundary/body definitions required by the current validation and simulation builders.
 - Config-driven geometry composition using domains, shapes, aligned boxes, transforms, and particle-generation settings.
 - Incremental config editing through the CLI update command instead of regenerating cases from scratch.
+- Schema exploration through the CLI explore command for questions about supported bodies, materials, and simulator behavior.
 
 The repository remains config-first: natural-language generation is useful for initialization and revision, but the validated JSON artifact is the authoritative simulation input.
 

@@ -24,6 +24,7 @@ def get_llm():
         return OllamaLLM(
             base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434"),
             model=os.getenv("OLLAMA_MODEL", "qwen2.5:3b"),
+            timeout=float(os.getenv("OLLAMA_TIMEOUT", "180")),
         )
         
     from sphinxsim.llm.mock_llm import MockLLM
