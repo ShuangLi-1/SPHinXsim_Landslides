@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import time
 from difflib import get_close_matches
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,14 +42,32 @@ class OllamaLLM:
             method="POST",
         )
 
-        try:
-            with request.urlopen(req, timeout=self.timeout) as resp:
-                raw = resp.read().decode("utf-8")
-        except error.URLError as exc:
-            raise RuntimeError(
-                "Failed to contact Ollama server. "
-                "Ensure Ollama is running and OLLAMA_BASE_URL is correct."
-            ) from exc
+        raw = ""
+        for attempt in range(2):
+            try:
+                with request.urlopen(req, timeout=self.timeout) as resp:
+                    raw = resp.read().decode("utf-8")
+                break
+            except error.URLError as exc:
+                raise RuntimeError(
+                    "Failed to contact Ollama server. "
+                    "Ensure Ollama is running and OLLAMA_BASE_URL is correct."
+                ) from exc
+            except TimeoutError as exc:
+                if attempt == 0:
+                    time.sleep(1)
+                    continue
+                raise RuntimeError(
+                    "Ollama request timed out. Increase OLLAMA_TIMEOUT or use a smaller model."
+                ) from exc
+            except OSError as exc:
+                # socket.py can raise raw TimeoutError/OSError on read timeout
+                if "timed out" in str(exc).lower() and attempt == 0:
+                    time.sleep(1)
+                    continue
+                raise RuntimeError(
+                    "Failed during Ollama request. Ensure Ollama is reachable and responsive."
+                ) from exc
 
         data = json.loads(raw)
         message = data.get("message") or {}
@@ -172,12 +191,21 @@ class OllamaLLM:
         rename_map: Dict[str, str] = {}
         shape_rename_map: Dict[str, str] = {}
 
+        def _normalize_wall_typo(name: str | None) -> str | None:
+            if not name or not isinstance(name, str):
+                return name
+            if name.startswith("Wal") and not name.startswith("Wall"):
+                return "Wall" + name[3:]
+            return name
+
         def _canonical_name(name: str | None) -> str | None:
+            name = _normalize_wall_typo(name)
             if not name:
                 return name
             if name in shape_names:
                 return name
-            candidates = get_close_matches(name, list(shape_names), n=1, cutoff=0.6)
+            shape_candidates = [n for n in shape_names if isinstance(n, str)]
+            candidates = get_close_matches(name, shape_candidates, n=1, cutoff=0.6)
             if candidates:
                 return candidates[0]
             return name
@@ -188,15 +216,12 @@ class OllamaLLM:
             if not isinstance(shape, dict):
                 continue
             name = shape.get("name")
-            if name and "Wal" in name and name not in shape_names:
-                # Potential typo like WalInnerBox → WallInnerBox
-                corrected = name.replace("Wal", "Wall")
-                if corrected in shape_names:
-                    shape_rename_map[name] = corrected
-                    shape["name"] = corrected
-                    # Update shape_names set to reflect the rename
-                    shape_names.discard(name)
-                    shape_names.add(corrected)
+            corrected = _canonical_name(name)
+            if name and corrected and corrected != name:
+                shape_rename_map[name] = corrected
+                shape["name"] = corrected
+                shape_names.discard(name)
+                shape_names.add(corrected)
 
         # Second pass: fix shape references that point to typoed names.
         for shape in shapes:
@@ -219,7 +244,7 @@ class OllamaLLM:
             if not isinstance(body, dict):
                 continue
             old = body.get("name")
-            new = _canonical_name(old)
+            new = _normalize_wall_typo(old)
             if old and new and old != new:
                 rename_map[old] = new
                 body["name"] = new
@@ -228,7 +253,16 @@ class OllamaLLM:
             if not isinstance(body, dict):
                 continue
             old = body.get("name")
-            new = _canonical_name(old)
+            new = _normalize_wall_typo(old)
+            if old and new and old != new:
+                rename_map[old] = new
+                body["name"] = new
+
+        for body in updated.get("continuum_bodies", []):
+            if not isinstance(body, dict):
+                continue
+            old = body.get("name")
+            new = _normalize_wall_typo(old)
             if old and new and old != new:
                 rename_map[old] = new
                 body["name"] = new
@@ -245,36 +279,46 @@ class OllamaLLM:
             if isinstance(body, dict) and body.get("name")
         }
 
+        def _canonical_body_name(name: str | None) -> str | None:
+            name = _normalize_wall_typo(name)
+            if not name:
+                return name
+            if name in all_body_names:
+                return name
+            body_candidates = [n for n in all_body_names if isinstance(n, str)]
+            candidates = get_close_matches(name, body_candidates, n=1, cutoff=0.6)
+            if candidates:
+                return candidates[0]
+            return name
+
         for entry in updated.get("extra_state_recording", []):
             if not isinstance(entry, dict):
                 continue
             old_name = entry.get("name")
-            if old_name and old_name not in all_body_names:
-                candidates = get_close_matches(old_name, list(all_body_names), n=1, cutoff=0.6)
-                if candidates:
-                    rename_map[old_name] = candidates[0]
+            new_name = _canonical_body_name(old_name)
+            if old_name and new_name and old_name != new_name:
+                rename_map[old_name] = new_name
 
         for entry in updated.get("particle_generation", {}).get("settings", {}).get("bodies", []):
-            if isinstance(entry, dict) and entry.get("name") in rename_map:
-                entry["name"] = rename_map[entry["name"]]
+            if isinstance(entry, dict):
+                entry["name"] = _canonical_body_name(entry.get("name"))
 
         for entry in updated.get("observers", []):
-            if isinstance(entry, dict) and entry.get("observed_body") in rename_map:
-                entry["observed_body"] = rename_map[entry["observed_body"]]
+            if isinstance(entry, dict):
+                entry["observed_body"] = _canonical_body_name(entry.get("observed_body"))
 
         for entry in updated.get("fluid_boundary_conditions", []):
-            if isinstance(entry, dict) and entry.get("body_name") in rename_map:
-                entry["body_name"] = rename_map[entry["body_name"]]
+            if isinstance(entry, dict):
+                entry["body_name"] = _canonical_body_name(entry.get("body_name"))
 
         for entry in updated.get("body_constraints", []):
-            if isinstance(entry, dict) and entry.get("body_name") in rename_map:
-                entry["body_name"] = rename_map[entry["body_name"]]
+            if isinstance(entry, dict):
+                entry["body_name"] = _canonical_body_name(entry.get("body_name"))
 
         for entry in updated.get("extra_state_recording", []):
             if not isinstance(entry, dict):
                 continue
-            if entry.get("name") in rename_map:
-                entry["name"] = rename_map[entry["name"]]
+            entry["name"] = _canonical_body_name(entry.get("name"))
             for variable in entry.get("variables", []):
                 if not isinstance(variable, dict):
                     continue
@@ -321,9 +365,10 @@ class OllamaLLM:
             "with values adapted for the new description. "
             "Choose the correct simulation type and body/material families for the requested physics. "
         ) + self._BODY_TYPE_RULES
+        example_cfg = self._example_config(description)
         user = {
             "description": description,
-            "example_output": self._example_config(description),
+            "example_output": example_cfg,
         }
 
         messages = [
@@ -333,9 +378,16 @@ class OllamaLLM:
         data = self._post_chat(messages=messages)
         if not isinstance(data, dict):
             raise ValueError("Ollama returned an invalid generation response")
-        merged = self._merge_dicts(self._example_config(description), data)
+        merged = self._merge_dicts(example_cfg, data)
         merged = self._sanitize_config_dict(merged)
-        return SimulationConfig(**merged)
+        try:
+            return SimulationConfig(**merged)
+        except Exception:
+            # If the model corrupts required structures (e.g. domain bounds),
+            # rehydrate from validated example config while preserving valid edits.
+            repaired = self._merge_dicts(merged, example_cfg)
+            repaired = self._sanitize_config_dict(repaired)
+            return SimulationConfig(**repaired)
 
     def update(self, existing: SimulationConfig, description: str) -> SimulationConfig:
         if not description or not description.strip():
@@ -381,7 +433,12 @@ class OllamaLLM:
                 merged = self._merge_dicts(existing_dict, patch_data)
         merged = self._apply_explicit_instruction_overrides(merged, description)
         merged = self._sanitize_config_dict(merged)
-        return SimulationConfig(**merged)
+        try:
+            return SimulationConfig(**merged)
+        except Exception:
+            repaired = self._merge_dicts(merged, existing_dict)
+            repaired = self._sanitize_config_dict(repaired)
+            return SimulationConfig(**repaired)
 
     def explore(self, question: str, context: str | None = None) -> str:
         if not question or not question.strip():
