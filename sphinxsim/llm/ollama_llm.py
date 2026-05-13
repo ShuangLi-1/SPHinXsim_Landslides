@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from difflib import get_close_matches
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict
 from urllib import error, request
 
@@ -71,7 +73,42 @@ class OllamaLLM:
 
     @staticmethod
     def _example_config(description: str) -> Dict[str, Any]:
-        """Return a physics-matched canonical example config for few-shot prompting."""
+        """Return a validated fixture-backed example config for few-shot prompting."""
+        project_root = Path(__file__).resolve().parents[2]
+        fluid_fixture = (
+            project_root
+            / "tests"
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "dambreak.json"
+        )
+        solid_fixture = (
+            project_root
+            / "tests"
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "milling.json"
+        )
+
+        desc = (description or "").lower()
+        is_solid_like = any(
+            token in desc for token in ("solid", "elastic", "beam", "continuum", "milling")
+        )
+
+        preferred = solid_fixture if is_solid_like else fluid_fixture
+        fallback = fluid_fixture if preferred == solid_fixture else solid_fixture
+
+        for fixture in (preferred, fallback):
+            try:
+                payload = json.loads(fixture.read_text())
+                validated = SimulationConfig.model_validate(payload)
+                return json.loads(validated.model_dump_json(exclude_none=True))
+            except Exception:
+                continue
+
+        # Last resort if fixture files are unavailable/corrupt.
         from sphinxsim.llm.mock_llm import MockLLM
 
         return json.loads(MockLLM().generate(description).model_dump_json(exclude_none=True))
@@ -120,6 +157,134 @@ class OllamaLLM:
     @staticmethod
     def _sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         updated = json.loads(json.dumps(cfg))
+
+        # Keep generated/output configs robust for runtime by omitting optional
+        # scaling hints that small models frequently corrupt.
+        updated.pop("characteristic_dimensions", None)
+
+        shapes = updated.get("geometries", {}).get("shapes", [])
+        shape_names = {
+            shape.get("name")
+            for shape in shapes
+            if isinstance(shape, dict) and shape.get("name")
+        }
+
+        rename_map: Dict[str, str] = {}
+        shape_rename_map: Dict[str, str] = {}
+
+        def _canonical_name(name: str | None) -> str | None:
+            if not name:
+                return name
+            if name in shape_names:
+                return name
+            candidates = get_close_matches(name, list(shape_names), n=1, cutoff=0.6)
+            if candidates:
+                return candidates[0]
+            return name
+
+        # Build a map of potential typos in shape names themselves
+        # by looking for common misspellings (e.g., Wal* → Wall*)
+        for shape in shapes:
+            if not isinstance(shape, dict):
+                continue
+            name = shape.get("name")
+            if name and "Wal" in name and name not in shape_names:
+                # Potential typo like WalInnerBox → WallInnerBox
+                corrected = name.replace("Wal", "Wall")
+                if corrected in shape_names:
+                    shape_rename_map[name] = corrected
+                    shape["name"] = corrected
+                    # Update shape_names set to reflect the rename
+                    shape_names.discard(name)
+                    shape_names.add(corrected)
+
+        # Second pass: fix shape references that point to typoed names.
+        for shape in shapes:
+            if not isinstance(shape, dict):
+                continue
+            original = shape.get("original")
+            if isinstance(original, str):
+                original = shape_rename_map.get(original, original)
+                shape["original"] = _canonical_name(original)
+            sub_shapes = shape.get("sub_shapes")
+            if isinstance(sub_shapes, list):
+                shape["sub_shapes"] = [
+                    _canonical_name(shape_rename_map.get(item, item) if isinstance(item, str) else item)
+                    if isinstance(item, str)
+                    else item
+                    for item in sub_shapes
+                ]
+
+        for body in updated.get("fluid_bodies", []):
+            if not isinstance(body, dict):
+                continue
+            old = body.get("name")
+            new = _canonical_name(old)
+            if old and new and old != new:
+                rename_map[old] = new
+                body["name"] = new
+
+        for body in updated.get("solid_bodies", []):
+            if not isinstance(body, dict):
+                continue
+            old = body.get("name")
+            new = _canonical_name(old)
+            if old and new and old != new:
+                rename_map[old] = new
+                body["name"] = new
+
+        # Also canonicalize body names in extra_state_recording to catch typos from LLM output
+        all_body_names = {
+            body.get("name")
+            for bodies_list in [
+                updated.get("fluid_bodies", []),
+                updated.get("solid_bodies", []),
+                updated.get("continuum_bodies", []),
+            ]
+            for body in bodies_list
+            if isinstance(body, dict) and body.get("name")
+        }
+
+        for entry in updated.get("extra_state_recording", []):
+            if not isinstance(entry, dict):
+                continue
+            old_name = entry.get("name")
+            if old_name and old_name not in all_body_names:
+                candidates = get_close_matches(old_name, list(all_body_names), n=1, cutoff=0.6)
+                if candidates:
+                    rename_map[old_name] = candidates[0]
+
+        for entry in updated.get("particle_generation", {}).get("settings", {}).get("bodies", []):
+            if isinstance(entry, dict) and entry.get("name") in rename_map:
+                entry["name"] = rename_map[entry["name"]]
+
+        for entry in updated.get("observers", []):
+            if isinstance(entry, dict) and entry.get("observed_body") in rename_map:
+                entry["observed_body"] = rename_map[entry["observed_body"]]
+
+        for entry in updated.get("fluid_boundary_conditions", []):
+            if isinstance(entry, dict) and entry.get("body_name") in rename_map:
+                entry["body_name"] = rename_map[entry["body_name"]]
+
+        for entry in updated.get("body_constraints", []):
+            if isinstance(entry, dict) and entry.get("body_name") in rename_map:
+                entry["body_name"] = rename_map[entry["body_name"]]
+
+        for entry in updated.get("extra_state_recording", []):
+            if not isinstance(entry, dict):
+                continue
+            if entry.get("name") in rename_map:
+                entry["name"] = rename_map[entry["name"]]
+            for variable in entry.get("variables", []):
+                if not isinstance(variable, dict):
+                    continue
+                real_type = variable.get("real_type")
+                vector_type = variable.get("vector_type")
+                if isinstance(real_type, str):
+                    variable["real_type"] = [real_type]
+                if isinstance(vector_type, str):
+                    variable["vector_type"] = [vector_type]
+
         settings = updated.get("particle_generation", {}).get("settings", {})
         bodies = settings.get("bodies", [])
         fluid_names = {body.get("name") for body in updated.get("fluid_bodies", [])}

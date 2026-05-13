@@ -8,6 +8,8 @@ deterministic, schema-validated configs without any network access.
 from __future__ import annotations
 
 import re
+import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 from sphinxsim.config.schemas import (
@@ -409,6 +411,26 @@ def _apply_updates(existing: Dict[str, Any], description: str) -> Dict[str, Any]
     return cfg
 
 
+def _fixture_template_for_physics(physics: PhysicsType) -> Dict[str, Any] | None:
+    """Load a validated fixture template for the given physics type when available."""
+    root = Path(__file__).resolve().parents[2]
+    fixture_rel = {
+        PhysicsType.FLUID: Path("tests/test_simulation/test_2d_simulation/data/dambreak.json"),
+        PhysicsType.SOLID: Path("tests/test_simulation/test_2d_simulation/data/milling.json"),
+    }.get(physics)
+
+    if fixture_rel is None:
+        return None
+
+    fixture_path = root / fixture_rel
+    try:
+        payload = json.loads(fixture_path.read_text())
+        validated = SimulationConfig.model_validate(payload)
+        return validated.model_dump(exclude_none=True)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -451,7 +473,8 @@ class MockLLM:
             raise ValueError("description must not be empty")
 
         physics = _detect_physics(description)
-        template = _apply_overrides(_TEMPLATES[physics], description)
+        base_template = _fixture_template_for_physics(physics) or _TEMPLATES[physics]
+        template = _apply_overrides(base_template, description)
 
         return SimulationConfig(**template)
 
