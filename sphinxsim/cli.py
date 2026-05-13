@@ -373,8 +373,12 @@ def _shell_auto_validate(config_path: Path) -> bool:
 def cmd_shell(args: argparse.Namespace) -> int:
     """Interactive shell for generate/update/validate/run workflow."""
     config_path = _shell_resolve_config_path(args.config_file)
+    provider = os.getenv("SPHINXSIM_LLM_PROVIDER", "mock")
     print("SPHinXsim interactive shell")
+    print(f"LLM provider: {provider}")
     print(f"Config file: {config_path}")
+    if not Path(args.config_file).is_absolute():
+        print("Note: relative config paths are resolved under .build-temp/")
     print("Type: generate ..., update ..., explore ..., validate, run, exit")
 
     while True:
