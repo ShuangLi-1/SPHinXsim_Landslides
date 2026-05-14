@@ -371,15 +371,14 @@ def _shell_auto_validate(config_path: Path) -> bool:
 
 
 def cmd_shell(args: argparse.Namespace) -> int:
-    """Interactive shell for generate/update/validate/run workflow."""
-    config_path = _shell_resolve_config_path(args.config_file)
+    """Interactive shell for load/generate/update/validate/run workflow."""
     provider = os.getenv("SPHINXSIM_LLM_PROVIDER", "mock")
     print("SPHinXsim interactive shell")
     print(f"LLM provider: {provider}")
-    print(f"Config file: {config_path}")
-    if not Path(args.config_file).is_absolute():
-        print("Note: relative config paths are resolved under .build-temp/")
-    print("Type: generate ..., update ..., explore ..., validate, run, exit")
+    print("Commands: load FILE, generate DESCRIPTION FILE, update INSTRUCTION, validate, run, explore QUESTION, exit")
+    print("Note: relative paths are resolved under .build-temp/")
+
+    config_path: Path | None = None
 
     while True:
         try:
@@ -396,12 +395,13 @@ def cmd_shell(args: argparse.Namespace) -> int:
 
         if line == "help":
             print("Commands:")
-            print("  generate DESCRIPTION")
-            print("  update INSTRUCTION")
-            print("  explore QUESTION")
-            print("  validate")
-            print("  run")
-            print("  exit")
+            print("  load FILE                       - Load an existing config file")
+            print("  generate DESCRIPTION FILE       - Generate new config via LLM and save to FILE")
+            print("  update INSTRUCTION              - Modify loaded config via LLM")
+            print("  explore QUESTION                - Ask about schema")
+            print("  validate                        - Reload and validate config from disk")
+            print("  run                             - Run simulation from loaded config")
+            print("  exit                            - Exit shell")
             continue
 
         try:
@@ -415,22 +415,49 @@ def cmd_shell(args: argparse.Namespace) -> int:
 
         cmd = parts[0]
 
-        if cmd == "generate":
-            description = " ".join(parts[1:]).strip()
-            if not description:
-                print("Usage: generate DESCRIPTION", file=sys.stderr)
+        if cmd == "load":
+            if len(parts) < 2:
+                print("Usage: load FILE", file=sys.stderr)
                 continue
+            file_arg = " ".join(parts[1:]).strip()
+            config_path = _shell_resolve_config_path(file_arg)
+            if not config_path.exists():
+                print(f"File not found: {config_path}", file=sys.stderr)
+                config_path = None
+                continue
+            # Validate the file
+            cfg, rc = _load_config(config_path)
+            if rc != 0 or cfg is None:
+                print(f"Failed to load config from {config_path}", file=sys.stderr)
+                config_path = None
+                continue
+            print(f"✅ Loaded config: {config_path}")
+            continue
+
+        if cmd == "generate":
+            if len(parts) < 3:
+                print("Usage: generate DESCRIPTION FILE", file=sys.stderr)
+                continue
+            # Last part is the file, rest is description
+            file_arg = parts[-1]
+            description = " ".join(parts[1:-1]).strip()
+            if not description or not file_arg:
+                print("Usage: generate DESCRIPTION FILE", file=sys.stderr)
+                continue
+            config_path = _shell_resolve_config_path(file_arg)
             llm = get_llm()
             try:
                 config = llm.generate(description)
                 config_path.parent.mkdir(parents=True, exist_ok=True)
                 config_path.write_text(config.model_dump_json(indent=2, exclude_none=True))
-                print(f"Config written to {config_path}")
+                print(f"✅ Config generated and written to {config_path}")
                 _shell_auto_validate(config_path)
             except (ValueError, ValidationError) as exc:
                 print(f"Error generating config: {exc}", file=sys.stderr)
+                config_path = None
             except OSError as exc:
-                print(f"Error writing config to {config_path}: {exc}", file=sys.stderr)
+                print(f"Error writing config: {exc}", file=sys.stderr)
+                config_path = None
             continue
 
         if cmd == "update":
@@ -438,9 +465,12 @@ def cmd_shell(args: argparse.Namespace) -> int:
             if not instruction:
                 print("Usage: update INSTRUCTION", file=sys.stderr)
                 continue
+            if config_path is None:
+                print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
+                continue
             current, rc = _load_config(config_path)
             if rc != 0 or current is None:
-                print("No valid config found. Run generate first.", file=sys.stderr)
+                print("Failed to load current config for update.", file=sys.stderr)
                 continue
             llm = get_llm()
             if not hasattr(llm, "update"):
@@ -453,12 +483,12 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 updated = llm.update(current, instruction)
                 config_path.parent.mkdir(parents=True, exist_ok=True)
                 config_path.write_text(updated.model_dump_json(indent=2, exclude_none=True))
-                print(f"Updated config written to {config_path}")
+                print(f"✅ Updated config written to {config_path}")
                 _shell_auto_validate(config_path)
             except (ValueError, ValidationError) as exc:
                 print(f"Error updating config: {exc}", file=sys.stderr)
             except OSError as exc:
-                print(f"Error writing config to {config_path}: {exc}", file=sys.stderr)
+                print(f"Error writing config: {exc}", file=sys.stderr)
             continue
 
         if cmd == "explore":
@@ -470,10 +500,23 @@ def cmd_shell(args: argparse.Namespace) -> int:
             continue
 
         if cmd == "validate":
+            if config_path is None:
+                print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
+                continue
+            # Reload from disk to pick up external edits
+            cfg, rc = _load_config(config_path)
+            if rc != 0 or cfg is None:
+                print(f"❌ Validation failed for {config_path}", file=sys.stderr)
+                continue
+            print(f"✅ Reloaded and validated config: {config_path}")
+            # Show config summary
             _ = cmd_validate(argparse.Namespace(config_file=str(config_path)))
             continue
 
         if cmd == "run":
+            if config_path is None:
+                print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
+                continue
             _ = cmd_run(argparse.Namespace(config_file=str(config_path)))
             continue
 
@@ -543,13 +586,7 @@ def _build_parser() -> argparse.ArgumentParser:
     # shell
     shell = subparsers.add_parser(
         "shell",
-        help="Interactive command loop with auto-save and auto-validate.",
-    )
-    shell.add_argument(
-        "--config",
-        dest="config_file",
-        default="config.json",
-        help="Config file used by interactive commands (default: config.json).",
+        help="Interactive shell for config load/modify/validate workflow.",
     )
     shell.set_defaults(func=cmd_shell)
 

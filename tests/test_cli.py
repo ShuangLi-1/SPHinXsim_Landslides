@@ -260,12 +260,12 @@ class TestCLIShell:
     def test_shell_generate_then_update_auto_validates(self, build_temp_path, capsys):
         cfg = build_temp_path / "shell_config.json"
         inputs = [
-            'generate "water dam break simulation"',
+            'generate "water dam break simulation" shell_config.json',
             'update "simulate for 2 s"',
             "exit",
         ]
         with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell", "--config", str(cfg)])
+            rc = main(["shell"])
 
         assert rc == 0
         assert cfg.exists()
@@ -276,21 +276,19 @@ class TestCLIShell:
         out = capsys.readouterr().out
         assert "Auto-validation passed" in out
 
-    def test_shell_update_before_generate_errors(self, build_temp_path, capsys):
-        cfg = build_temp_path / "missing_config.json"
+    def test_shell_update_before_load_errors(self, build_temp_path, capsys):
         inputs = ['update "simulate for 2 s"', "exit"]
         with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell", "--config", str(cfg)])
+            rc = main(["shell"])
 
         assert rc == 0
         err = capsys.readouterr().err
-        assert "Run generate first" in err
+        assert "No config loaded" in err
 
     def test_shell_explore_returns_answer(self, build_temp_path, capsys):
-        cfg = build_temp_path / "shell_config.json"
         inputs = ['explore "what are top-level schema fields?"', "exit"]
         with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell", "--config", str(cfg)])
+            rc = main(["shell"])
 
         assert rc == 0
         out = capsys.readouterr().out
