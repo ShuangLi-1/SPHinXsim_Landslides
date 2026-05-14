@@ -256,6 +256,61 @@ class TestCLIUpdate:
         assert rc != 0
 
 
+class TestCLIShell:
+    def test_shell_generate_then_update_auto_validates(self, build_temp_path, capsys):
+        cfg = build_temp_path / "shell_config.json"
+        inputs = [
+            'generate "water dam break simulation"',
+            'update "simulate for 2 s"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell", "--config", str(cfg)])
+
+        assert rc == 0
+        assert cfg.exists()
+        data = json.loads(cfg.read_text())
+        assert data["fluid_bodies"][0]["name"] == "WaterBody"
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
+
+        out = capsys.readouterr().out
+        assert "Auto-validation passed" in out
+
+    def test_shell_update_before_generate_errors(self, build_temp_path, capsys):
+        cfg = build_temp_path / "missing_config.json"
+        inputs = ['update "simulate for 2 s"', "exit"]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell", "--config", str(cfg)])
+
+        assert rc == 0
+        err = capsys.readouterr().err
+        assert "Run generate first" in err
+
+    def test_shell_explore_returns_answer(self, build_temp_path, capsys):
+        cfg = build_temp_path / "shell_config.json"
+        inputs = ['explore "what are top-level schema fields?"', "exit"]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell", "--config", str(cfg)])
+
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Top-level SimulationConfig fields" in out
+
+
+class TestCLIExplore:
+    def test_explore_outputs_schema_guidance(self, capsys):
+        rc = main(["explore", "what can I configure in SimulationConfig?"])
+        assert rc == 0
+        out = capsys.readouterr().out
+        assert "Top-level SimulationConfig fields" in out
+
+    def test_explore_empty_question_returns_nonzero(self, capsys):
+        rc = main(["explore", ""])
+        assert rc != 0
+        err = capsys.readouterr().err
+        assert "question must not be empty" in err
+
+
 class TestCLIVersion:
     def test_version_matches_package(self, capsys):
         with pytest.raises(SystemExit) as exc_info:

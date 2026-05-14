@@ -241,6 +241,34 @@ class GeometriesConfig(BaseModel):
     shapes: List[ShapeConfig] = Field(..., min_length=1)
     aligned_boxes: List[AlignedBoxConfig] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def _validate_shape_references(self) -> "GeometriesConfig":
+        """Ensure shape definitions are unique and only reference earlier shapes."""
+        defined_shape_names: set[str] = set()
+
+        for shape in self.shapes:
+            if shape.name in defined_shape_names:
+                raise ValueError(
+                    f"geometries.shapes contains duplicate shape name '{shape.name}'"
+                )
+
+            if shape.type == BodyShapeType.EXPANDED_BOX:
+                if shape.original not in defined_shape_names:
+                    raise ValueError(
+                        f"expanded_box shape '{shape.name}' must reference a previously defined shape in original"
+                    )
+
+            if shape.type == BodyShapeType.COMPLEX_SHAPE:
+                for sub_shape in shape.sub_shapes or []:
+                    if sub_shape not in defined_shape_names:
+                        raise ValueError(
+                            f"complex_shape '{shape.name}' has sub_shape '{sub_shape}' that is not previously defined"
+                        )
+
+            defined_shape_names.add(shape.name)
+
+        return self
+
 
 class RelaxationBodyConfig(BaseModel):
     level_set: Optional[dict] = None

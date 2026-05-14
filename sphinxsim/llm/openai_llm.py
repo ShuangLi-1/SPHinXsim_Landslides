@@ -83,4 +83,32 @@ class OpenAILLM:
         content = resp.choices[0].message.content or ""
         data: Dict[str, Any] = json.loads(content)
         return SimulationConfig(**data)
+
+    def explore(self, question: str, context: str | None = None) -> str:
+        if not question or not question.strip():
+            raise ValueError("question must not be empty")
+
+        system = (
+            "You explain SPHinXsim schema and simulator functionality. "
+            "Be accurate, concise, and practical."
+        )
+        user = {
+            "question": question,
+            "context": context or "",
+        }
+
+        resp = self.client.chat.completions.create(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user)},
+            ],
+            temperature=0,
+        )
+
+        content = resp.choices[0].message.content or ""
+        answer = content.strip()
+        if not answer:
+            raise ValueError("OpenAI returned an empty exploration answer")
+        return answer
     

@@ -133,6 +133,114 @@ class TestSimulationConfig:
         with pytest.raises(ValidationError, match="must match a shape name"):
             _make_minimal_fluid_config(**bad)
 
+    def test_shape_reference_to_previous_shape_is_allowed(self):
+        geometries = {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "WaterBody",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [0.4, 0.2],
+                },
+                {
+                    "name": "ExpandedWaterBody",
+                    "type": "expanded_box",
+                    "original": "WaterBody",
+                    "expansion": 0.01,
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+            "aligned_boxes": [
+                {
+                    "name": "Inlet",
+                    "type": "region",
+                    "half_size": [0.1, 0.05],
+                    "transform": {"translation": [0.05, 0.2], "rotation_angle": 0.0},
+                }
+            ],
+        }
+        cfg = _make_minimal_fluid_config(geometries=geometries)
+        assert any(shape.name == "ExpandedWaterBody" for shape in cfg.geometries.shapes)
+
+    def test_shape_duplicate_name_rejected(self):
+        geometries = {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "WaterBody",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [0.4, 0.2],
+                },
+                {
+                    "name": "WaterBody",
+                    "type": "expanded_box",
+                    "original": "WaterBody",
+                    "expansion": 0.01,
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+            "aligned_boxes": [
+                {
+                    "name": "Inlet",
+                    "type": "region",
+                    "half_size": [0.1, 0.05],
+                    "transform": {"translation": [0.05, 0.2], "rotation_angle": 0.0},
+                }
+            ],
+        }
+        with pytest.raises(ValidationError, match="duplicate shape name"):
+            _make_minimal_fluid_config(geometries=geometries)
+
+    def test_shape_reference_must_be_previously_defined(self):
+        geometries = {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "ExpandedWaterBody",
+                    "type": "expanded_box",
+                    "original": "WaterBody",
+                    "expansion": 0.01,
+                },
+                {
+                    "name": "WaterBody",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [0.4, 0.2],
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+            "aligned_boxes": [
+                {
+                    "name": "Inlet",
+                    "type": "region",
+                    "half_size": [0.1, 0.05],
+                    "transform": {"translation": [0.05, 0.2], "rotation_angle": 0.0},
+                }
+            ],
+        }
+        with pytest.raises(ValidationError, match="previously defined"):
+            _make_minimal_fluid_config(geometries=geometries)
+
     def test_observer_observed_body_must_exist(self):
         with pytest.raises(ValidationError, match="observer observed_body"):
             _make_minimal_fluid_config(

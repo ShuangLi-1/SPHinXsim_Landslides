@@ -8,6 +8,8 @@ deterministic, schema-validated configs without any network access.
 from __future__ import annotations
 
 import re
+import json
+from pathlib import Path
 from typing import Any, Dict, List
 
 from sphinxsim.config.schemas import (
@@ -409,6 +411,26 @@ def _apply_updates(existing: Dict[str, Any], description: str) -> Dict[str, Any]
     return cfg
 
 
+def _fixture_template_for_physics(physics: PhysicsType) -> Dict[str, Any] | None:
+    """Load a validated fixture template for the given physics type when available."""
+    root = Path(__file__).resolve().parents[2]
+    fixture_rel = {
+        PhysicsType.FLUID: Path("tests/test_simulation/test_2d_simulation/data/dambreak.json"),
+        PhysicsType.SOLID: Path("tests/test_simulation/test_2d_simulation/data/milling.json"),
+    }.get(physics)
+
+    if fixture_rel is None:
+        return None
+
+    fixture_path = root / fixture_rel
+    try:
+        payload = json.loads(fixture_path.read_text())
+        validated = SimulationConfig.model_validate(payload)
+        return validated.model_dump(exclude_none=True)
+    except Exception:
+        return None
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -451,18 +473,8 @@ class MockLLM:
             raise ValueError("description must not be empty")
 
         physics = _detect_physics(description)
-        template = _apply_overrides(_TEMPLATES[physics], description)
-        if template.get("fluid_bodies"):
-            template["fluid_bodies"][0]["name"] = _extract_name(description)
-            template["geometries"]["shapes"][0]["name"] = template["fluid_bodies"][0]["name"]
-            if template.get("observers"):
-                template["observers"][0]["observed_body"] = template["fluid_bodies"][0]["name"]
-
-            # Keep particle-generation body list in sync with body name.
-            settings = template.get("particle_generation", {}).get("settings", {})
-            for body in settings.get("bodies", []):
-                if body.get("name") == "WaterBody":
-                    body["name"] = template["fluid_bodies"][0]["name"]
+        base_template = _fixture_template_for_physics(physics) or _TEMPLATES[physics]
+        template = _apply_overrides(base_template, description)
 
         return SimulationConfig(**template)
 
@@ -473,3 +485,16 @@ class MockLLM:
 
         updated = _apply_updates(existing.model_dump(), description)
         return SimulationConfig(**updated)
+
+    def explore(self, question: str, context: str | None = None) -> str:
+        """Return a deterministic schema/functionality explanation for local usage."""
+        if not question or not question.strip():
+            raise ValueError("question must not be empty")
+
+        top_level_fields = sorted(SimulationConfig.model_json_schema().get("properties", {}).keys())
+        return (
+            "Mock exploration mode (deterministic). "
+            "SPHinXsim supports generate, update, validate, run, and shell workflows. "
+            f"Top-level SimulationConfig fields: {', '.join(top_level_fields)}. "
+            f"Question received: {question.strip()}"
+        )

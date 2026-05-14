@@ -16,16 +16,31 @@ The project is designed around explicit simulation configuration rather than opa
 
 ## Core workflow
 
-The current user loop is:
+The recommended user workflow is to use the **interactive shell**:
 
-1. Describe a simulation in natural language.
-2. Generate a JSON config with `sphinxsim generate`.
-3. Refine an existing config with `sphinxsim update`.
-4. Validate structure and cross-field consistency with `sphinxsim validate`.
-5. Run the validated case with `sphinxsim run`.
-6. Iterate on geometry, materials, solver settings, and rerun.
+```bash
+sphinxsim shell
+```
 
-This keeps simulation inputs reproducible and reviewable while still allowing fast iteration through LLM assistance.
+Inside the shell, you can:
+
+1. **Generate** a simulation config from natural language: `generate "water dam break"`
+2. **Validate** the config structure: `validate`
+3. **Update** it with further instructions: `update "simulate for 2 s"`
+4. **Explore** the simulator schema and capabilities: `explore what body types are supported?`
+5. **Run** the validated simulation: `run`
+
+Each command auto-validates and auto-saves, so you always have a working config on disk.
+
+Alternatively, you can use direct commands for non-interactive workflows:
+
+- `sphinxsim generate` — Create a config from description
+- `sphinxsim update` — Modify an existing config
+- `sphinxsim explore` — Ask schema and functionality questions
+- `sphinxsim validate` — Check config validity
+- `sphinxsim run` — Execute a validated simulation
+
+For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 
 ## High-level architecture
 
@@ -34,7 +49,7 @@ This keeps simulation inputs reproducible and reviewable while still allowing fa
 - `sphinxsim/config/schemas.py`:
   Defines the top-level `SimulationConfig` and the typed config surface for system domains, global resolution, shapes, aligned boxes, particle generation, fluid bodies, continuum bodies, solid bodies, boundary conditions, observers, restart settings, body constraints, and extra state recording.
 - `sphinxsim/llm/`:
-  Provides LLM backends that translate natural-language prompts into schema-compliant configs. The default mock backend supports deterministic local testing, while the OpenAI backend can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
+  Provides LLM backends that translate natural-language prompts into schema-compliant configs and answer schema exploration questions. The default mock backend supports deterministic local testing, while the OpenAI backend can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 - `sphinxsim/sph_simulation/` and native bindings:
   Build and load SPHinXsys-backed simulation objects from validated JSON, including fluid and continuum-oriented workflows exposed through the Python package.
 
@@ -47,12 +62,22 @@ SPHinXsim currently supports a broader config surface than a basic fluid-only de
 - Solid boundary/body definitions required by the current validation and simulation builders.
 - Config-driven geometry composition using domains, shapes, aligned boxes, transforms, and particle-generation settings.
 - Incremental config editing through the CLI update command instead of regenerating cases from scratch.
+- Schema exploration through the CLI explore command for questions about supported bodies, materials, and simulator behavior.
 
 The repository remains config-first: natural-language generation is useful for initialization and revision, but the validated JSON artifact is the authoritative simulation input.
 
 ## Current direction
 
 The codebase is positioned for richer multi-physics growth while staying strict about validation boundaries. In practice, that means expanding benchmark coverage, continuing to improve continuum and coupled workflows, and strengthening the path from prompt to executable, testable simulation assets.
+
+## LLM test matrix
+
+The repository now supports two LLM testing modes:
+
+- Mocked tests are always safe for CI and run without any external service.
+- Ollama integration tests run locally when Ollama is available and are skipped in CI.
+
+See [LLM testing](llm-testing.md) for the exact test matrix, environment variables, and local commands.
 
 ## Why this project matters
 

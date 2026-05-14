@@ -14,6 +14,9 @@ import os
 import importlib.util
 import importlib
 from pathlib import Path
+from urllib import error, request
+
+import pytest
 
 def find_project_root(start: Path | None = None):
     start = start or Path.cwd()
@@ -202,15 +205,44 @@ def main():
         # Restore original directory
         os.chdir(original_dir)
 
-def test_nlp_to_simulation():
+
+def _ollama_reachable() -> bool:
+    base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
+    try:
+        with request.urlopen(f"{base_url.rstrip('/')}/api/tags", timeout=3):
+            return True
+    except (error.URLError, OSError):
+        return False
+
+
+def _is_ci_environment() -> bool:
+    return bool(os.getenv("CI") or os.getenv("GITHUB_ACTIONS") or os.getenv("GITLAB_CI"))
+
+
+def _ensure_core_2d_available():
     if importlib.util.find_spec("_sphinxsys_core_2d") is None:
-        import pytest
         pytest.skip("_sphinxsys_core_2d is not available in this environment")
     try:
         importlib.import_module("_sphinxsys_core_2d")
     except ImportError:
-        import pytest
         pytest.skip("_sphinxsys_core_2d cannot be imported in this environment")
+
+
+def test_nlp_to_simulation_mock(monkeypatch):
+    _ensure_core_2d_available()
+    monkeypatch.setenv("SPHINXSIM_LLM_PROVIDER", "mock")
+    assert main()
+
+
+@pytest.mark.integration
+def test_nlp_to_simulation_ollama(monkeypatch):
+    _ensure_core_2d_available()
+    if _is_ci_environment():
+        pytest.skip("Skip live Ollama test in CI; CI validates mock provider only")
+    if not _ollama_reachable():
+        pytest.skip("Ollama server is not reachable")
+
+    monkeypatch.setenv("SPHINXSIM_LLM_PROVIDER", "ollama")
     assert main()
 
 if __name__ == "__main__":
