@@ -29,7 +29,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -72,7 +72,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
         "fluid_boundary_conditions": [
             {
                 "body_name": "WaterBody",
-                "aligned_box": "Inlet",
+                "oriented_box": "Inlet",
                 "type": "emitter",
                 "inflow_speed": 1.5,
             }
@@ -157,7 +157,7 @@ class TestSimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -193,7 +193,7 @@ class TestSimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -229,7 +229,7 @@ class TestSimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -254,13 +254,13 @@ class TestSimulationConfig:
                 ]
             )
 
-    def test_boundary_condition_requires_existing_aligned_box(self):
-        with pytest.raises(ValidationError, match="aligned_box"):
+    def test_boundary_condition_requires_existing_oriented_box(self):
+        with pytest.raises(ValidationError, match="oriented_box"):
             _make_minimal_fluid_config(
                 fluid_boundary_conditions=[
                     {
                         "body_name": "WaterBody",
-                        "aligned_box": "MissingBox",
+                        "oriented_box": "MissingBox",
                         "type": "emitter",
                         "inflow_speed": 1.0,
                     }

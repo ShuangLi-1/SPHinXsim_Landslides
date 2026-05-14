@@ -64,10 +64,10 @@ void ConstraintBuilder::addConstraint(
             SimTK::MultibodySystem>("SimbodyMultibodySystem");
         SimTK::SimbodyMatterSubsystem &matter = *config_manager.emplaceEntity<
             SimTK::SimbodyMatterSubsystem>("SimbodyMatterSubsystem", MBsystem);
-        Shape &shape = config_manager.getEntity<Shape>(real_body.getName());
+        Shape &shape = config_manager.getEntity<Shape>(real_body.Name());
         SolidBodyPartForSimbody &body_part = real_body.addBodyPart<SolidBodyPartForSimbody>(shape);
         SimTK::Body::Rigid &simbody_body = *config_manager.emplaceEntity<
-            SimTK::Body::Rigid>(body_part.getName(), *body_part.body_part_mass_properties_);
+            SimTK::Body::Rigid>(body_part.Name(), *body_part.body_part_mass_properties_);
 
         const std::string mobilized_body_type = config.at("mobilized_body").get<std::string>();
 

@@ -27,16 +27,16 @@ void GeometryBuilder::createGeometries(EntityManager &config_manager, const json
     for (const auto &geo : config.at("shapes"))
     {
         Shape *shape = addShape(scaling_config, config_manager, geo);
-        config_manager.addEntity<Shape>(shape->getName(), shape);
+        config_manager.addEntity<Shape>(shape->Name(), shape);
         system_domain_config->updateSystemDomainConfig(shape->getBounds());
     }
 
-    if (config.contains("aligned_boxes"))
+    if (config.contains("oriented_boxes"))
     {
-        for (const auto &ab : config.at("aligned_boxes"))
+        for (const auto &ab : config.at("oriented_boxes"))
         {
-            GeometricShapeBox aligned_box_shape = addAlignedBox(scaling_config, config_manager, ab);
-            aligned_box_shape.writeGeometricShapeBoxToVtp(scaling_factor);
+            GeometricShapeBox oriented_box_shape = addOrientedBox(scaling_config, config_manager, ab);
+            oriented_box_shape.writeGeometricShapeBoxToVtp(scaling_factor);
         }
     }
 }
@@ -231,7 +231,7 @@ Shape *GeometryBuilder::addShape(
     throw std::runtime_error("GeometryBuilder::addShape: unsupported shape: " + type);
 }
 //=================================================================================================//
-GeometricShapeBox GeometryBuilder::addAlignedBox(
+GeometricShapeBox GeometryBuilder::addOrientedBox(
     const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config)
 {
     const std::string name = config.at("name").get<std::string>();
@@ -251,19 +251,19 @@ GeometricShapeBox GeometryBuilder::addAlignedBox(
         half_size[xAxis] = expansion_length * 0.5;
         Vecd translation = center + normal * half_size[xAxis];
         Rotation rotation = getRotationFromXAxis(normal);
-        AlignedBox *aligned_box = config_manager.emplaceEntity<AlignedBox>(
+        OrientedBox *oriented_box = config_manager.emplaceEntity<OrientedBox>(
             name, xAxis, Transform(rotation, translation), half_size);
-        return GeometricShapeBox(*aligned_box, name); // for visualization only
+        return GeometricShapeBox(*oriented_box, name); // for visualization only
     }
 
     if (type == "region")
     {
-        AlignedBox *aligned_box = config_manager.emplaceEntity<AlignedBox>(
+        OrientedBox *oriented_box = config_manager.emplaceEntity<OrientedBox>(
             name, xAxis, GeometryBuilder::parseBox(scaling_config, config));
-        return GeometricShapeBox(*aligned_box, name); // for visualization only
+        return GeometricShapeBox(*oriented_box, name); // for visualization only
     }
 
-    throw std::runtime_error("GeometryBuilder::addAlignedBox: unsupported aligned box type: " + type);
+    throw std::runtime_error("GeometryBuilder::addOrientedBox: unsupported aligned box type: " + type);
 }
 //=================================================================================================//
 } // namespace SPH

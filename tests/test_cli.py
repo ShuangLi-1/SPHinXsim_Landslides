@@ -42,7 +42,7 @@ def _valid_data() -> dict:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -85,7 +85,7 @@ def _valid_data() -> dict:
         "fluid_boundary_conditions": [
             {
                 "body_name": "WaterBody",
-                "aligned_box": "Inlet",
+                "oriented_box": "Inlet",
                 "type": "emitter",
                 "inflow_speed": 1.0,
             }
