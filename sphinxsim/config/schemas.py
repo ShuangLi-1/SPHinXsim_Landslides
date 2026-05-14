@@ -198,6 +198,8 @@ class ShapeConfig(BaseModel):
                 raise ValueError("complex_shape requires sub_shapes and operations")
             if len(self.sub_shapes) != len(self.operations):
                 raise ValueError("complex_shape sub_shapes and operations must have same length")
+            if any(op == GeometricOperationType.INTERSECTION for op in self.operations):
+                raise ValueError("complex_shape operations only support union and subtraction")
             return self
 
         if self.type == BodyShapeType.MULTIPOLYGON:
@@ -440,7 +442,6 @@ class FluidBoundaryConditionConfig(BaseModel):
 
 
 class RestartConfig(BaseModel):
-    enabled: bool
     restore_step: int = Field(..., ge=0)
     save_interval: int = Field(default=1000, gt=0)
     summary_enabled: bool = False

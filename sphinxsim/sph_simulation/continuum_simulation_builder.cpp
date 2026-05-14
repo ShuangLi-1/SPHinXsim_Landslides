@@ -171,9 +171,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Initial condition from restart file if enabled.
     //----------------------------------------------------------------------
-    auto &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
-    if (restart_config.enabled_)
+    if (config_manager.hasEntity<RestartConfig>("RestartConfig"))
     {
+        auto &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
         sph_system.setRestartStep(restart_config.restore_step_);
         auto &restart_io = main_methods.addIODynamics<RestartIOCK>(
             sph_system, restart_config.summary_enabled_);

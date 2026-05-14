@@ -158,7 +158,6 @@ struct SolverCommonConfig
 
 struct RestartConfig
 {
-    bool enabled_{false};
     int save_interval_{1000};
     int restore_step_{0};
     bool summary_enabled_{false};

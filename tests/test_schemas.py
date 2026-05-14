@@ -93,6 +93,63 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
     return SimulationConfig(**data)
 
 
+def _make_minimal_continuum_config(**overrides) -> SimulationConfig:
+    data = {
+        "simulation_type": "continuum_dynamics",
+        "geometries": {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "ContinuumBody",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [0.4, 0.2],
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+        },
+        "particle_generation": {
+            "build_and_run": False,
+            "settings": {
+                "bodies": [
+                    {"name": "ContinuumBody"},
+                    {"name": "WallBoundary", "solid_body": {}},
+                ],
+                "relaxation_parameters": {"total_iterations": 1000},
+            },
+        },
+        "continuum_bodies": [
+            {
+                "name": "ContinuumBody",
+                "material": {
+                    "type": "general_continuum",
+                    "density": 1000.0,
+                    "sound_speed": 20.0,
+                    "youngs_modulus": 1.0e6,
+                    "poisson_ratio": 0.3,
+                },
+            }
+        ],
+        "solid_bodies": [{"name": "WallBoundary", "material": {"type": "rigid_body"}}],
+        "solver_parameters": {
+            "end_time": 1.0,
+            "output_interval": 0.01,
+            "continuum_dynamics": {
+                "acoustic_cfl": 0.4,
+                "advection_cfl": 0.2,
+            },
+        },
+    }
+    data.update(overrides)
+    return SimulationConfig(**data)
+
+
 class TestDomainConfig:
     def test_valid(self):
         d = DomainConfig(lower_bound=[0.0, 0.0], upper_bound=[1.0, 2.0])
@@ -353,16 +410,36 @@ class TestSimulationConfig:
         assert "LuminousIntensity" in names
         assert "AngularVelocity" in names
 
-    def test_simbody_constraint_requires_restart(self):
-        with pytest.raises(ValidationError, match="simbody body_constraints require solver_parameters.restart"):
+    def test_continuum_config_can_omit_restart(self):
+        cfg = _make_minimal_continuum_config()
+        assert cfg.solver_parameters.restart is None
+
+    def test_complex_shape_disallows_intersection(self):
+        with pytest.raises(ValidationError, match="only support union and subtraction"):
             _make_minimal_fluid_config(
-                body_constraints=[
-                    {
-                        "body_name": "WallBoundary",
-                        "type": "simbody",
-                        "mobilized_body": "planar",
-                        "velocity": [0.0, 0.0],
-                        "angular_velocity": 0.0,
-                    }
-                ]
+                geometries={
+                    "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+                    "global_resolution": {"particle_spacing": 0.05},
+                    "shapes": [
+                        {
+                            "name": "WaterBody",
+                            "type": "bounding_box",
+                            "lower_bound": [0.0, 0.0],
+                            "upper_bound": [0.4, 0.2],
+                        },
+                        {
+                            "name": "WallBoundary",
+                            "type": "bounding_box",
+                            "lower_bound": [0.0, 0.0],
+                            "upper_bound": [1.0, 1.0],
+                        },
+                        {
+                            "name": "BadComplex",
+                            "type": "complex_shape",
+                            "sub_shapes": ["WaterBody", "WallBoundary"],
+                            "operations": ["union", "intersection"],
+                        },
+                    ],
+                }
             )
+
