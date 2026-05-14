@@ -48,7 +48,12 @@ class Relation;
 class RelationBase
 {
   public:
+    RelationBase() {}
     virtual ~RelationBase() {};
+    const std::string &Name() const { return names_.front(); }
+
+  protected:
+    StdVec<std::string> names_;
 };
 
 template <typename SourceIdentifier, typename TargetIdentifier>
@@ -57,7 +62,7 @@ class Relation<SourceIdentifier, TargetIdentifier> : public RelationBase
 
     using SourceAdaptation = typename SourceIdentifier::Adaptation;
     using TargetAdaptation = typename TargetIdentifier::Adaptation;
-    SharedPtrsKeeper<Entity> relation_variable_ptrs_;
+    SharedPtrsKeeper<Quantity> relation_variable_ptrs_;
     SharedPtrsKeeper<Neighbor<Base>> neighborhood_ptrs_;
     DiscreteVariable<Vecd> *assignConfigPosition(BaseParticles &particles, ConfigType config_type);
 
