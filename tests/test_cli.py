@@ -259,8 +259,9 @@ class TestCLIUpdate:
 class TestCLIShell:
     def test_shell_generate_then_update_auto_validates(self, build_temp_path, capsys):
         cfg = build_temp_path / "shell_config.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_config.json"
         inputs = [
-            'generate "water dam break simulation" shell_config.json',
+            f'generate "water dam break simulation" {shell_rel_cfg}',
             'update "simulate for 2 s"',
             "exit",
         ]
