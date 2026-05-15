@@ -47,6 +47,7 @@ from typing import Tuple
 from pydantic import ValidationError
 
 from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.config.update_patch import UpdatePatch, apply_update_patch
 from sphinxsim.llm import get_llm
 
 # Convert PROJECT_ROOT to Path after imports
@@ -130,7 +131,53 @@ def cmd_update(args: argparse.Namespace) -> int:
                 file=sys.stderr,
             )
             return 1
-        updated_config = llm.update(config, args.description)
+        strict_mode = str(getattr(args, "strict", "true")).lower() != "false"
+        if getattr(args, "patch_mode", False):
+            if not hasattr(llm, "update_patch"):
+                print(
+                    "The selected LLM provider does not support patch-mode updates. "
+                    "Please use a provider implementing update_patch().",
+                    file=sys.stderr,
+                )
+                return 1
+            patch_payload = llm.update_patch(config, args.description, strict=strict_mode)
+            if isinstance(patch_payload, UpdatePatch):
+                parsed_patch = patch_payload
+            else:
+                parsed_patch = UpdatePatch.model_validate(patch_payload)
+
+            patch_result = apply_update_patch(
+                config.model_dump(exclude_none=True), parsed_patch, strict=strict_mode
+            )
+            if patch_result.errors:
+                print("Error applying update patch:", file=sys.stderr)
+                for error in patch_result.errors:
+                    print(f"  - {error}", file=sys.stderr)
+                return 1
+
+            try:
+                updated_config = SimulationConfig.model_validate(patch_result.updated)
+            except ValidationError as exc:
+                print(f"Patched config validation failed:\n{exc}", file=sys.stderr)
+                return 1
+
+            print("Patch summary:")
+            print(f"  Applied: {patch_result.applied}")
+            print(f"  Changed: {patch_result.changed}")
+            print(f"  Operations: {patch_result.summary}")
+            print(f"  Diff stats: {patch_result.diff_stats}")
+            if patch_result.warnings:
+                print("  Warnings:")
+                for warning in patch_result.warnings:
+                    print(f"    - {warning}")
+
+            if getattr(args, "dry_run", False):
+                print("Dry run: no files were written.")
+                print("Generated patch:")
+                print(parsed_patch.model_dump_json(indent=2, exclude_none=True))
+                return 0
+        else:
+            updated_config = llm.update(config, args.description)
     except (ValueError, ValidationError) as exc:
         print(f"Error updating config: {exc}", file=sys.stderr)
         return 1
@@ -379,7 +426,11 @@ def cmd_shell(args: argparse.Namespace) -> int:
     provider = os.getenv("SPHINXSIM_LLM_PROVIDER", "mock")
     print("SPHinXsim interactive shell")
     print(f"LLM provider: {provider}")
-    print("Commands: load FILE, generate DESCRIPTION FILE, update INSTRUCTION, validate, run, explore QUESTION, exit")
+    print(
+        "Commands: load FILE, generate DESCRIPTION FILE, "
+        "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
+        "validate, run, explore QUESTION, exit"
+    )
     print("Note: relative paths are resolved under .build-temp/")
 
     config_path: Path | None = None
@@ -402,6 +453,11 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  load FILE                       - Load an existing config file")
             print("  generate DESCRIPTION FILE       - Generate new config via LLM and save to FILE")
             print("  update INSTRUCTION              - Modify loaded config via LLM")
+            print("  update --patch-mode INSTRUCTION - Apply operation-based patch update")
+            print("  update --patch-mode --dry-run INSTRUCTION")
+            print("                                 - Preview patch update without writing")
+            print("  update --patch-mode --strict false INSTRUCTION")
+            print("                                 - Patch update with non-strict behavior")
             print("  explore QUESTION                - Ask about schema")
             print("  validate                        - Reload and validate config from disk")
             print("  run                             - Run simulation from loaded config")
@@ -465,34 +521,54 @@ def cmd_shell(args: argparse.Namespace) -> int:
             continue
 
         if cmd == "update":
-            instruction = " ".join(parts[1:]).strip()
+            patch_mode = False
+            dry_run = False
+            strict = "true"
+            parse_error = False
+            idx = 1
+            while idx < len(parts):
+                token = parts[idx]
+                if token == "--patch-mode":
+                    patch_mode = True
+                    idx += 1
+                    continue
+                if token == "--dry-run":
+                    dry_run = True
+                    idx += 1
+                    continue
+                if token == "--strict":
+                    if idx + 1 >= len(parts) or parts[idx + 1] not in {"true", "false"}:
+                        print("Usage: update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION", file=sys.stderr)
+                        parse_error = True
+                        break
+                    strict = parts[idx + 1]
+                    idx += 2
+                    continue
+                break
+
+            if parse_error:
+                continue
+
+            instruction = " ".join(parts[idx:]).strip()
             if not instruction:
-                print("Usage: update INSTRUCTION", file=sys.stderr)
+                print("Usage: update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION", file=sys.stderr)
                 continue
             if config_path is None:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
-            current, rc = _load_config(config_path)
-            if rc != 0 or current is None:
-                print("Failed to load current config for update.", file=sys.stderr)
-                continue
-            llm = get_llm()
-            if not hasattr(llm, "update"):
-                print(
-                    "The selected LLM provider does not support config updates.",
-                    file=sys.stderr,
+
+            rc = cmd_update(
+                argparse.Namespace(
+                    config_file=str(config_path),
+                    description=instruction,
+                    output=None,
+                    patch_mode=patch_mode,
+                    dry_run=dry_run,
+                    strict=strict,
                 )
-                continue
-            try:
-                updated = llm.update(current, instruction)
-                config_path.parent.mkdir(parents=True, exist_ok=True)
-                config_path.write_text(updated.model_dump_json(indent=2, exclude_none=True))
-                print(f"✅ Updated config written to {config_path}")
+            )
+            if rc == 0 and not dry_run:
                 _shell_auto_validate(config_path)
-            except (ValueError, ValidationError) as exc:
-                print(f"Error updating config: {exc}", file=sys.stderr)
-            except OSError as exc:
-                print(f"Error writing config: {exc}", file=sys.stderr)
             continue
 
         if cmd == "explore":
@@ -571,6 +647,22 @@ def _build_parser() -> argparse.ArgumentParser:
         metavar="FILE",
         default=None,
         help="Write updated JSON to FILE instead of updating in place.",
+    )
+    upd.add_argument(
+        "--patch-mode",
+        action="store_true",
+        help="Use operation-based patch updates (provider must support update_patch()).",
+    )
+    upd.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Preview patch-mode results without writing output file.",
+    )
+    upd.add_argument(
+        "--strict",
+        choices=["true", "false"],
+        default="true",
+        help="Strict patch application behavior for --patch-mode (default: true).",
     )
     upd.set_defaults(func=cmd_update)
 

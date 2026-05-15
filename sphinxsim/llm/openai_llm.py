@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
 from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.config.update_patch import UpdatePatch
 
 # OpenAI SDK (new-style)
 from openai import OpenAI
@@ -83,6 +84,45 @@ class OpenAILLM:
         content = resp.choices[0].message.content or ""
         data: Dict[str, Any] = json.loads(content)
         return SimulationConfig(**data)
+
+    @staticmethod
+    def _dict_diff(base: Any, updated: Any) -> Any:
+        if isinstance(base, dict) and isinstance(updated, dict):
+            changed: Dict[str, Any] = {}
+            for key in updated.keys():
+                if key not in base:
+                    changed[key] = updated[key]
+                    continue
+                child = OpenAILLM._dict_diff(base[key], updated[key])
+                if child is not None:
+                    changed[key] = child
+            return changed if changed else None
+
+        if isinstance(base, list) and isinstance(updated, list):
+            if base != updated:
+                return updated
+            return None
+
+        if base != updated:
+            return updated
+        return None
+
+    def update_patch(self, existing: SimulationConfig, description: str, strict: bool = True) -> Dict[str, Any]:
+        updated = self.update(existing, description)
+        base = existing.model_dump(exclude_none=True)
+        target = updated.model_dump(exclude_none=True)
+        delta = self._dict_diff(base, target) or {}
+        patch = UpdatePatch(
+            strict=strict,
+            operations=[
+                {
+                    "op": "merge_object",
+                    "path": "",
+                    "value": delta,
+                }
+            ],
+        )
+        return patch.model_dump(exclude_none=True)
 
     def explore(self, question: str, context: str | None = None) -> str:
         if not question or not question.strip():

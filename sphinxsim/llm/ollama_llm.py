@@ -12,6 +12,7 @@ from typing import Any, Dict
 from urllib import error, request
 
 from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.config.update_patch import UpdatePatch
 
 
 @dataclass
@@ -152,6 +153,28 @@ class OllamaLLM:
             else:
                 merged[key] = value
         return merged
+
+    @staticmethod
+    def _dict_diff(base: Any, updated: Any) -> Any:
+        if isinstance(base, dict) and isinstance(updated, dict):
+            changed: Dict[str, Any] = {}
+            for key in updated.keys():
+                if key not in base:
+                    changed[key] = updated[key]
+                    continue
+                child = OllamaLLM._dict_diff(base[key], updated[key])
+                if child is not None:
+                    changed[key] = child
+            return changed if changed else None
+
+        if isinstance(base, list) and isinstance(updated, list):
+            if base != updated:
+                return updated
+            return None
+
+        if base != updated:
+            return updated
+        return None
 
     @staticmethod
     def _apply_explicit_instruction_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
@@ -439,6 +462,55 @@ class OllamaLLM:
             repaired = self._merge_dicts(merged, existing_dict)
             repaired = self._sanitize_config_dict(repaired)
             return SimulationConfig(**repaired)
+
+    def update_patch(self, existing: SimulationConfig, description: str, strict: bool = True) -> Dict[str, Any]:
+        if not description or not description.strip():
+            raise ValueError("description must not be empty")
+
+        existing_dict = existing.model_dump(exclude_none=True)
+        system = (
+            "You generate operation-based JSON patches for simulator configs. "
+            "Return ONLY JSON in this shape: "
+            "{\"schema_version\":\"1.0\",\"strict\":true|false,\"operations\":[...]}. "
+            "Allowed operations: set_value(path,value), merge_object(path,value), "
+            "append_item(path,value), upsert_item(path,match,value,on_match,on_missing), "
+            "rename_item_key(path,match,key,new_value). "
+            "Do not use delete/remove operations."
+        )
+        user = {
+            "instruction": description,
+            "existing_config": existing_dict,
+            "strict": strict,
+        }
+
+        data = self._post_chat(
+            messages=[
+                {"role": "system", "content": system},
+                {"role": "user", "content": json.dumps(user)},
+            ]
+        )
+        if isinstance(data, dict):
+            try:
+                patch = UpdatePatch.model_validate(data)
+                patch.strict = strict
+                return patch.model_dump(exclude_none=True)
+            except Exception:
+                pass
+
+        updated = self.update(existing, description)
+        target = updated.model_dump(exclude_none=True)
+        delta = self._dict_diff(existing_dict, target) or {}
+        patch = UpdatePatch(
+            strict=strict,
+            operations=[
+                {
+                    "op": "merge_object",
+                    "path": "",
+                    "value": delta,
+                }
+            ],
+        )
+        return patch.model_dump(exclude_none=True)
 
     def explore(self, question: str, context: str | None = None) -> str:
         if not question or not question.strip():

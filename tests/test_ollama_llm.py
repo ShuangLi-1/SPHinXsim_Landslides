@@ -224,3 +224,31 @@ class TestOllamaLLMUpdate:
         ):
             with pytest.raises(RuntimeError, match="Failed to contact Ollama server"):
                 self.llm.update(_FLUID_CONFIG, "change model")
+
+
+class TestOllamaLLMUpdatePatch:
+    def setup_method(self):
+        self.llm = OllamaLLM()
+
+    def test_returns_operation_patch(self):
+        patch_payload = {
+            "schema_version": "1.0",
+            "strict": True,
+            "operations": [
+                {
+                    "op": "set_value",
+                    "path": "solver_parameters.end_time",
+                    "value": 3.0,
+                }
+            ],
+        }
+        resp = _make_response({"message": {"role": "assistant", "content": patch_payload}})
+        with patch("urllib.request.urlopen", return_value=resp):
+            patch_obj = self.llm.update_patch(_FLUID_CONFIG, "simulate for 3 s")
+
+        assert patch_obj["schema_version"] == "1.0"
+        assert patch_obj["operations"][0]["op"] == "set_value"
+
+    def test_empty_description_raises(self):
+        with pytest.raises(ValueError, match="description must not be empty"):
+            self.llm.update_patch(_FLUID_CONFIG, "")
