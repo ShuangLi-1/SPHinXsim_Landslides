@@ -41,6 +41,8 @@ PYBIND11_MODULE(MODULE_NAME, m)
              "Build geometries from JSON configuration file")
         .def("generateParticles", &SPHSimulation::generateParticles,
              "Generate particles for all bodies from configuration")
+        .def("resetAfterGeometryChange", &SPHSimulation::resetAfterGeometryChange,
+             "Reset particle/system/solver state to allow geometry edits and rebuild")
         .def("rerunParticleRelaxation", &SPHSimulation::rerunParticleRelaxation,
              "Rerun particle relaxation workflow")
         .def("buildSimulation", &SPHSimulation::buildSimulation,
