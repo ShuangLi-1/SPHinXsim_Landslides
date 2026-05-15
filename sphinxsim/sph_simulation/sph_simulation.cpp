@@ -66,8 +66,17 @@ EntityManager &SPHSimulation::getConfigManager()
     return config_manager_;
 }
 //=================================================================================================//
-void SPHSimulation::createParticlesGeneration(const json &config)
+void SPHSimulation::generateParticles()
 {
+    if (!geometry_builder_ptr_)
+    {
+        std::cerr << "SPHSimulation::runParticleGeneration: GeometryBuilder not found. "
+                     "Call buildGeometries() before runParticleGeneration\n";
+
+        exit(1);
+    }
+
+    json config = loadConfig().at("particle_generation");
     if (config.at("build_and_run").get<bool>())
     {
         particle_generation_ptr_ = std::make_unique<ParticleGeneration>();
@@ -76,12 +85,23 @@ void SPHSimulation::createParticlesGeneration(const json &config)
     }
 }
 //=================================================================================================//
-void SPHSimulation::buildSimulationFromJson(const json &config)
+void SPHSimulation::buildGeometries()
 {
+    json config = loadConfig();
     config_manager_.emplaceEntity<ScalingConfig>("ScalingConfig", config);
     geometry_builder_ptr_->createGeometries(config_manager_, config.at("geometries"));
-    createParticlesGeneration(config.at("particle_generation"));
+}
+//=================================================================================================//
+void SPHSimulation::buildSimulation()
+{
+    if (!particle_generation_ptr_)
+    {
+        std::cerr << "SPHSimulation::buildSimulation: ParticleGeneration not found. "
+                     "Call createParticlesGeneration() before buildSimulation().\n";
+        exit(1);
+    }
 
+    json config = loadConfig();
     if (config.contains("simulation_type"))
     {
         std::string simulation_type = config.at("simulation_type").get<std::string>();
@@ -105,18 +125,17 @@ void SPHSimulation::buildSimulationFromJson(const json &config)
     }
 }
 //=================================================================================================//
-void SPHSimulation::loadConfig()
+json SPHSimulation::loadConfig()
 {
+    json config;
     std::ifstream file(config_path_);
     if (!file.is_open())
     {
         throw std::runtime_error(
             "SPHSimulation::loadConfig: unable to open config file " + config_path_.string());
     }
-    json config;
     file >> config;
-
-    buildSimulationFromJson(config);
+    return config;
 }
 //=================================================================================================//
 void SPHSimulation::initializeSimulation()
@@ -125,7 +144,7 @@ void SPHSimulation::initializeSimulation()
     {
         throw std::runtime_error(
             "SPHSimulation::initializeSimulation: simulation is not built. "
-            "Call loadConfig() or buildSimulationFromJson() first.");
+            "Call buildSimulation() first.");
     }
 
     for (auto &step : initialization_pipeline_.main_steps)
@@ -170,11 +189,13 @@ void SPHSimulation::stepBy(Real interval)
     stepTo(present_time_ + interval);
 }
 //=================================================================================================//
-void SPHSimulation::runParticleGeneration()
+void SPHSimulation::rerunParticleRelaxation()
 {
     if (!particle_generation_ptr_)
     {
-        std::cerr << "SPHSimulation::ParticleGeneration: ParticleGeneration not found.\n";
+        std::cerr << "SPHSimulation::rerunParticleGeneration: ParticleGeneration not found. "
+                     "Call createParticlesGeneration() before rerunParticleGeneration\n";
+
         exit(1);
     }
     particle_generation_ptr_->runRelaxation();

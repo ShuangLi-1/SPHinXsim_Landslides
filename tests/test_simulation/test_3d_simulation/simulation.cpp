@@ -15,7 +15,9 @@ TEST(simulations, dambreak)
 {
     SPHSimulation sim("input/dambreak.json");
     sim.resetOutputRoot("./dambreak");
-    sim.loadConfig();
+    sim.buildGeometries();
+    sim.generateParticles();
+    sim.buildSimulation();
     sim.initializeSimulation();
     sim.run();
 }
@@ -24,7 +26,9 @@ TEST(simulations, t_pipe)
 {
     SPHSimulation sim("input/t_pipe.json");
     sim.resetOutputRoot("./t_pipe", true);
-    sim.loadConfig();
+    sim.buildGeometries();
+    sim.generateParticles();
+    sim.buildSimulation();
     sim.initializeSimulation();
     sim.run();
 }
