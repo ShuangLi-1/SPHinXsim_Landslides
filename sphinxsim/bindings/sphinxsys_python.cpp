@@ -43,6 +43,12 @@ PYBIND11_MODULE(MODULE_NAME, m)
              "Generate particles for all bodies from configuration")
         .def("resetAfterGeometryChange", &SPHSimulation::resetAfterGeometryChange,
              "Reset particle/system/solver state to allow geometry edits and rebuild")
+        .def("isGeometryLocked", &SPHSimulation::isGeometryLocked,
+             "Return whether geometry edits are locked after particle generation")
+        .def("hasBuiltGeometries", &SPHSimulation::hasBuiltGeometries,
+             "Return whether geometries have been built in this simulator instance")
+        .def("hasGeneratedParticles", &SPHSimulation::hasGeneratedParticles,
+             "Return whether particles have been generated in this simulator instance")
         .def("rerunParticleRelaxation", &SPHSimulation::rerunParticleRelaxation,
              "Rerun particle relaxation workflow")
         .def("buildSimulation", &SPHSimulation::buildSimulation,

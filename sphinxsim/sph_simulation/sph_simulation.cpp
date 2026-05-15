@@ -122,6 +122,21 @@ void SPHSimulation::resetAfterGeometryChange()
     geometry_locked_ = false;
 }
 //=================================================================================================//
+bool SPHSimulation::isGeometryLocked() const
+{
+    return geometry_locked_;
+}
+//=================================================================================================//
+bool SPHSimulation::hasBuiltGeometries() const
+{
+    return geometry_built_;
+}
+//=================================================================================================//
+bool SPHSimulation::hasGeneratedParticles() const
+{
+    return particles_generated_;
+}
+//=================================================================================================//
 void SPHSimulation::buildSimulation()
 {
     if (!particle_generation_ptr_)

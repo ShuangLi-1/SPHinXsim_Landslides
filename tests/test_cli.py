@@ -365,6 +365,40 @@ class TestCLIShell:
         data = json.loads(cfg.read_text())
         assert data["solver_parameters"]["end_time"] == pytest.approx(1.0)
 
+    def test_shell_geometry_lock_blocks_geometry_update(self, build_temp_path, capsys):
+        cfg = build_temp_path / "shell_geometry_lock.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_lock.json"
+        inputs = [
+            f'generate "water dam break simulation" {shell_rel_cfg}',
+            "lock-geometry",
+            'update "water flow with 5 mm resolution"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        err = capsys.readouterr().err
+        assert "Geometry is locked" in err
+        data = json.loads(cfg.read_text())
+        assert data["geometries"]["global_resolution"]["particle_spacing"] == pytest.approx(0.025)
+
+    def test_shell_geometry_lock_allows_non_geometry_update(self, build_temp_path):
+        cfg = build_temp_path / "shell_geometry_lock_non_geo.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_lock_non_geo.json"
+        inputs = [
+            f'generate "water dam break simulation" {shell_rel_cfg}',
+            "lock-geometry",
+            'update "simulate for 2 s"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        data = json.loads(cfg.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
+
 
 class TestCLIExplore:
     def test_explore_outputs_schema_guidance(self, capsys):

@@ -54,6 +54,9 @@ class SPHSimulation
     void buildGeometries();
     void generateParticles();
     void resetAfterGeometryChange();
+    bool isGeometryLocked() const;
+    bool hasBuiltGeometries() const;
+    bool hasGeneratedParticles() const;
     void rerunParticleRelaxation();
     void buildSimulation();
     void initializeSimulation();
