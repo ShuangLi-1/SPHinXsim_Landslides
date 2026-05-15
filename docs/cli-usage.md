@@ -15,8 +15,8 @@ sphinxsim shell
 This opens an interactive prompt where you can enter commands sequentially:
 
 ```
-> generate "water dam break simulation"
-✓ Config generated and saved to config.json
+> generate "water dam break simulation" config.json
+✓ Config generated and written to .../.build-temp/config.json
 ✓ Schema validation passed
 
 > validate
@@ -27,7 +27,7 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
   Gravity: [0, -1] m/s²
 
 > update "simulate for 2 s"
-✓ Config updated and saved to config.json
+✓ Updated config written to .../.build-temp/config.json
 ✓ Schema validation passed
 
 > explore what bodies and materials does this simulation support?
@@ -41,18 +41,12 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
   Gravity: [0, -1] m/s²
 
 > run
-Building simulation...
-Running SPH simulation...
-Output saved to: build-integrated/output
+✅ Simulation configuration loaded
+✅ Simulation initialized
+🚀 Running simulation...
 
 > exit
 Goodbye!
-```
-
-### Shell with custom config file
-
-```bash
-sphinxsim shell --config my_simulation.json
 ```
 
 ### Shell commands
@@ -61,13 +55,19 @@ Inside the shell, you can use the following commands:
 
 | Command | Description |
 | --- | --- |
-| `generate "description"` | Generate a new config from natural language description |
-| `update "instruction"` | Modify the current config with an instruction (e.g., "change end time to 5 s") |
+| `load FILE` | Load and validate an existing config file |
+| `generate "description" FILE` | Generate a new config and write it to FILE |
+| `update "instruction"` | Modify the loaded config with an instruction (e.g., "change end time to 5 s") |
 | `explore "question"` | Ask the configured LLM questions about the simulator schema and capabilities |
-| `validate` | Display the current config structure and validate it |
-| `run` | Build and execute the validated simulation |
+| `validate` | Reload the loaded file from disk and validate it |
+| `run` | Build and execute the loaded config |
 | `help` | Show available commands |
 | `exit` | Quit the shell |
+
+Notes:
+- `sphinxsim shell` starts with no file loaded.
+- Relative file paths inside the shell resolve under `.build-temp/`.
+- `validate` always reloads from disk, so external edits are picked up immediately.
 
 ## Direct commands (non-interactive)
 
@@ -78,7 +78,7 @@ You can also run individual commands directly:
 Create a new simulation config from a natural language description:
 
 ```bash
-sphinxsim generate --description "2D water dam break with 0.5 m/s initial velocity" --output config.json
+sphinxsim generate "2D water dam break with 0.5 m/s initial velocity" --output config.json
 ```
 
 This:
@@ -93,7 +93,7 @@ This:
 Check an existing config without modifying it:
 
 ```bash
-sphinxsim validate --config config.json
+sphinxsim validate config.json
 ```
 
 This displays:
@@ -108,7 +108,7 @@ This displays:
 Modify an existing config with natural language instructions:
 
 ```bash
-sphinxsim update --config config.json --description "increase end time to 10 s" --output config_updated.json
+sphinxsim update config.json "increase end time to 10 s" --output config_updated.json
 ```
 
 This:
@@ -136,7 +136,7 @@ This:
 Execute a validated simulation:
 
 ```bash
-sphinxsim run --config config.json
+sphinxsim run config.json
 ```
 
 This:
@@ -151,7 +151,7 @@ This:
 
 ```bash
 sphinxsim shell
-> generate "2D water dam break, domain 5m x 5m, resolution 2.5cm"
+> generate "2D water dam break, domain 5m x 5m, resolution 2.5cm" config.json
 > validate
 > run
 > exit
@@ -160,20 +160,23 @@ sphinxsim shell
 ### Example 2: Compare two configurations
 
 ```bash
-sphinxsim generate --description "water dam break" --output config_v1.json
-sphinxsim validate --config config_v1.json
+sphinxsim generate "water dam break" --output config_v1.json
+sphinxsim validate config_v1.json
 
-sphinxsim generate --description "water dam break with faster gravity" --output config_v2.json
-sphinxsim validate --config config_v2.json
+sphinxsim generate "water dam break with faster gravity" --output config_v2.json
+sphinxsim validate config_v2.json
 
 # Then run the version you prefer:
-sphinxsim run --config config_v1.json
+sphinxsim run config_v1.json
 ```
 
-### Example 3: Fine-tune a config without regenerating
+### Example 3: External editing loop in shell
 
 ```bash
-sphinxsim shell --config config.json
+sphinxsim shell
+> load config.json
+> validate
+# edit config.json in your editor while shell remains open
 > validate
 > update "change particle spacing to 1 cm"
 > explore what materials can I use for solid bodies?
@@ -185,8 +188,8 @@ sphinxsim shell --config config.json
 
 ```bash
 for desc in "water dam break" "sloshing tank" "wave propagation"; do
-  sphinxsim generate --description "$desc" --output "config_$desc.json"
-  sphinxsim validate --config "config_$desc.json"
+  sphinxsim generate "$desc" --output "config_$desc.json"
+  sphinxsim validate "config_$desc.json"
 done
 ```
 
@@ -200,7 +203,7 @@ By default, `sphinxsim` uses a local mock LLM that works offline. To use a diffe
 export SPHINXSIM_LLM_PROVIDER=ollama
 export OLLAMA_BASE_URL=http://localhost:11434
 export OLLAMA_MODEL=qwen2.5:3b
-sphinxsim generate --description "water dam break"
+sphinxsim generate "water dam break"
 ```
 
 First, ensure Ollama is running:
@@ -216,21 +219,22 @@ ollama pull qwen2.5:3b
 export SPHINXSIM_LLM_PROVIDER=openai
 export OPENAI_API_KEY=sk-...
 export OPENAI_MODEL=gpt-4
-sphinxsim generate --description "water dam break"
+sphinxsim generate "water dam break"
 ```
 
 ### Use mock (default)
 
 ```bash
 export SPHINXSIM_LLM_PROVIDER=mock
-sphinxsim generate --description "water dam break"
+sphinxsim generate "water dam break"
 ```
 
 ## Output locations
 
-- **Generated configs**: Saved to the path specified by `--output` (default: `config.json`)
+- **Generated configs**: Printed to stdout unless `--output` is provided
+- **Shell-generated configs**: Saved to the FILE argument used by `generate "..." FILE` (resolved under `.build-temp/` when relative)
 - **Explore answers**: Printed to stdout; no files are written
-- **Simulation output**: Saved to `build-integrated/output/`
+- **Simulation output**: Saved under `.build-temp/test_simulation/` (runtime output root)
 - **Temporary files**: Stored in `.build-temp/`
 
 ## Error handling
@@ -240,7 +244,7 @@ If config generation or validation fails:
 1. **Generation fails**: The LLM response did not match the expected JSON schema. Check the error message for details, or try rephrasing your description.
 2. **Validation fails**: The config violates a schema constraint (e.g., body type mismatch). Use `sphinxsim validate` to see which field is invalid.
 3. **Explore fails**: The LLM could not answer using the schema context. Rephrase the question to focus on supported bodies, materials, solver settings, or CLI workflow.
-4. **Execution fails**: The config is valid but the simulation failed. Check simulation output in `build-integrated/output/`.
+4. **Execution fails**: The config is valid but the simulation failed. Check simulation output in `.build-temp/test_simulation/`.
 
 ## See also
 

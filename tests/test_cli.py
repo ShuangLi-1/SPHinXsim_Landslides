@@ -42,7 +42,7 @@ def _valid_data() -> dict:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -85,7 +85,7 @@ def _valid_data() -> dict:
         "fluid_boundary_conditions": [
             {
                 "body_name": "WaterBody",
-                "aligned_box": "Inlet",
+                "oriented_box": "Inlet",
                 "type": "emitter",
                 "inflow_speed": 1.0,
             }
@@ -259,13 +259,14 @@ class TestCLIUpdate:
 class TestCLIShell:
     def test_shell_generate_then_update_auto_validates(self, build_temp_path, capsys):
         cfg = build_temp_path / "shell_config.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_config.json"
         inputs = [
-            'generate "water dam break simulation"',
+            f'generate "water dam break simulation" {shell_rel_cfg}',
             'update "simulate for 2 s"',
             "exit",
         ]
         with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell", "--config", str(cfg)])
+            rc = main(["shell"])
 
         assert rc == 0
         assert cfg.exists()
@@ -276,21 +277,19 @@ class TestCLIShell:
         out = capsys.readouterr().out
         assert "Auto-validation passed" in out
 
-    def test_shell_update_before_generate_errors(self, build_temp_path, capsys):
-        cfg = build_temp_path / "missing_config.json"
+    def test_shell_update_before_load_errors(self, build_temp_path, capsys):
         inputs = ['update "simulate for 2 s"', "exit"]
         with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell", "--config", str(cfg)])
+            rc = main(["shell"])
 
         assert rc == 0
         err = capsys.readouterr().err
-        assert "Run generate first" in err
+        assert "No config loaded" in err
 
     def test_shell_explore_returns_answer(self, build_temp_path, capsys):
-        cfg = build_temp_path / "shell_config.json"
         inputs = ['explore "what are top-level schema fields?"', "exit"]
         with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell", "--config", str(cfg)])
+            rc = main(["shell"])
 
         assert rc == 0
         out = capsys.readouterr().out

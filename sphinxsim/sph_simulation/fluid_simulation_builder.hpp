@@ -106,7 +106,7 @@ void FluidSimulationBuilder::buildViscousForceIfPresent(
     EntityManager &config_manager = sim.getConfigManager();
 
     SPHBody &sph_body = inner_relation.getSPHBody();
-    if (config_manager.hasEntity<Viscosity>(sph_body.getName() + "Viscosity"))
+    if (config_manager.hasEntity<Viscosity>(sph_body.Name() + "Viscosity"))
     {
         auto &viscous_force =
             main_methods.template addInteractionDynamicsWithUpdate<
@@ -150,13 +150,13 @@ void FluidSimulationBuilder::addBoundaryCondition(
 
     const std::string body_name = config.at("body_name").get<std::string>();
     FluidBody &fluid_body = sim.getSPHSystem().getBodyByName<FluidBody>(body_name);
-    AlignedBox &aligned_box = config_manager.getEntity<AlignedBox>(
-        config.at("aligned_box").get<std::string>());
+    OrientedBox &oriented_box = config_manager.getEntity<OrientedBox>(
+        config.at("oriented_box").get<std::string>());
     const std::string type = config.at("type").get<std::string>();
 
     if (type == "emitter")
     { // must be aligned box for emitter
-        auto &emitter = fluid_body.addBodyPart<AlignedBoxByParticle>(aligned_box);
+        auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
         auto &inflow_condition = main_methods.template addStateDynamics<
             fluid_dynamics::EmitterInflowConditionCK, ConstantInflowSpeed>(
             emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
@@ -176,9 +176,9 @@ void FluidSimulationBuilder::addBoundaryCondition(
 
     if (type == "bi_directional")
     {
-        auto &aligned_box_by_cell = fluid_body.addBodyPart<AlignedBoxByCell>(aligned_box);
+        auto &oriented_box_by_cell = fluid_body.addBodyPart<OrientedBoxByCell>(oriented_box);
         auto &bi_directional_bd = createBiDirectionBoundary(
-            aligned_box_by_cell, config_manager, main_methods, config);
+            oriented_box_by_cell, config_manager, main_methods, config);
 
         initialization_pipeline.insert_hook(
             InitializationHookPoint::InitialParticleIndicationTagging, [&]()
@@ -222,7 +222,7 @@ void FluidSimulationBuilder::addBoundaryCondition(
 //=================================================================================================//
 template <class MethodContainerType>
 fluid_dynamics::AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiDirectionBoundary(
-    AlignedBoxByCell &aligned_box_by_cell, EntityManager &config_manager,
+    OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
     MethodContainerType &main_methods, const json &config)
 {
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
@@ -230,7 +230,7 @@ fluid_dynamics::AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiD
     {
         auto &bi_directional_bd = main_methods.template addGeneralDynamics<
             fluid_dynamics::BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<>>(
-            aligned_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
+            oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
         return bi_directional_bd;
     }
     throw std::runtime_error(

@@ -29,7 +29,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -72,7 +72,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
         "fluid_boundary_conditions": [
             {
                 "body_name": "WaterBody",
-                "aligned_box": "Inlet",
+                "oriented_box": "Inlet",
                 "type": "emitter",
                 "inflow_speed": 1.5,
             }
@@ -86,6 +86,63 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
                 "advection_cfl": 0.25,
                 "flow_type": "free_surface",
                 "particle_sort_frequency": 100,
+            },
+        },
+    }
+    data.update(overrides)
+    return SimulationConfig(**data)
+
+
+def _make_minimal_continuum_config(**overrides) -> SimulationConfig:
+    data = {
+        "simulation_type": "continuum_dynamics",
+        "geometries": {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "ContinuumBody",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [0.4, 0.2],
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+        },
+        "particle_generation": {
+            "build_and_run": False,
+            "settings": {
+                "bodies": [
+                    {"name": "ContinuumBody"},
+                    {"name": "WallBoundary", "solid_body": {}},
+                ],
+                "relaxation_parameters": {"total_iterations": 1000},
+            },
+        },
+        "continuum_bodies": [
+            {
+                "name": "ContinuumBody",
+                "material": {
+                    "type": "general_continuum",
+                    "density": 1000.0,
+                    "sound_speed": 20.0,
+                    "youngs_modulus": 1.0e6,
+                    "poisson_ratio": 0.3,
+                },
+            }
+        ],
+        "solid_bodies": [{"name": "WallBoundary", "material": {"type": "rigid_body"}}],
+        "solver_parameters": {
+            "end_time": 1.0,
+            "output_interval": 0.01,
+            "continuum_dynamics": {
+                "acoustic_cfl": 0.4,
+                "advection_cfl": 0.2,
             },
         },
     }
@@ -157,7 +214,7 @@ class TestSimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -193,7 +250,7 @@ class TestSimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -229,7 +286,7 @@ class TestSimulationConfig:
                     "upper_bound": [1.0, 1.0],
                 },
             ],
-            "aligned_boxes": [
+            "oriented_boxes": [
                 {
                     "name": "Inlet",
                     "type": "region",
@@ -254,13 +311,13 @@ class TestSimulationConfig:
                 ]
             )
 
-    def test_boundary_condition_requires_existing_aligned_box(self):
-        with pytest.raises(ValidationError, match="aligned_box"):
+    def test_boundary_condition_requires_existing_oriented_box(self):
+        with pytest.raises(ValidationError, match="oriented_box"):
             _make_minimal_fluid_config(
                 fluid_boundary_conditions=[
                     {
                         "body_name": "WaterBody",
-                        "aligned_box": "MissingBox",
+                        "oriented_box": "MissingBox",
                         "type": "emitter",
                         "inflow_speed": 1.0,
                     }
@@ -353,16 +410,36 @@ class TestSimulationConfig:
         assert "LuminousIntensity" in names
         assert "AngularVelocity" in names
 
-    def test_simbody_constraint_requires_restart(self):
-        with pytest.raises(ValidationError, match="simbody body_constraints require solver_parameters.restart"):
+    def test_continuum_config_can_omit_restart(self):
+        cfg = _make_minimal_continuum_config()
+        assert cfg.solver_parameters.restart is None
+
+    def test_complex_shape_disallows_intersection(self):
+        with pytest.raises(ValidationError, match="only support union and subtraction"):
             _make_minimal_fluid_config(
-                body_constraints=[
-                    {
-                        "body_name": "WallBoundary",
-                        "type": "simbody",
-                        "mobilized_body": "planar",
-                        "velocity": [0.0, 0.0],
-                        "angular_velocity": 0.0,
-                    }
-                ]
+                geometries={
+                    "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+                    "global_resolution": {"particle_spacing": 0.05},
+                    "shapes": [
+                        {
+                            "name": "WaterBody",
+                            "type": "bounding_box",
+                            "lower_bound": [0.0, 0.0],
+                            "upper_bound": [0.4, 0.2],
+                        },
+                        {
+                            "name": "WallBoundary",
+                            "type": "bounding_box",
+                            "lower_bound": [0.0, 0.0],
+                            "upper_bound": [1.0, 1.0],
+                        },
+                        {
+                            "name": "BadComplex",
+                            "type": "complex_shape",
+                            "sub_shapes": ["WaterBody", "WallBoundary"],
+                            "operations": ["union", "intersection"],
+                        },
+                    ],
+                }
             )
+

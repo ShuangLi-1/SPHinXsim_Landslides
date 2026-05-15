@@ -35,8 +35,8 @@ namespace SPH
 {
 
 class TimeStepper;
-class AlignedBoxByParticle;
-class AlignedBoxByCell;
+class OrientedBoxByParticle;
+class OrientedBoxByCell;
 class RealBody;
 namespace fluid_dynamics
 {
@@ -97,7 +97,7 @@ class FluidSimulationBuilder : public SimulationBuilder
 
     template <class MethodContainerType>
     fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
-        AlignedBoxByCell &aligned_box_by_cell, EntityManager &config_manager,
+        OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
         MethodContainerType &main_methods, const json &config);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>

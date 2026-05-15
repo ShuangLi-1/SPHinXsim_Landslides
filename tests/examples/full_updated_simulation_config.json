@@ -35,7 +35,7 @@
         ]
       }
     ],
-    "aligned_boxes": [
+    "oriented_boxes": [
       {
         "name": "Inlet",
         "type": "region",
@@ -86,7 +86,7 @@
   "fluid_boundary_conditions": [
     {
       "body_name": "WaterBody",
-      "aligned_box": "Inlet",
+      "oriented_box": "Inlet",
       "type": "emitter",
       "inflow_speed": 2.0
     }

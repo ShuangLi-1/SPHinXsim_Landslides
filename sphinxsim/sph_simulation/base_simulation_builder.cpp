@@ -456,7 +456,6 @@ void SimulationBuilder::parseSolverParameters(EntityManager &config_manager, con
 RestartConfig SimulationBuilder::parseRestartConfig(const json &config)
 {
     RestartConfig restart_config;
-    restart_config.enabled_ = config.at("enabled").get<bool>();
     if (config.contains("save_interval"))
         restart_config.save_interval_ = config.at("save_interval").get<int>();
     restart_config.restore_step_ = config.at("restore_step").get<int>();

@@ -56,26 +56,24 @@ sphinxsim shell
 Inside the shell, you can generate and update configs using the live Ollama backend:
 
 ```
-> generate "2D water dam break simulation"
-✓ Config generated and saved to config.json
+> generate "2D water dam break simulation" config.json
+✓ Config generated and written to .../.build-temp/config.json
 ✓ Schema validation passed
 
 > validate
-Configuration: WaterBody (fluid) + WallBoundary (solid)
-  Domain: [0, 0] to [5.37, 5.37]
-  Resolution: 0.025 m
-  End time: 0.5 s
+✅ Reloaded and validated config: .../.build-temp/config.json
 
 > update "increase end time to 2 seconds"
-✓ Config updated and saved to config.json
+✓ Updated config written to .../.build-temp/config.json
 ✓ Schema validation passed
 
 > explore what body types are supported?
 Supported body types include fluid bodies, continuum bodies, and rigid solid bodies, depending on the schema fields present.
 
 > run
-Building simulation...
-Running SPH simulation...
+✅ Simulation configuration loaded
+✅ Simulation initialized
+🚀 Running simulation...
 ```
 
 See [CLI Usage](cli-usage.md) for full shell command reference, including `explore`.

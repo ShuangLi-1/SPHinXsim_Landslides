@@ -34,7 +34,7 @@
         ]
       }
     ],
-    "aligned_boxes": [
+    "oriented_boxes": [
       {
         "name": "Emitter",
         "type": "region",
@@ -89,7 +89,7 @@
   "fluid_boundary_conditions": [
     {
       "body_name": "WaterBody",
-      "aligned_box": "Emitter",
+      "oriented_box": "Emitter",
       "type": "emitter",
       "inflow_speed": 2.0
     }

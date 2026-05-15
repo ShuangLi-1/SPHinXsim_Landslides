@@ -126,7 +126,7 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationPositionUpdate(
         position_update.add(&main_methods.template addStateDynamics<PositionRelaxationCK>(real_body));
         if (body_config.with_level_set_)
         {
-            auto *near_body_surface = config_manager.emplaceEntity<NearShapeSurface>(real_body.getName(), real_body);
+            auto *near_body_surface = config_manager.emplaceEntity<NearShapeSurface>(real_body.Name(), real_body);
             position_update.add(&main_methods.template addStateDynamics<LevelsetBounding>(*near_body_surface));
         }
     }
@@ -150,16 +150,16 @@ ParticleDynamicsGroup &ParticleGeneration::addBodyNormalDirection(
     return normal_direction_update;
 }
 //=================================================================================================//
-template <class AlignedBoxPartType, class ConstraintMethodType>
-class AlignedBoxConstraint : public BaseLocalDynamics<AlignedBoxPartType>
+template <class OrientedBoxPartType, class ConstraintMethodType>
+class OrientedBoxConstraint : public BaseLocalDynamics<OrientedBoxPartType>
 {
     using DataType = typename ConstraintMethodType::ReturnType;
 
   public:
     template <typename... Args>
-    AlignedBoxConstraint(AlignedBoxPartType &aligned_box_part, const std::string &variable_name, Args &&...args)
-        : BaseLocalDynamics<AlignedBoxPartType>(aligned_box_part),
-          sv_aligned_box_(aligned_box_part.svAlignedBox()),
+    OrientedBoxConstraint(OrientedBoxPartType &oriented_box_part, const std::string &variable_name, Args &&...args)
+        : BaseLocalDynamics<OrientedBoxPartType>(oriented_box_part),
+          sv_oriented_box_(oriented_box_part.svOrientedBox()),
           dv_variable_(this->particles_->template getVariableByName<DataType>(variable_name)),
           constraint_(std::forward<Args>(args)...){};
 
@@ -168,23 +168,23 @@ class AlignedBoxConstraint : public BaseLocalDynamics<AlignedBoxPartType>
       public:
         template <class ExecutionPolicy, class EncloserType>
         UpdateKernel(const ExecutionPolicy &ex_policy, EncloserType &encloser)
-            : aligned_box_(encloser.sv_aligned_box_->DelegatedData(ex_policy)),
+            : oriented_box_(encloser.sv_oriented_box_->DelegatedData(ex_policy)),
               variable_(encloser.dv_variable_->DelegatedData(ex_policy)),
               constraint_(encloser.constraint_){};
 
         void update(size_t index_i, Real dt = 0.0)
         {
-            variable_[index_i] = constraint_(aligned_box_->getTransform(), variable_[index_i]);
+            variable_[index_i] = constraint_(oriented_box_->getTransform(), variable_[index_i]);
         };
 
       protected:
-        AlignedBox *aligned_box_;
+        OrientedBox *oriented_box_;
         DataType *variable_;
         ConstraintMethodType constraint_;
     };
 
   protected:
-    SingleVariable<AlignedBox> *sv_aligned_box_;
+    SingleVariable<OrientedBox> *sv_oriented_box_;
     DiscreteVariable<DataType> *dv_variable_;
     ConstraintMethodType constraint_;
 };
@@ -215,14 +215,14 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
     {
         const std::string body_name = rc.at("body_name").get<std::string>();
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
-        AlignedBox &constraint_region = config_manager.getEntity<
-            AlignedBox>(rc.at("aligned_box").get<std::string>());
-        auto &body_part = real_body.addBodyPart<AlignedBoxByParticle>(constraint_region);
+        OrientedBox &constraint_region = config_manager.getEntity<
+            OrientedBox>(rc.at("oriented_box").get<std::string>());
+        auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(constraint_region);
         std::string type = rc.at("type").get<std::string>();
         if (type == "normal")
         {
             relaxation_constraints.add(
-                &main_methods.template addStateDynamics<AlignedBoxConstraint, CovariantVectorAxis>(
+                &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
                     body_part, "KernelGradientIntegral", 0));
         }
         else

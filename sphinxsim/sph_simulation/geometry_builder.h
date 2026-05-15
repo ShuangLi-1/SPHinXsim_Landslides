@@ -62,7 +62,7 @@ class GeometryBuilder
 
   private:
     Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
-    GeometricShapeBox addAlignedBox(
+    GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
 };
 } // namespace SPH

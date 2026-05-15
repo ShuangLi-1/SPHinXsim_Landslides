@@ -63,7 +63,7 @@ class MultiPolygonPrimitiveType(str, Enum):
     DATA_FILE = "data_file"
 
 
-class AlignedBoxType(str, Enum):
+class OrientedBoxType(str, Enum):
     IN_OUTLET = "in_outlet"
     REGION = "region"
 
@@ -198,6 +198,8 @@ class ShapeConfig(BaseModel):
                 raise ValueError("complex_shape requires sub_shapes and operations")
             if len(self.sub_shapes) != len(self.operations):
                 raise ValueError("complex_shape sub_shapes and operations must have same length")
+            if any(op == GeometricOperationType.INTERSECTION for op in self.operations):
+                raise ValueError("complex_shape operations only support union and subtraction")
             return self
 
         if self.type == BodyShapeType.MULTIPOLYGON:
@@ -213,9 +215,9 @@ class ShapeConfig(BaseModel):
         return self
 
 
-class AlignedBoxConfig(BaseModel):
+class OrientedBoxConfig(BaseModel):
     name: str = Field(..., min_length=1)
-    type: AlignedBoxType
+    type: OrientedBoxType
 
     center: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     normal: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
@@ -225,13 +227,13 @@ class AlignedBoxConfig(BaseModel):
     transform: Optional[TransformConfig] = None
 
     @model_validator(mode="after")
-    def _validate_aligned_box(self) -> "AlignedBoxConfig":
-        if self.type == AlignedBoxType.IN_OUTLET:
+    def _validate_oriented_box(self) -> "OrientedBoxConfig":
+        if self.type == OrientedBoxType.IN_OUTLET:
             if self.center is None or self.normal is None or self.radius is None:
-                raise ValueError("in_outlet aligned_box requires center, normal and radius")
-        elif self.type == AlignedBoxType.REGION:
+                raise ValueError("in_outlet oriented_box requires center, normal and radius")
+        elif self.type == OrientedBoxType.REGION:
             if self.half_size is None or self.transform is None:
-                raise ValueError("region aligned_box requires half_size and transform")
+                raise ValueError("region oriented_box requires half_size and transform")
         return self
 
 
@@ -239,7 +241,7 @@ class GeometriesConfig(BaseModel):
     system_domain: Optional[DomainConfig] = None
     global_resolution: Optional[GlobalResolutionConfig] = None
     shapes: List[ShapeConfig] = Field(..., min_length=1)
-    aligned_boxes: List[AlignedBoxConfig] = Field(default_factory=list)
+    oriented_boxes: List[OrientedBoxConfig] = Field(default_factory=list)
 
     @model_validator(mode="after")
     def _validate_shape_references(self) -> "GeometriesConfig":
@@ -287,7 +289,7 @@ class RelaxationParametersConfig(BaseModel):
 
 class RelaxationConstraintConfig(BaseModel):
     body_name: str = Field(..., min_length=1)
-    aligned_box: str = Field(..., min_length=1)
+    oriented_box: str = Field(..., min_length=1)
     type: str = Field(..., min_length=1)
 
 
@@ -425,7 +427,7 @@ class ContinuumBodyConfig(BaseModel):
 
 class FluidBoundaryConditionConfig(BaseModel):
     body_name: str = Field(..., min_length=1)
-    aligned_box: str = Field(..., min_length=1)
+    oriented_box: str = Field(..., min_length=1)
     type: FluidBoundaryConditionType
     inflow_speed: Optional[float] = Field(default=None, gt=0)
     pressure: Optional[float] = None
@@ -440,7 +442,6 @@ class FluidBoundaryConditionConfig(BaseModel):
 
 
 class RestartConfig(BaseModel):
-    enabled: bool
     restore_step: int = Field(..., ge=0)
     save_interval: int = Field(default=1000, gt=0)
     summary_enabled: bool = False
@@ -513,7 +514,7 @@ class SimulationConfig(BaseModel):
     @model_validator(mode="after")
     def _cross_validate(self) -> "SimulationConfig":
         shape_names = {shape.name for shape in self.geometries.shapes}
-        aligned_box_names = {ab.name for ab in self.geometries.aligned_boxes}
+        oriented_box_names = {ab.name for ab in self.geometries.oriented_boxes}
 
         # Scaling: if characteristic_dimensions provided, Length must be among them
         if self.characteristic_dimensions is not None:
@@ -559,9 +560,9 @@ class SimulationConfig(BaseModel):
                     raise ValueError(
                         f"relaxation constraint body '{c.body_name}' must match a shape name in geometries.shapes"
                     )
-                if c.aligned_box not in aligned_box_names:
+                if c.oriented_box not in oriented_box_names:
                     raise ValueError(
-                        f"relaxation constraint aligned_box '{c.aligned_box}' must exist in geometries.aligned_boxes"
+                        f"relaxation constraint oriented_box '{c.oriented_box}' must exist in geometries.oriented_boxes"
                     )
 
         # Boundary condition references
@@ -569,8 +570,8 @@ class SimulationConfig(BaseModel):
         for bc in self.fluid_boundary_conditions:
             if bc.body_name not in fluid_names:
                 raise ValueError("fluid_boundary_conditions body_name must reference an existing fluid body")
-            if bc.aligned_box not in aligned_box_names:
-                raise ValueError("fluid_boundary_conditions aligned_box must exist in geometries.aligned_boxes")
+            if bc.oriented_box not in oriented_box_names:
+                raise ValueError("fluid_boundary_conditions oriented_box must exist in geometries.oriented_boxes")
 
         # Observer references
         observed_names = fluid_names | {body.name for body in self.continuum_bodies}

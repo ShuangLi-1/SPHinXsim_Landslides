@@ -12,7 +12,7 @@ template <class MethodContainerType, class InnerRelationType>
 BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
     EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
 {
-    std::string body_name = inner_relation.getSPHBody().getName();
+    std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
     {
         using RiemannSolverType = RiemannSolver<GeneralContinuum, GeneralContinuum, NoLimiter>;
@@ -37,7 +37,7 @@ template <class MethodContainerType, class InnerRelationType>
 BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
     EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
 {
-    std::string body_name = inner_relation.getSPHBody().getName();
+    std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
     {
         using RiemannSolverType = RiemannSolver<GeneralContinuum, GeneralContinuum, NoLimiter>;
@@ -69,7 +69,7 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
             .add(&method_container.template addInteractionDynamics<
                   LinearGradient, Vecd>(inner_relation, "Velocity"));
 
-    std::string body_name = inner_relation.getSPHBody().getName();
+    std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
     {
         continuum_shear_force.add(

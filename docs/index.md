@@ -24,13 +24,14 @@ sphinxsim shell
 
 Inside the shell, you can:
 
-1. **Generate** a simulation config from natural language: `generate "water dam break"`
-2. **Validate** the config structure: `validate`
-3. **Update** it with further instructions: `update "simulate for 2 s"`
-4. **Explore** the simulator schema and capabilities: `explore what body types are supported?`
-5. **Run** the validated simulation: `run`
+1. **Load** an existing config file: `load config.json`
+2. **Generate** a simulation config from natural language: `generate "water dam break" config.json`
+3. **Validate** the config structure: `validate`
+4. **Update** it with further instructions: `update "simulate for 2 s"`
+5. **Explore** the simulator schema and capabilities: `explore what body types are supported?`
+6. **Run** the validated simulation: `run`
 
-Each command auto-validates and auto-saves, so you always have a working config on disk.
+In shell mode, `validate` reloads the loaded file from disk so external edits are picked up immediately.
 
 Alternatively, you can use direct commands for non-interactive workflows:
 

@@ -29,19 +29,19 @@ void MaterialBuilder::addMaterial(EntityManager &config_manager, SPHBody &sph_bo
             Real viscosity = scaling_config.jsonToReal(config.at("viscosity"), "Viscosity");
             auto &material = sph_body.defineClosure<WeaklyCompressibleFluid, Viscosity>(
                 ConstructArgs(density, sound_speed), viscosity);
-            config_manager.addEntity(sph_body.getName() + "WeaklyCompressibleFluid", &material);
-            config_manager.addEntity(sph_body.getName() + "Viscosity", DynamicCast<Viscosity>(this, &material));
+            config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleFluid", &material);
+            config_manager.addEntity(sph_body.Name() + "Viscosity", DynamicCast<Viscosity>(this, &material));
             return;
         }
         auto &material = sph_body.defineMaterial<WeaklyCompressibleFluid>(density, sound_speed);
-        config_manager.addEntity(sph_body.getName() + "WeaklyCompressibleFluid", &material);
+        config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleFluid", &material);
         return;
     }
 
     if (type == "rigid_body")
     {
         auto &material = sph_body.defineMaterial<Solid>();
-        config_manager.addEntity(sph_body.getName() + "RigidBody", &material);
+        config_manager.addEntity(sph_body.Name() + "RigidBody", &material);
         return;
     }
 
@@ -55,7 +55,7 @@ void MaterialBuilder::addMaterial(EntityManager &config_manager, SPHBody &sph_bo
         Real hardening_modulus = scaling_config.jsonToReal(config.at("hardening_modulus"), "Stress");
         auto &material = sph_body.defineMaterial<J2Plasticity>(
             density, sound_speed, youngs_modulus, poisson_ratio, yield_stress, hardening_modulus);
-        config_manager.addEntity(sph_body.getName() + "J2Plasticity", &material);
+        config_manager.addEntity(sph_body.Name() + "J2Plasticity", &material);
         return;
     }
 
@@ -67,7 +67,7 @@ void MaterialBuilder::addMaterial(EntityManager &config_manager, SPHBody &sph_bo
         Real poisson_ratio = scaling_config.jsonToReal(config.at("poisson_ratio"), "Dimensionless");
         auto &material = sph_body.defineMaterial<GeneralContinuum>(
             density, sound_speed, youngs_modulus, poisson_ratio);
-        config_manager.addEntity(sph_body.getName() + "GeneralContinuum", &material);
+        config_manager.addEntity(sph_body.Name() + "GeneralContinuum", &material);
         return;
     }
 

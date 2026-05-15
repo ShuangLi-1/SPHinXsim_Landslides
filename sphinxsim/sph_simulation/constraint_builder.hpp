@@ -30,7 +30,6 @@ void ConstraintBuilder::addConstraint(
     EntityManager &config_manager = sim.getConfigManager();
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
-    RestartConfig &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
     StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
 
     const std::string type = config.at("type").get<std::string>();
@@ -64,10 +63,10 @@ void ConstraintBuilder::addConstraint(
             SimTK::MultibodySystem>("SimbodyMultibodySystem");
         SimTK::SimbodyMatterSubsystem &matter = *config_manager.emplaceEntity<
             SimTK::SimbodyMatterSubsystem>("SimbodyMatterSubsystem", MBsystem);
-        Shape &shape = config_manager.getEntity<Shape>(real_body.getName());
+        Shape &shape = config_manager.getEntity<Shape>(real_body.Name());
         SolidBodyPartForSimbody &body_part = real_body.addBodyPart<SolidBodyPartForSimbody>(shape);
         SimTK::Body::Rigid &simbody_body = *config_manager.emplaceEntity<
-            SimTK::Body::Rigid>(body_part.getName(), *body_part.body_part_mass_properties_);
+            SimTK::Body::Rigid>(body_part.Name(), *body_part.body_part_mass_properties_);
 
         const std::string mobilized_body_type = config.at("mobilized_body").get<std::string>();
 
@@ -90,8 +89,9 @@ void ConstraintBuilder::addConstraint(
             SimTK::Vec3 u_cmd = SimTK::Vec3(omega_z, velocity[0], velocity[1]);
             mobilized_body.setU(state, u_cmd); // set the initial velocity of the mobilized body
 
-            if (restart_config.enabled_)
+            if (config_manager.hasEntity<RestartConfig>("RestartConfig"))
             {
+                auto &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
                 SPH::SimbodyStateEngine &state_engine = *config_manager.emplaceEntity<
                     SPH::SimbodyStateEngine>("SimbodyStateEngine", MBsystem);
 
