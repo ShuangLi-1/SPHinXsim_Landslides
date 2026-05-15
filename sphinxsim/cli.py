@@ -247,8 +247,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         sim.resetOutputRoot(str(output_dir))
         print(f"📁 Now, the output folder is changed to: {output_dir}")
 
-        sim.loadConfig()
-        print("✅ Simulation configuration loaded")
+        sim.buildGeometries()
+        print("✅ Geometries built")
+        sim.generateParticles()
+        print("✅ Particles generated")
+        sim.buildSimulation()
+        print("✅ Simulation built")
 
         sim.initializeSimulation()
         print("✅ Simulation initialized")
