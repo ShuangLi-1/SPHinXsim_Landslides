@@ -70,8 +70,8 @@ void SPHSimulation::generateParticles()
 {
     if (!geometry_builder_ptr_)
     {
-        std::cerr << "SPHSimulation::runParticleGeneration: GeometryBuilder not found. "
-                     "Call buildGeometries() before runParticleGeneration\n";
+        std::cerr << "SPHSimulation::generateParticles: GeometryBuilder not found. "
+                     "Call buildGeometries() before generateParticles().\n";
 
         exit(1);
     }
