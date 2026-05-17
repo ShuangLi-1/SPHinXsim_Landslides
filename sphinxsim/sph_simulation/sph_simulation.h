@@ -51,8 +51,14 @@ class SPHSimulation
     SPHSimulation(const fs::path &config_path);
     ~SPHSimulation();
     void resetOutputRoot(const fs::path &output_root, bool keep_existing = false);
-    void loadConfig();
-    void runParticleGeneration();
+    void buildGeometries();
+    void generateParticles();
+    void resetAfterGeometryChange();
+    bool isGeometryLocked() const;
+    bool hasBuiltGeometries() const;
+    bool hasGeneratedParticles() const;
+    void rerunParticleRelaxation();
+    void buildSimulation();
     void initializeSimulation();
     void run();
     void stepTo(Real target_time);
@@ -85,10 +91,11 @@ class SPHSimulation
     std::unique_ptr<ParticleGeneration> particle_generation_ptr_;
     std::unique_ptr<SPHSystem> sph_system_ptr_;
     std::unique_ptr<SPHSolver> sph_solver_ptr_;
+    bool geometry_built_{false};
+    bool geometry_locked_{false};
+    bool particles_generated_{false};
     bool executable_simulation_state_ready_{false};
-
-    void buildSimulationFromJson(const json &config);
-    void createParticlesGeneration(const json &config);
+    json loadConfig();
 };
 } // namespace SPH
 #endif // SPH_SIMULATION_H

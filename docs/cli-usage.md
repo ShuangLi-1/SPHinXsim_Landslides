@@ -45,6 +45,19 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
 ✅ Simulation initialized
 🚀 Running simulation...
 
+> lock-status
+Geometry lock status: locked (source: simulator)
+
+> update "water flow with 5 mm resolution"
+Geometry is locked after particle generation. Unlock geometry first to apply geometry changes.
+
+> unlock-geometry
+🔓 Geometry updates unlocked (simulator-reported state).
+
+> update "water flow with 5 mm resolution"
+✓ Updated config written to .../.build-temp/config.json
+✓ Schema validation passed
+
 > exit
 Goodbye!
 ```
@@ -58,9 +71,15 @@ Inside the shell, you can use the following commands:
 | `load FILE` | Load and validate an existing config file |
 | `generate "description" FILE` | Generate a new config and write it to FILE |
 | `update "instruction"` | Modify the loaded config with an instruction (e.g., "change end time to 5 s") |
+| `update --patch-mode "instruction"` | Apply operation-based patch updates |
+| `update --patch-mode --dry-run "instruction"` | Preview patch update without writing |
+| `update --patch-mode --strict false "instruction"` | Use non-strict patch apply behavior |
 | `explore "question"` | Ask the configured LLM questions about the simulator schema and capabilities |
 | `validate` | Reload the loaded file from disk and validate it |
 | `run` | Build and execute the loaded config |
+| `lock-geometry` | Lock geometry updates for the active shell session |
+| `unlock-geometry` | Unlock geometry updates (and reset downstream simulator state when attached) |
+| `lock-status` | Show whether geometry updates are locked |
 | `help` | Show available commands |
 | `exit` | Quit the shell |
 
@@ -68,6 +87,18 @@ Notes:
 - `sphinxsim shell` starts with no file loaded.
 - Relative file paths inside the shell resolve under `.build-temp/`.
 - `validate` always reloads from disk, so external edits are picked up immediately.
+
+## Geometry lock behavior
+
+The simulator now acts as the source of truth for geometry lock state during shell workflows.
+
+- Geometry becomes locked after particle generation in the simulator lifecycle.
+- While locked, geometry-changing `update` operations are rejected.
+- Non-geometry updates (for example, end time changes) are still allowed.
+- `unlock-geometry` re-opens geometry edits. If a simulator instance is attached, this calls the simulator reset path so downstream particle/system/solver state is invalidated safely.
+- `lock-status` reports whether the lock state comes from the simulator or shell fallback state.
+
+In non-interactive direct commands (`sphinxsim update ...`), there is no persistent simulator session, so lock enforcement is session policy rather than live simulator state.
 
 ## Direct commands (non-interactive)
 
@@ -191,6 +222,20 @@ for desc in "water dam break" "sloshing tank" "wave propagation"; do
   sphinxsim generate "$desc" --output "config_$desc.json"
   sphinxsim validate "config_$desc.json"
 done
+```
+
+### Example 5: Geometry edit safety loop in shell
+
+```bash
+sphinxsim shell
+> load config.json
+> run
+> lock-status
+> update "water flow with 5 mm resolution"     # rejected while locked
+> unlock-geometry
+> update "water flow with 5 mm resolution"     # now allowed
+> validate
+> run
 ```
 
 ## LLM provider selection

@@ -255,6 +255,46 @@ class TestCLIUpdate:
         rc = main(["update", str(build_temp_path / "missing.json"), "simulate for 1 s"])
         assert rc != 0
 
+    def test_update_patch_mode_in_place(self, build_temp_path):
+        p = self._write_valid(build_temp_path)
+        rc = main(["update", str(p), "simulate for 2 s", "--patch-mode"])
+        assert rc == 0
+        data = json.loads(p.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
+
+    def test_update_patch_mode_dry_run_does_not_write(self, build_temp_path, capsys):
+        p = self._write_valid(build_temp_path)
+        before = p.read_text()
+        rc = main(["update", str(p), "simulate for 3 s", "--patch-mode", "--dry-run"])
+        assert rc == 0
+        after = p.read_text()
+        assert after == before
+        out = capsys.readouterr().out
+        assert "Dry run" in out
+
+    def test_update_patch_mode_strict_failure(self, build_temp_path):
+        class _BadPatchLLM:
+            def update(self, existing, description):
+                return existing
+
+            def update_patch(self, existing, description, strict=True):
+                return {
+                    "schema_version": "1.0",
+                    "strict": True,
+                    "operations": [
+                        {
+                            "op": "append_item",
+                            "path": "solver_parameters.end_time",
+                            "value": 1,
+                        }
+                    ],
+                }
+
+        p = self._write_valid(build_temp_path)
+        with patch("sphinxsim.cli.get_llm", return_value=_BadPatchLLM()):
+            rc = main(["update", str(p), "simulate for 1 s", "--patch-mode", "--strict", "true"])
+        assert rc != 0
+
 
 class TestCLIShell:
     def test_shell_generate_then_update_auto_validates(self, build_temp_path, capsys):
@@ -294,6 +334,70 @@ class TestCLIShell:
         assert rc == 0
         out = capsys.readouterr().out
         assert "Top-level SimulationConfig fields" in out
+
+    def test_shell_update_patch_mode_applies(self, build_temp_path):
+        cfg = build_temp_path / "shell_patch_apply.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_patch_apply.json"
+        inputs = [
+            f'generate "water dam break simulation" {shell_rel_cfg}',
+            'update --patch-mode "simulate for 2 s"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        data = json.loads(cfg.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
+
+    def test_shell_update_patch_mode_dry_run_does_not_write(self, build_temp_path):
+        cfg = build_temp_path / "shell_patch_dry_run.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_patch_dry_run.json"
+        inputs = [
+            f'generate "water flow for 1 s" {shell_rel_cfg}',
+            'update --patch-mode --dry-run "simulate for 2 s"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        data = json.loads(cfg.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(1.0)
+
+    def test_shell_geometry_lock_blocks_geometry_update(self, build_temp_path, capsys):
+        cfg = build_temp_path / "shell_geometry_lock.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_lock.json"
+        inputs = [
+            f'generate "water dam break simulation" {shell_rel_cfg}',
+            "lock-geometry",
+            'update "water flow with 5 mm resolution"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        err = capsys.readouterr().err
+        assert "Geometry is locked" in err
+        data = json.loads(cfg.read_text())
+        assert data["geometries"]["global_resolution"]["particle_spacing"] == pytest.approx(0.025)
+
+    def test_shell_geometry_lock_allows_non_geometry_update(self, build_temp_path):
+        cfg = build_temp_path / "shell_geometry_lock_non_geo.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_lock_non_geo.json"
+        inputs = [
+            f'generate "water dam break simulation" {shell_rel_cfg}',
+            "lock-geometry",
+            'update "simulate for 2 s"',
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        data = json.loads(cfg.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
 
 
 class TestCLIExplore:

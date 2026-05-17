@@ -36,11 +36,23 @@ PYBIND11_MODULE(MODULE_NAME, m)
         .def(py::init<const std::filesystem::path &>(), py::arg("config_path"),
              "Initialize SPHSimulation with path to JSON config file")
         .def("resetOutputRoot", &SPHSimulation::resetOutputRoot, py::arg("output_root"), py::arg("keep_existing") = false,
-             "Override output/restart/reload root folder. Call before loadConfig().")
-        .def("loadConfig", &SPHSimulation::loadConfig,
-             "Build simulation from JSON file specified at initialization")
-        .def("runParticleGeneration", &SPHSimulation::runParticleGeneration,
-             "Run particle generation / relaxation workflow when configured")
+             "Override output/restart/reload root folder. Call before building simulation.")
+        .def("buildGeometries", &SPHSimulation::buildGeometries,
+             "Build geometries from JSON configuration file")
+        .def("generateParticles", &SPHSimulation::generateParticles,
+             "Generate particles for all bodies from configuration")
+        .def("resetAfterGeometryChange", &SPHSimulation::resetAfterGeometryChange,
+             "Reset particle/system/solver state to allow geometry edits and rebuild")
+        .def("isGeometryLocked", &SPHSimulation::isGeometryLocked,
+             "Return whether geometry edits are locked after particle generation")
+        .def("hasBuiltGeometries", &SPHSimulation::hasBuiltGeometries,
+             "Return whether geometries have been built in this simulator instance")
+        .def("hasGeneratedParticles", &SPHSimulation::hasGeneratedParticles,
+             "Return whether particles have been generated in this simulator instance")
+        .def("rerunParticleRelaxation", &SPHSimulation::rerunParticleRelaxation,
+             "Rerun particle relaxation workflow")
+        .def("buildSimulation", &SPHSimulation::buildSimulation,
+             "Build simulation (relations, dynamics, etc.) from JSON configuration")
         .def("initializeSimulation", &SPHSimulation::initializeSimulation,
              "Initialize executable simulation state after build and before run")
         .def("run", &SPHSimulation::run,

@@ -142,7 +142,7 @@ BaseIO *RecordingBuilder::addObserveRecorderWithVariableConfig(
     if (variable_config.type_ == "Real")
     {
         auto &ob = main_methods.template addObserveRecorder<Real>(
-            variable_config.name_, observer_relation);
+            observer_relation, variable_config.name_);
         ob.getObservedVariable().setScalingRef(scaling_config.getScalingRef(variable_config.name_));
         return &ob;
     }
@@ -150,7 +150,7 @@ BaseIO *RecordingBuilder::addObserveRecorderWithVariableConfig(
     if (variable_config.type_ == "Vecd")
     {
         auto &ob = main_methods.template addObserveRecorder<Vecd>(
-            variable_config.name_, observer_relation);
+            observer_relation, variable_config.name_);
         ob.getObservedVariable().setScalingRef(scaling_config.getScalingRef(variable_config.name_));
         return &ob;
     }

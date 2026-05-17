@@ -16,6 +16,7 @@ from sphinxsim.config.schemas import (
     PhysicsType,
     SimulationConfig,
 )
+from sphinxsim.config.update_patch import UpdatePatch
 
 
 # ---------------------------------------------------------------------------
@@ -411,6 +412,28 @@ def _apply_updates(existing: Dict[str, Any], description: str) -> Dict[str, Any]
     return cfg
 
 
+def _dict_diff(base: Any, updated: Any) -> Any:
+    if isinstance(base, dict) and isinstance(updated, dict):
+        changed: Dict[str, Any] = {}
+        for key in updated.keys():
+            if key not in base:
+                changed[key] = updated[key]
+                continue
+            child = _dict_diff(base[key], updated[key])
+            if child is not None:
+                changed[key] = child
+        return changed if changed else None
+
+    if isinstance(base, list) and isinstance(updated, list):
+        if base != updated:
+            return updated
+        return None
+
+    if base != updated:
+        return updated
+    return None
+
+
 def _fixture_template_for_physics(physics: PhysicsType) -> Dict[str, Any] | None:
     """Load a validated fixture template for the given physics type when available."""
     root = Path(__file__).resolve().parents[2]
@@ -485,6 +508,70 @@ class MockLLM:
 
         updated = _apply_updates(existing.model_dump(), description)
         return SimulationConfig(**updated)
+
+    def update_patch(self, existing: SimulationConfig, description: str, strict: bool = True) -> Dict[str, Any]:
+        """Return an operation patch for updating an existing config."""
+        if not description or not description.strip():
+            raise ValueError("description must not be empty")
+
+        operations: List[Dict[str, Any]] = []
+
+        time_match = re.search(
+            r"(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b",
+            description,
+            re.IGNORECASE,
+        )
+        if time_match:
+            operations.append(
+                {
+                    "op": "set_value",
+                    "path": "solver_parameters.end_time",
+                    "value": float(time_match.group(1)),
+                }
+            )
+
+        res_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s+resolution", description, re.IGNORECASE)
+        if res_match:
+            operations.append(
+                {
+                    "op": "set_value",
+                    "path": "geometries.global_resolution.particle_spacing",
+                    "value": float(res_match.group(1)) / 1000.0,
+                }
+            )
+
+        lower = description.lower()
+        if "add observer" in lower:
+            updated = self.update(existing, description)
+            before = existing.model_dump(exclude_none=True).get("observers", [])
+            after = updated.model_dump(exclude_none=True).get("observers", [])
+            if len(after) > len(before):
+                operations.append(
+                    {
+                        "op": "append_item",
+                        "path": "observers",
+                        "value": after[-1],
+                    }
+                )
+
+        if not operations:
+            updated = self.update(existing, description)
+            base = existing.model_dump(exclude_none=True)
+            target = updated.model_dump(exclude_none=True)
+            delta = _dict_diff(base, target) or {}
+            operations.append(
+                {
+                    "op": "merge_object",
+                    "path": "",
+                    "value": delta,
+                }
+            )
+
+        patch = UpdatePatch(
+            strict=strict,
+            operations=operations,
+        )
+        return patch.model_dump(exclude_none=True)
 
     def explore(self, question: str, context: str | None = None) -> str:
         """Return a deterministic schema/functionality explanation for local usage."""

@@ -492,7 +492,8 @@ class BodyConstraintConfig(BaseModel):
 
 
 class SimulationConfig(BaseModel):
-    """Top-level JSON payload consumed directly by SPHSimulation::loadConfig."""
+    """Top-level JSON payload consumed by SPHSimulation methods:
+    buildGeometries(), generateParticles(), buildSimulation()."""
 
     characteristic_dimensions: Optional[List[CharacteristicDimensionConfig]] = None
     simulation_type: SimulationType
