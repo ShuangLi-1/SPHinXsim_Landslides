@@ -3,19 +3,9 @@
 namespace SPH
 {
 //=================================================================================================//
-void SystemDomainConfig::updateSystemDomainConfig(const BoundingBoxd &shape_bounds)
+void SystemDomainConfig::updateSystemDomain(const BoundingBoxd &shape_bounds)
 {
     system_bounds_ = system_bounds_.add(shape_bounds);
-    updateParticleSpacing();
-}
-//=================================================================================================//
-void SystemDomainConfig::updateParticleSpacing()
-{
-    if (!prescribed_spacing_)
-    {
-        particle_spacing_ = system_bounds_.MinimumDimension() /
-                            Real(min_dimension_particles_);
-    }
 }
 //=================================================================================================//
 void GeometryBuilder::createGeometries(EntityManager &config_manager, const json &config)
@@ -28,7 +18,7 @@ void GeometryBuilder::createGeometries(EntityManager &config_manager, const json
     {
         Shape *shape = addShape(scaling_config, config_manager, geo);
         config_manager.addEntity<Shape>(shape->Name(), shape);
-        system_domain_config->updateSystemDomainConfig(shape->getBounds());
+        system_domain_config->updateSystemDomain(shape->getBounds());
     }
 
     if (config.contains("oriented_boxes"))
@@ -63,25 +53,27 @@ SystemDomainConfig GeometryBuilder::parseSystemDomainConfig(
     {
         system_config.system_bounds_ = parseBoundingBox(scaling_config, config.at("system_domain"));
     }
-    if (config.contains("global_resolution"))
-    {
-        parseGlobalResolution(scaling_config, system_config, config.at("global_resolution"));
-    }
+    system_config.particle_spacing_ = parseGlobalResolution(scaling_config, config.at("global_resolution"));
     return system_config;
 }
 //=================================================================================================//
-void GeometryBuilder::parseGlobalResolution(
-    const ScalingConfig &scaling_config, SystemDomainConfig &system_config, const json &config)
+Real GeometryBuilder::parseGlobalResolution(const ScalingConfig &scaling_config, const json &config)
 {
-    if (config.contains("min_dimension_particles"))
+    if (config.contains("particle_spacing"))
     {
-        system_config.prescribed_spacing_ = false;
-        system_config.min_dimension_particles_ =
-            config.at("min_dimension_particles").get<UnsignedInt>();
-        system_config.updateParticleSpacing();
-        return;
+        return scaling_config.jsonToReal(config.at("particle_spacing"), "Length");
     }
-    system_config.particle_spacing_ = scaling_config.jsonToReal(config.at("particle_spacing"), "Length");
+    else
+    {
+        if (config.contains("characteristic_length_particles"))
+        {
+            UnsignedInt num_particles = config.at("characteristic_length_particles").get<UnsignedInt>();
+            return 1.0 / Real(num_particles);
+        }
+    }
+
+    throw std::runtime_error(
+        "GeometryBuilder::parseGlobalResolution: global resolution is not specified in the config.");
 }
 //=================================================================================================//
 GeometricOps GeometryBuilder::parseGeometricOp(const std::string &op_str)

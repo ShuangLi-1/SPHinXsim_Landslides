@@ -107,12 +107,12 @@ class DomainConfig(BaseModel):
 
 class GlobalResolutionConfig(BaseModel):
     particle_spacing: Optional[float] = Field(default=None, gt=0)
-    min_dimension_particles: Optional[int] = Field(default=None, gt=0)
+    characteristic_length_particles: Optional[int] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _requires_one_mode(self) -> "GlobalResolutionConfig":
-        if self.particle_spacing is None and self.min_dimension_particles is None:
-            raise ValueError("global_resolution requires particle_spacing or min_dimension_particles")
+        if self.particle_spacing is None and self.characteristic_length_particles is None:
+            raise ValueError("global_resolution requires particle_spacing or characteristic_length_particles")
         return self
 
 

@@ -20,7 +20,7 @@
   "simulation_type": "fluid_dynamics",
 
   "geometries": {
-    "global_resolution": { "min_dimension_particles": 25 },
+    "global_resolution": { "characteristic_length_particles": 4 },
     "shapes": [
       {
         "name": "BloodBody",
