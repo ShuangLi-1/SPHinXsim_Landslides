@@ -76,6 +76,10 @@ add_subdirectory(sphinxsim/sphinxsys)
 
 # Include headers and sources for sph simulation library
 set(SPH_SIMULATION_INCLUDE ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation)
+set(SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/simulation_builder)
+set(SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/particle_generation)
+set(SPH_SIMULATION_INCLUDE_COMMON_BUILDER ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/common_builder)
+set(SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/dynamics_builder)
 file(GLOB_RECURSE SPH_SIMULATION_SOURCES CONFIGURE_DEPENDS sphinxsim/sph_simulation/*.cpp)
 
 # Define the source file
@@ -83,7 +87,12 @@ set(BIND_SOURCE_FILES sphinxsim/bindings/sphinxsys_python.cpp)
 
 if(SPHINXSYS_2D)
     add_library(sph_simulation_2d)
-    target_include_directories(sph_simulation_2d PUBLIC ${SPH_SIMULATION_INCLUDE})
+    target_include_directories(sph_simulation_2d PUBLIC
+        ${SPH_SIMULATION_INCLUDE}
+        ${SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER}
+        ${SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION}
+        ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
+        ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
     target_sources(sph_simulation_2d INTERFACE ${SPH_SIMULATION_SOURCES})
     target_link_libraries(sph_simulation_2d INTERFACE VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
     target_link_libraries(sph_simulation_2d PRIVATE nlohmann_json::nlohmann_json)
@@ -112,7 +121,12 @@ endif()
 
 if(SPHINXSYS_3D)
     add_library(sph_simulation_3d)
-    target_include_directories(sph_simulation_3d PUBLIC ${SPH_SIMULATION_INCLUDE})
+    target_include_directories(sph_simulation_3d PUBLIC
+        ${SPH_SIMULATION_INCLUDE}
+        ${SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER}
+        ${SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION}
+        ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
+        ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
     target_sources(sph_simulation_3d INTERFACE ${SPH_SIMULATION_SOURCES})
     target_link_libraries(sph_simulation_3d INTERFACE VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
     target_link_libraries(sph_simulation_3d PRIVATE nlohmann_json::nlohmann_json)
