@@ -194,7 +194,7 @@ Shape *GeometryBuilder::addShape(
             multi_polygon.addMultiPolygon(parseMultiPolygon(scaling_config, plg), op);
         }
         MultiPolygonShape *shape = config_manager.emplaceEntity<MultiPolygonShape>(name, multi_polygon, name);
-        shape->writeMultiPolygonShapeToVtp();
+        shape->writeMultiPolygonShapeToVtp(scaling_factor);
         return shape;
     }
 #else
