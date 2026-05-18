@@ -66,6 +66,16 @@ VariableConfig RecordingBuilder::parseVariableConfig(const json &config)
 void RecordingBuilder::addVariableToStateRecorder(
     BodyStatesRecording &state_recording, SPHBody &sph_body, const json &config)
 {
+    if (config.contains("int_type"))
+    {
+        StdVec<std::string> int_variables = config.at("int_type").get<StdVec<std::string>>();
+        for (const auto &int_var : int_variables)
+        {
+            state_recording.template addToWrite<int>(sph_body, int_var);
+        }
+        return;
+    }
+
     if (config.contains("real_type"))
     {
         StdVec<std::string> real_variables = config.at("real_type").get<StdVec<std::string>>();

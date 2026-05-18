@@ -59,7 +59,7 @@ void FluidSimulationBuilder::buildTransportVelocityFormulationIfNotFreeSurface(
         auto &transport_velocity_correction =
             main_methods.template addInteractionDynamics<
                             KernelGradientIntegral, LinearCorrectionCK>(inner_relation)
-                .template addPostContactInteraction<Boundary, NoKernelCorrectionCK>(contact_relation);
+                .template addPostContactInteraction<Boundary, LinearCorrectionCK>(contact_relation);
 
         addTransportVelocityCorrection(
             transport_velocity_correction, inner_relation.getSPHBody(), fluid_solver_config);

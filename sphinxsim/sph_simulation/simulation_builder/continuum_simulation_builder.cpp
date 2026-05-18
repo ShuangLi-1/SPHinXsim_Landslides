@@ -167,7 +167,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Define optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-
     //----------------------------------------------------------------------
     // Initial condition from restart file if enabled.
     //----------------------------------------------------------------------

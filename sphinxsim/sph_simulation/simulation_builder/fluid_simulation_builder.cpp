@@ -77,6 +77,16 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_acoustic_time_step = main_methods.addReduceDynamics<fluid_dynamics::AcousticTimeStepCK<>>(
         fluid_body, fluid_solver_config.acoustic_cfl_);
     //----------------------------------------------------------------------
+    // Define optional methods using hooking point in stage pipelines.
+    //----------------------------------------------------------------------
+    recording_builder.buildObservationIfPresent(sim, main_methods, config);
+    buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
+    buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
+    buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
+    buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
+    buildBoundaryConditionsIfPresent(sim, main_methods, config);
+    buildParticleSortIfPresent(sim, main_methods, fluid_body);
+    //----------------------------------------------------------------------
     // Define basic state recording for visualization the simulation results.
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
@@ -170,16 +180,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::AfterAdvectionStepSetup);
             }
         });
-    //----------------------------------------------------------------------
-    // Define optional methods using hooking point in stage pipelines.
-    //----------------------------------------------------------------------
-    recording_builder.buildObservationIfPresent(sim, main_methods, config);
-    buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
-    buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
-    buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
-    buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
-    buildBoundaryConditionsIfPresent(sim, main_methods, config);
-    buildParticleSortIfPresent(sim, main_methods, fluid_body);
 }
 //=================================================================================================//
 void FluidSimulationBuilder::parseSolverParameters(EntityManager &config_manager, const json &config)
