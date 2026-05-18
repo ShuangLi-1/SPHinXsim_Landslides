@@ -70,6 +70,10 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     template <class MethodContainerType, class InnerRelationType>
     ParticleDynamicsGroup &addShearForceIntegration(
         EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+
+    template <class MethodContainerType>
+    void buildInitialConditionsIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
 };
 } // namespace SPH
 #endif // CONTINUUM_SIMULATION_BUILDER_H

@@ -77,6 +77,14 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_acoustic_time_step = main_methods.addReduceDynamics<fluid_dynamics::AcousticTimeStepCK<>>(
         fluid_body, fluid_solver_config.acoustic_cfl_);
     //----------------------------------------------------------------------
+    //	Define time integration method, screen out uput and observation sample rate.
+    //----------------------------------------------------------------------
+    auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
+    auto &time_stepper = sph_solver.getTimeStepper();
+    auto &advection_step = time_stepper.addTriggerByInterval(fluid_advection_time_step.exec());
+    auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
+    time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
+    //----------------------------------------------------------------------
     // Define optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
@@ -87,18 +95,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildBoundaryConditionsIfPresent(sim, main_methods, config);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
     //----------------------------------------------------------------------
-    // Define basic state recording for visualization the simulation results.
+    // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
-    //----------------------------------------------------------------------
-    //	Define time integration method, screen out uput and observation sample rate.
-    //----------------------------------------------------------------------
-    auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
-    auto &time_stepper = sph_solver.getTimeStepper();
-    auto &advection_step = time_stepper.addTriggerByInterval(fluid_advection_time_step.exec());
-    auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
-    time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
     //----------------------------------------------------------------------
     //	Define preparation or initialization step before the main integration.
     //----------------------------------------------------------------------

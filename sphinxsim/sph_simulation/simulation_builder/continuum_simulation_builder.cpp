@@ -82,11 +82,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         solid_dynamics::RepulsionForceCK, Wall>(
         continuum_solid_contact, continuum_solver_parameters.contact_numerical_damping_);
     //----------------------------------------------------------------------
-    // Define basic state recording for visualization the simulation results.
-    //----------------------------------------------------------------------
-    auto &body_state_recorder = recording_builder.createBodyStatesRecording(
-        sph_system, config_manager, main_methods, config);
-    //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------
     auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
@@ -94,6 +89,24 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
     auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
     time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
+    //----------------------------------------------------------------------
+    // Define optional methods using hooking point in stage pipelines.
+    //----------------------------------------------------------------------
+    buildInitialConditionsIfPresent(sim, main_methods, config);
+    //----------------------------------------------------------------------
+    // Constraints carried at last due to possible third-party dependencies.
+    //----------------------------------------------------------------------
+    if (config.contains("body_constraints"))
+    {
+        ConstraintBuilder &constraint_builder =
+            *config_manager.emplaceEntity<ConstraintBuilder>("ConstraintBuilder");
+        constraint_builder.addConstraints(sim, main_methods, config);
+    }
+    //----------------------------------------------------------------------
+    // Define state recording for visualization the simulation results.
+    //----------------------------------------------------------------------
+    auto &body_state_recorder = recording_builder.createBodyStatesRecording(
+        sph_system, config_manager, main_methods, config);
     //----------------------------------------------------------------------
     //	Define Preparation or initialization step for the time integration loop.
     //----------------------------------------------------------------------
@@ -163,47 +176,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
                 continuum_linear_correction_matrix.exec();
             }
         });
-
-    //----------------------------------------------------------------------
-    // Define optional methods using hooking point in stage pipelines.
-    //----------------------------------------------------------------------
-    //----------------------------------------------------------------------
-    // Initial condition from restart file if enabled.
-    //----------------------------------------------------------------------
-    if (config_manager.hasEntity<RestartConfig>("RestartConfig"))
-    {
-        auto &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
-        sph_system.setRestartStep(restart_config.restore_step_);
-        auto &restart_io = main_methods.addIODynamics<RestartIOCK>(
-            sph_system, restart_config.summary_enabled_);
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ExtraOutput, [&]()
-            { 
-                if (time_stepper.getIterationStep() % restart_config.save_interval_ == 0)
-                {
-                    restart_io.writeToFile(time_stepper.getIterationStep());
-                } });
-
-        if (restart_config.restore_step_ != 0)
-        {
-            initialization_pipeline.insert_hook(
-                InitializationHookPoint::InitialCondition, [&]()
-                { 
-                    time_stepper.setRestartStep(restart_config.restore_step_);
-                    restart_io.readRestartFiles(restart_config.restore_step_); });
-        }
-    }
-
-    //----------------------------------------------------------------------
-    // Constraints carried at last due to possible third-party dependencies.
-    //----------------------------------------------------------------------
-    if (config.contains("body_constraints"))
-    {
-        ConstraintBuilder &constraint_builder =
-            *config_manager.emplaceEntity<ConstraintBuilder>("ConstraintBuilder");
-        constraint_builder.addConstraints(sim, main_methods, config);
-    }
 }
 //=================================================================================================//
 void ContinuumSimulationBuilder::parseSolverParameters(EntityManager &config_manager, const json &config)
