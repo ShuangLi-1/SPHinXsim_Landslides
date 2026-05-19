@@ -44,6 +44,7 @@ class MaterialBuilder
   private:
     void addMatterMaterial(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     void addOtherMaterialProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
+    void addViscosity(EntityManager &config_manager, SPHBody &sph_body, const json &config);
 };
 } // namespace SPH
 #endif // MATERIAL_BUILDER_H

@@ -66,15 +66,27 @@ void MaterialBuilder::addMatterMaterial(
 void MaterialBuilder::addOtherMaterialProperties(
     EntityManager &config_manager, SPHBody &sph_body, const json &config)
 {
-    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
-
     if (config.contains("viscosity"))
     {
-        Real viscosity_ref = scaling_config.jsonToReal(config.at("viscosity"), "Viscosity");
-        Viscosity &viscosity = sph_body.addMaterialProperty<Viscosity>(viscosity_ref);
-        config_manager.addEntity(sph_body.Name() + "Viscosity", &viscosity);
-        return;
+        addViscosity(config_manager, sph_body, config.at("viscosity"));
     }
+}
+//=================================================================================================//
+void MaterialBuilder::addViscosity(EntityManager &config_manager, SPHBody &sph_body, const json &config)
+{
+    Real viscosity_ref = 0.0;
+    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+
+    if (config.contains("Reynolds_number"))
+    {
+        viscosity_ref = 1.0 / scaling_config.jsonToReal(config.at("Reynolds_number"), "Dimensionless");
+    }
+    else
+    {
+        viscosity_ref = scaling_config.jsonToReal(config, "Viscosity");
+    }
+    Viscosity &viscosity = sph_body.addMaterialProperty<Viscosity>(viscosity_ref);
+    config_manager.addEntity(sph_body.Name() + "Viscosity", &viscosity);
 }
 //=================================================================================================//
 } // namespace SPH

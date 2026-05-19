@@ -73,7 +73,6 @@ void RecordingBuilder::addVariableToStateRecorder(
         {
             state_recording.template addToWrite<int>(sph_body, int_var);
         }
-        return;
     }
 
     if (config.contains("real_type"))
@@ -83,7 +82,6 @@ void RecordingBuilder::addVariableToStateRecorder(
         {
             state_recording.template addToWrite<Real>(sph_body, real_var);
         }
-        return;
     }
 
     if (config.contains("vector_type"))
@@ -93,10 +91,7 @@ void RecordingBuilder::addVariableToStateRecorder(
         {
             state_recording.template addToWrite<Vecd>(sph_body, vector_var);
         }
-        return;
     }
-
-    throw std::runtime_error("RecordingBuilder::addVariableToStateRecorder not supported variable type.");
 }
 //=================================================================================================//
 } // namespace SPH
