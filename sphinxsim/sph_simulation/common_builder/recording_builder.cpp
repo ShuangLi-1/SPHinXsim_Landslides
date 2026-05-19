@@ -43,26 +43,6 @@ void RecordingBuilder::addObserves(
     }
 }
 //=================================================================================================//
-VariableConfig RecordingBuilder::parseVariableConfig(const json &config)
-{
-    VariableConfig variable_config;
-    if (config.contains("real_type"))
-    {
-        variable_config.type_ = "Real";
-        variable_config.name_ = config.at("real_type").get<std::string>();
-        return variable_config;
-    }
-
-    if (config.contains("vector_type"))
-    {
-        variable_config.type_ = "Vecd";
-        variable_config.name_ = config.at("vector_type").get<std::string>();
-        return variable_config;
-    }
-
-    throw std::runtime_error("RecordingBuilder::parseVariableConfig not supported variable type.");
-}
-//=================================================================================================//
 void RecordingBuilder::addVariableToStateRecorder(
     BodyStatesRecording &state_recording, SPHBody &sph_body, const json &config)
 {

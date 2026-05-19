@@ -391,8 +391,27 @@ Rotation getRotationFromXAxis(const Vecd &direction)
 }
 #endif
 //=================================================================================================//
-SimulationBuilder::SimulationBuilder()
-    : material_builder_ptr_(std::make_unique<MaterialBuilder>()) {}
+VariableConfig parseVariableConfig(const json &config)
+{
+    VariableConfig variable_config;
+    if (config.contains("real_type"))
+    {
+        variable_config.type_ = "Real";
+        variable_config.name_ = config.at("real_type").get<std::string>();
+        return variable_config;
+    }
+
+    if (config.contains("vector_type"))
+    {
+        variable_config.type_ = "Vecd";
+        variable_config.name_ = config.at("vector_type").get<std::string>();
+        return variable_config;
+    }
+
+    throw std::runtime_error("parseVariableConfig not supported variable type.");
+}
+//=================================================================================================//
+SimulationBuilder::SimulationBuilder() : material_builder_ptr_(std::make_unique<MaterialBuilder>()) {}
 //=================================================================================================//
 SimulationBuilder ::~SimulationBuilder() = default;
 //=================================================================================================//

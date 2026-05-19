@@ -149,6 +149,13 @@ class SPHBody;
 template <class ReturnType>
 class BaseDynamics;
 
+struct VariableConfig
+{
+    std::string type_;
+    std::string name_;
+};
+VariableConfig parseVariableConfig(const json &config);
+
 struct SolverCommonConfig
 {
     Real end_time_{0.0};
@@ -181,9 +188,18 @@ class SimulationBuilder
     void buildExternalForceIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, SPHBody &sph_body, const json &config);
 
+    template <class MethodContainerType>
+    void buildInitialConditionIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
     SolverCommonConfig parseSolverCommonConfig(const ScalingConfig &scaling_config, const json &config);
+
+    template <class MethodContainerType, class IdentifierType>
+    BaseDynamics<void> &addVariableAssignment(
+        MethodContainerType &main_methods, IdentifierType &identifier,
+        const ScalingConfig &scaling_config, const json &config);
 };
 } // namespace SPH
 #endif // BASE_SIMULATION_BUILDER_H
