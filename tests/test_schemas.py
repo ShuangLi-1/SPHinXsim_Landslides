@@ -54,7 +54,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
                 "material": {
                     "type": "weakly_compressible_fluid",
                     "density": 1000.0,
-                    "sound_speed": 20.0,
+                    "max_velocity_factor": 2.0,
                 },
                 "particle_reserve_factor": 10.0,
             }
@@ -182,7 +182,7 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "sound_speed": 20.0,
+                        "max_velocity_factor": 2.0,
                     },
                 }
             ]
@@ -324,6 +324,28 @@ class TestSimulationConfig:
                 ]
             )
 
+    def test_extra_state_recording_accepts_int_type(self):
+        cfg = _make_minimal_fluid_config(
+            extra_state_recording=[
+                {
+                    "name": "WaterBody",
+                    "variables": [{"int_type": ["BufferIndicator", "Indicator"]}],
+                }
+            ]
+        )
+        assert cfg.extra_state_recording[0].variables[0].int_type == ["BufferIndicator", "Indicator"]
+
+    def test_extra_state_recording_rejects_unknown_variable_type_key(self):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            _make_minimal_fluid_config(
+                extra_state_recording=[
+                    {
+                        "name": "WaterBody",
+                        "variables": [{"bool_type": ["Flag"]}],
+                    }
+                ]
+            )
+
     def test_dimensionality_mismatch_rejected(self):
         with pytest.raises(ValidationError, match="dimensionality"):
             _make_minimal_fluid_config(
@@ -352,7 +374,7 @@ class TestSimulationConfig:
         assert cfg.fluid_bodies[0].particle_reserve_factor == pytest.approx(350.0)
         assert cfg.fluid_boundary_conditions[0].type.value == "emitter"
 
-    def test_fluid_material_accepts_maximum_velocity(self):
+    def test_fluid_material_accepts_max_velocity_factor(self):
         cfg = _make_minimal_fluid_config(
             fluid_bodies=[
                 {
@@ -360,13 +382,42 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "maximum_velocity": 2.0,
+                        "max_velocity_factor": 2.0,
                     },
                 }
             ]
         )
-        assert cfg.fluid_bodies[0].material.maximum_velocity == pytest.approx(2.0)
-        assert cfg.fluid_bodies[0].material.sound_speed is None
+        assert cfg.fluid_bodies[0].material.max_velocity_factor == pytest.approx(2.0)
+
+    def test_fluid_material_accepts_viscosity_reynolds_number_object(self):
+        cfg = _make_minimal_fluid_config(
+            fluid_bodies=[
+                {
+                    "name": "WaterBody",
+                    "material": {
+                        "type": "weakly_compressible_fluid",
+                        "density": 1000.0,
+                        "max_velocity_factor": 2.0,
+                        "viscosity": {"Reynolds_number": 50.0},
+                    },
+                }
+            ]
+        )
+        assert cfg.fluid_bodies[0].material.viscosity is not None
+
+    def test_fluid_material_requires_max_velocity_factor(self):
+        with pytest.raises(ValidationError, match="requires max_velocity_factor"):
+            _make_minimal_fluid_config(
+                fluid_bodies=[
+                    {
+                        "name": "WaterBody",
+                        "material": {
+                            "type": "weakly_compressible_fluid",
+                            "density": 1000.0,
+                        },
+                    }
+                ]
+            )
 
     def test_characteristic_dimensions_support_new_base_units(self):
         cfg = _make_minimal_fluid_config(

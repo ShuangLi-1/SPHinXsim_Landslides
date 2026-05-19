@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PhysicsType(str, Enum):
@@ -329,13 +329,18 @@ class ObserverConfig(BaseModel):
 
 
 class StateRecordingVariableConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    int_type: Optional[List[str]] = None
     real_type: Optional[List[str]] = None
     vector_type: Optional[List[str]] = None
 
     @model_validator(mode="after")
     def _at_least_one(self) -> "StateRecordingVariableConfig":
-        if self.real_type is None and self.vector_type is None:
-            raise ValueError("extra_state_recording variables require real_type or vector_type")
+        if self.int_type is None and self.real_type is None and self.vector_type is None:
+            raise ValueError(
+                "extra_state_recording variables require at least one of int_type, real_type, vector_type"
+            )
         return self
 
 
@@ -344,13 +349,17 @@ class ExtraStateRecordingConfig(BaseModel):
     variables: List[StateRecordingVariableConfig] = Field(..., min_length=1)
 
 
+class ViscosityConfig(BaseModel):
+    Reynolds_number: float = Field(..., gt=0)
+
+
 class MaterialConfig(BaseModel):
     type: MaterialType
 
     density: Optional[float] = Field(default=None, gt=0)
     sound_speed: Optional[float] = Field(default=None, gt=0)
-    maximum_velocity: Optional[float] = Field(default=None, gt=0)
-    viscosity: Optional[float] = Field(default=None, gt=0)
+    max_velocity_factor: Optional[float] = Field(default=None, gt=0)
+    viscosity: Optional[float | ViscosityConfig] = None
 
     youngs_modulus: Optional[float] = Field(default=None, gt=0)
     poisson_ratio: Optional[float] = None
@@ -362,9 +371,9 @@ class MaterialConfig(BaseModel):
         if self.type == MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
             if self.density is None:
                 raise ValueError("weakly_compressible_fluid requires density")
-            if self.sound_speed is None and self.maximum_velocity is None:
+            if self.max_velocity_factor is None:
                 raise ValueError(
-                    "weakly_compressible_fluid requires sound_speed or maximum_velocity"
+                    "weakly_compressible_fluid requires max_velocity_factor"
                 )
         elif self.type == MaterialType.RIGID_BODY:
             pass
