@@ -66,6 +66,16 @@ VariableConfig RecordingBuilder::parseVariableConfig(const json &config)
 void RecordingBuilder::addVariableToStateRecorder(
     BodyStatesRecording &state_recording, SPHBody &sph_body, const json &config)
 {
+    for (const auto &[type_key, _] : config.items())
+    {
+        if (type_key != "int_type" && type_key != "real_type" && type_key != "vector_type")
+        {
+            throw std::runtime_error(
+                "RecordingBuilder::addVariableToStateRecorder unsupported variable type key: " +
+                type_key + ". Supported keys are: int_type, real_type, vector_type.");
+        }
+    }
+
     if (config.contains("int_type"))
     {
         StdVec<std::string> int_variables = config.at("int_type").get<StdVec<std::string>>();
