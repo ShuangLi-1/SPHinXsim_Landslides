@@ -20,17 +20,8 @@ void MaterialBuilder::addMatterMaterial(
     if (type == "weakly_compressible_fluid")
     {
         Real density = scaling_config.jsonToReal(config.at("density"), "Density");
-        Real sound_speed = 0.0;
-        if (config.contains("sound_speed"))
-        {
-            sound_speed = scaling_config.jsonToReal(config.at("sound_speed"), "Speed");
-        }
-        else
-        {
-            Real u_max = scaling_config.jsonToReal(config.at("maximum_velocity"), "Velocity");
-            sound_speed = 10.0 * u_max;
-        }
-
+        Real u_max_factor = scaling_config.jsonToReal(config.at("max_velocity_factor"), "Dimensionless");
+        Real sound_speed = 10.0 * u_max_factor; // 10 times of the maximum anticipated velocity
         auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleFluid>(density, sound_speed);
         config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleFluid", &material);
         return;

@@ -42,6 +42,17 @@ TEST(simulations, milling)
     sim.run();
 }
 
+TEST(simulations, heat_transfer)
+{
+    SPH::SPHSimulation sim("./input/heat_transfer.json");
+    sim.resetOutputRoot("./heat_transfer", true);
+    sim.buildGeometries();
+    sim.generateParticles();
+    sim.buildSimulation();
+    sim.initializeSimulation();
+    sim.run();
+}
+
 int main(int argc, char *argv[])
 {
     testing::InitGoogleTest(&argc, argv);

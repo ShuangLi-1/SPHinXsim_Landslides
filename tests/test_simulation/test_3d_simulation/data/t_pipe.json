@@ -103,7 +103,7 @@
       "material": {
         "type": "weakly_compressible_fluid",
         "density": 1060.0,
-        "sound_speed": 6.0,
+        "max_velocity_factor": 1.0,
         "viscosity": 0.0035
       },
       "particle_reserve_factor": 0.2

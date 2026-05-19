@@ -77,7 +77,7 @@
       "material": {
         "type": "weakly_compressible_fluid",
         "density": 1.0,
-        "maximum_velocity": 2.0
+        "max_velocity_factor": 1.0
       }
     }
   ],

@@ -59,7 +59,7 @@
       "material": {
         "type": "weakly_compressible_fluid",
         "density": 1.0,
-        "sound_speed": 10.0
+        "max_velocity_factor": 1.0
       }
     }
   ],
