@@ -92,6 +92,10 @@
         "max_velocity_factor": 1.0,
         "viscosity": {
           "Reynolds_number": 50
+        },
+        "thermal_properties": {
+          "thermal_conductivity": 0.6,
+          "specific_heat_capacity": 4181.3
         }
       },
       "particle_reserve_factor": 0.2

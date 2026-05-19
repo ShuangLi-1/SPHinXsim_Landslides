@@ -228,7 +228,7 @@ UnitMetrics ScalingConfig::getUnitMetrics(std::string unit_name, bool is_require
         return UnitMetrics{0, 0, 0, 0, 0, 1, 0};
     if (unit_name == "LuminousIntensity")
         return UnitMetrics{0, 0, 0, 0, 0, 0, 1};
-    // for continuum dynamics
+    // for continuum mechanics
     if (unit_name == "Velocity" || unit_name == "Speed")
         return UnitMetrics{1, 0, -1, 0, 0, 0, 0};
     if (unit_name == "AngularVelocity")
@@ -241,6 +241,12 @@ UnitMetrics ScalingConfig::getUnitMetrics(std::string unit_name, bool is_require
         return UnitMetrics{-1, 1, -2, 0, 0, 0, 0};
     if (unit_name == "Viscosity")
         return UnitMetrics{-1, 1, -1, 0, 0, 0, 0};
+    if (unit_name == "Diffusivity")
+        return UnitMetrics{1, 0, -1, 0, 0, 0, 0};
+    if (unit_name == "ThermalConductivity")
+        return UnitMetrics{-1, 1, -3, -1, 0, 0, 0};
+    if (unit_name == "VolumetricHeatCapacity")
+        return UnitMetrics{0, 1, -2, -1, 0, 0, 0};
 
     if (is_required)
     {
