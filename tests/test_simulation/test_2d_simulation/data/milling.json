@@ -25,12 +25,17 @@
             "file_path": "./input/milling_tool.dat"
           }
         ]
-      },
+      }
+    ],
+    "oriented_boxes": [
       {
         "name": "ClampingRegion",
-        "type": "bounding_box",
-        "lower_bound": [-0.08, -0.08],
-        "upper_bound": [0.08, -0.067]
+        "type": "region",
+        "half_size": [0.08, 0.0065],
+        "transform": {
+          "translation": [0.0, -0.0735],
+          "rotation_angle": 0.0
+        }
       }
     ]
   },

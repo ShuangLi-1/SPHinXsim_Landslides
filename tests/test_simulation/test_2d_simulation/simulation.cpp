@@ -29,7 +29,7 @@ TEST(simulations, filling_tank)
     sim.buildSimulation();
     sim.initializeSimulation();
     sim.run();
-}
+}*/
 
 TEST(simulations, milling)
 {
@@ -41,7 +41,7 @@ TEST(simulations, milling)
     sim.initializeSimulation();
     sim.run();
 }
-*/
+
 TEST(simulations, heat_transfer)
 {
     SPH::SPHSimulation sim("./input/heat_transfer.json");

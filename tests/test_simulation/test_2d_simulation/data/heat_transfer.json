@@ -45,18 +45,6 @@
             "upper_bound": [2.1, 0.4]
           }
         ]
-      },
-      {
-        "name": "UpperWall",
-        "type": "bounding_box",
-        "lower_bound": [0.0, 0.4],
-        "upper_bound": [2.0, 0.5]
-      },
-      {
-        "name": "LowerWall",
-        "type": "bounding_box",
-        "lower_bound": [0.0, -0.1],
-        "upper_bound": [2.0, 0.0]
       }
     ],
     "oriented_boxes": [
@@ -73,6 +61,24 @@
         "center": [2.0, 0.2],
         "normal": [-1.0, 0.0],
         "radius": 0.2
+      },
+      {
+        "name": "UpperWall",
+        "type": "region",
+        "half_size": [1.0, 0.05],
+        "transform": {
+          "translation": [1.0, 0.45],
+          "rotation_angle": 0.0
+        }
+      },
+      {
+        "name": "LowerWall",
+        "type": "region",
+        "half_size": [1.0, 0.05],
+        "transform": {
+          "translation": [1.0, -0.05],
+          "rotation_angle": 0.0
+        }
       }
     ]
   },
@@ -107,7 +113,7 @@
         },
         "thermal_properties": {
           "thermal_conductivity": 0.6,
-          "specific_heat_capacity": 4181.3
+          "volumetric_heat_capacity": 4181.3
         }
       },
       "particle_reserve_factor": 0.2
@@ -158,7 +164,6 @@
       "body_name": "WaterBody",
       "assignments": [
         {
-          "region": "All",
           "variable": { "real_type": "Temperature" },
           "value": 350.0
         }

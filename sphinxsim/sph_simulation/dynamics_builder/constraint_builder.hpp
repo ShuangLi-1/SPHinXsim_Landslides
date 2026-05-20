@@ -39,9 +39,8 @@ void ConstraintBuilder::addConstraint(
         auto &constraint = method_container.addParticleDynamicsGroup();
         if (config.contains("region"))
         {
-            Shape &shape = config_manager.getEntity<Shape>(config.at("region").get<std::string>());
-            BodyPartByParticle &body_part = real_body.addBodyPart<BodyRegionByParticle>(shape);
-
+            auto &oriented_box = config_manager.getEntity<OrientedBox>(config.at("region").get<std::string>());
+            auto &body_part = real_body.template addBodyPart<OrientedBoxByParticle>(oriented_box);
             constraint.add(&method_container.template addStateDynamics<
                             ConstantConstraintCK, Vecd>(body_part, "Velocity", Vecd::Zero()));
         }

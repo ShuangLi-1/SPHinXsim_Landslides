@@ -198,7 +198,7 @@ class SimulationBuilder
 
     template <class MethodContainerType, class IdentifierType>
     BaseDynamics<void> &addVariableAssignment(
-        MethodContainerType &main_methods, IdentifierType &identifier,
+        MethodContainerType &method_container, IdentifierType &identifier,
         const ScalingConfig &scaling_config, const json &config);
 };
 } // namespace SPH
