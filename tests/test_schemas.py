@@ -165,6 +165,44 @@ class TestSimulationConfig:
         cfg = _make_minimal_fluid_config()
         assert cfg.simulation_type.value == "fluid_dynamics"
         assert len(cfg.fluid_bodies) == 1
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.surface_type == "free_surface"
+        assert cfg.solver_parameters.fluid_dynamics.flow_type == "inviscid_flow"
+
+    def test_fluid_solver_accepts_surface_type_and_flow_type(self):
+        cfg = _make_minimal_fluid_config(
+            solver_parameters={
+                "end_time": 1.0,
+                "output_interval": 0.01,
+                "screen_interval": 100,
+                "fluid_dynamics": {
+                    "acoustic_cfl": 0.6,
+                    "advection_cfl": 0.25,
+                    "surface_type": "open_boundary",
+                    "flow_type": "viscous_flow",
+                    "particle_sort_frequency": 100,
+                },
+            }
+        )
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.surface_type == "open_boundary"
+        assert cfg.solver_parameters.fluid_dynamics.flow_type == "viscous_flow"
+
+    def test_fluid_solver_rejects_unknown_key(self):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            _make_minimal_fluid_config(
+                solver_parameters={
+                    "end_time": 1.0,
+                    "output_interval": 0.01,
+                    "screen_interval": 100,
+                    "fluid_dynamics": {
+                        "acoustic_cfl": 0.6,
+                        "advection_cfl": 0.25,
+                        "surface_type": "free_surface",
+                        "unsupported_key": "x",
+                    },
+                }
+            )
 
     def test_missing_fluid_solver_section_rejected(self):
         with pytest.raises(ValidationError, match="solver_parameters.fluid_dynamics"):

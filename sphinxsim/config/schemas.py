@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -481,9 +481,12 @@ class RestartConfig(BaseModel):
 
 
 class FluidDynamicsSolverConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     acoustic_cfl: float = Field(default=0.6, gt=0)
     advection_cfl: float = Field(default=0.25, gt=0)
-    flow_type: str = "free_surface"
+    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
+    flow_type: Literal["inviscid_flow", "viscous_flow"] = "inviscid_flow"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 
 
