@@ -97,7 +97,7 @@ def _valid_data() -> dict:
             "fluid_dynamics": {
                 "acoustic_cfl": 0.6,
                 "advection_cfl": 0.25,
-                "flow_type": "free_surface",
+                "surface_type": "free_surface",
                 "particle_sort_frequency": 100,
             },
         },

@@ -84,7 +84,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
             "fluid_dynamics": {
                 "acoustic_cfl": 0.6,
                 "advection_cfl": 0.25,
-                "flow_type": "free_surface",
+                "surface_type": "free_surface",
                 "particle_sort_frequency": 100,
             },
         },

@@ -104,9 +104,8 @@ void FluidSimulationBuilder::buildViscousForceIfPresent(
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     EntityManager &config_manager = sim.getConfigManager();
-
-    SPHBody &sph_body = inner_relation.getSPHBody();
-    if (config_manager.hasEntity<Viscosity>(sph_body.Name() + "Viscosity"))
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+    if (fluid_solver_config.flow_type_ == "viscous_flow")
     {
         auto &viscous_force =
             main_methods.template addInteractionDynamicsWithUpdate<
