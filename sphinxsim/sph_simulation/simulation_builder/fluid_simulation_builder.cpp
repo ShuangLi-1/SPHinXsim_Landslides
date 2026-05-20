@@ -202,6 +202,9 @@ FluidSolverConfig FluidSimulationBuilder::parseFluidSolverConfig(
     if (config.contains("advection_cfl"))
         params.advection_cfl_ = scaling_config.jsonToReal(
             config.at("advection_cfl"), "Dimensionless");
+    if (config.contains("max_velocity_factor"))
+        params.max_velocity_factor_ = scaling_config.jsonToReal(
+            config.at("max_velocity_factor"), "Dimensionless");
     if (config.contains("surface_type"))
         params.surface_type_ = config.at("surface_type").get<std::string>();
     if (config.contains("particle_sort_frequency"))

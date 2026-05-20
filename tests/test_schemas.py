@@ -54,7 +54,6 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
                 "material": {
                     "type": "weakly_compressible_fluid",
                     "density": 1000.0,
-                    "max_velocity_factor": 2.0,
                 },
                 "particle_reserve_factor": 10.0,
             }
@@ -218,7 +217,6 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "max_velocity_factor": 2.0,
                     },
                 }
             ]
@@ -428,20 +426,23 @@ class TestSimulationConfig:
         assert cfg.solid_bodies[0].material.thermal_properties is not None
         assert cfg.solid_bodies[0].material.thermal_properties.thermal_boundary.value == "Dirichlet"
 
-    def test_fluid_material_accepts_max_velocity_factor(self):
+    def test_fluid_solver_accepts_max_velocity_factor(self):
         cfg = _make_minimal_fluid_config(
-            fluid_bodies=[
-                {
-                    "name": "WaterBody",
-                    "material": {
-                        "type": "weakly_compressible_fluid",
-                        "density": 1000.0,
-                        "max_velocity_factor": 2.0,
-                    },
-                }
-            ]
+            solver_parameters={
+                "end_time": 1.0,
+                "output_interval": 0.01,
+                "screen_interval": 100,
+                "fluid_dynamics": {
+                    "acoustic_cfl": 0.6,
+                    "advection_cfl": 0.25,
+                    "max_velocity_factor": 2.0,
+                    "surface_type": "free_surface",
+                    "particle_sort_frequency": 100,
+                },
+            }
         )
-        assert cfg.fluid_bodies[0].material.max_velocity_factor == pytest.approx(2.0)
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.max_velocity_factor == pytest.approx(2.0)
 
     def test_fluid_material_accepts_viscosity_reynolds_number_object(self):
         cfg = _make_minimal_fluid_config(
@@ -451,7 +452,6 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "max_velocity_factor": 2.0,
                         "viscosity": {"Reynolds_number": 50.0},
                     },
                 }
@@ -459,19 +459,10 @@ class TestSimulationConfig:
         )
         assert cfg.fluid_bodies[0].material.viscosity is not None
 
-    def test_fluid_material_requires_max_velocity_factor(self):
-        with pytest.raises(ValidationError, match="requires max_velocity_factor"):
-            _make_minimal_fluid_config(
-                fluid_bodies=[
-                    {
-                        "name": "WaterBody",
-                        "material": {
-                            "type": "weakly_compressible_fluid",
-                            "density": 1000.0,
-                        },
-                    }
-                ]
-            )
+    def test_fluid_solver_max_velocity_factor_default(self):
+        cfg = _make_minimal_fluid_config()
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.max_velocity_factor == pytest.approx(1.0)
 
     def test_fluid_material_accepts_thermal_properties(self):
         cfg = _make_minimal_fluid_config(
@@ -481,7 +472,6 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "max_velocity_factor": 2.0,
                         "thermal_properties": {
                             "thermal_conductivity": 0.6,
                             "volumetric_heat_capacity": 4181.3,
@@ -504,7 +494,6 @@ class TestSimulationConfig:
                         "material": {
                             "type": "weakly_compressible_fluid",
                             "density": 1000.0,
-                            "max_velocity_factor": 2.0,
                             "thermal_properties": {
                                 "thermal_conductivity": 0.6,
                             },

@@ -58,8 +58,7 @@ _FLUID_TEMPLATE: Dict[str, Any] = {
             "name": "WaterBody",
             "material": {
                 "type": "weakly_compressible_fluid",
-                "density": 1.0,
-                "max_velocity_factor": 2.0,
+                "density": 1.0
             },
         }
     ],
@@ -191,8 +190,7 @@ _FSI_TEMPLATE: Dict[str, Any] = {
             "name": "WaterBody",
             "material": {
                 "type": "weakly_compressible_fluid",
-                "density": 1000.0,
-                "max_velocity_factor": 2.0,
+                "density": 1000.0
             },
         }
     ],
@@ -305,8 +303,7 @@ def _apply_overrides(template: Dict[str, Any], description: str) -> Dict[str, An
     vel_match = re.search(r"(\d+(?:\.\d+)?)\s*m/s", description, re.IGNORECASE)
     if vel_match:
         speed = float(vel_match.group(1))
-        if cfg.get("fluid_bodies"):
-            cfg["fluid_bodies"][0]["material"]["max_velocity_factor"] = max(2.0, speed)
+        cfg.setdefault("solver_parameters", {}).setdefault("fluid_dynamics", {})["max_velocity_factor"] = max(2.0, speed)
 
     # End-time override (e.g. "5 s", "5 sec", "5 second", "5 seconds")
     time_match = re.search(
@@ -397,10 +394,10 @@ def _apply_additions(cfg: Dict[str, Any], description: str) -> None:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": density,
-                        "max_velocity_factor": max_velocity_factor,
                     },
                 }
             )
+            cfg.setdefault("solver_parameters", {}).setdefault("fluid_dynamics", {})["max_velocity_factor"] = max_velocity_factor
 
 
 def _apply_updates(existing: Dict[str, Any], description: str) -> Dict[str, Any]:

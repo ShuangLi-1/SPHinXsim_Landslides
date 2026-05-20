@@ -67,7 +67,6 @@ def _valid_data() -> dict:
                 "material": {
                     "type": "weakly_compressible_fluid",
                     "density": 1000.0,
-                    "max_velocity_factor": 2.0,
                 },
                 "particle_reserve_factor": 100.0,
             }

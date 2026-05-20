@@ -381,7 +381,6 @@ class MaterialConfig(BaseModel):
 
     density: Optional[float] = Field(default=None, gt=0)
     sound_speed: Optional[float] = Field(default=None, gt=0)
-    max_velocity_factor: Optional[float] = Field(default=None, gt=0)
     viscosity: Optional[float | ViscosityConfig] = None
     thermal_properties: Optional[ThermalPropertiesConfig] = None
 
@@ -395,10 +394,6 @@ class MaterialConfig(BaseModel):
         if self.type == MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
             if self.density is None:
                 raise ValueError("weakly_compressible_fluid requires density")
-            if self.max_velocity_factor is None:
-                raise ValueError(
-                    "weakly_compressible_fluid requires max_velocity_factor"
-                )
         elif self.type == MaterialType.RIGID_BODY:
             pass
         elif self.type == MaterialType.J2_PLASTICITY:
@@ -485,6 +480,7 @@ class FluidDynamicsSolverConfig(BaseModel):
 
     acoustic_cfl: float = Field(default=0.6, gt=0)
     advection_cfl: float = Field(default=0.25, gt=0)
+    max_velocity_factor: float = Field(default=1.0, gt=0)
     surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 

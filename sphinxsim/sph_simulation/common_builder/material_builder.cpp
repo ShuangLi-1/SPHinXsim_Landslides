@@ -1,5 +1,6 @@
 #include "material_builder.h"
 
+#include "fluid_simulation_builder.h"
 #include "sphinxsys.h"
 
 namespace SPH
@@ -20,7 +21,8 @@ void MaterialBuilder::addMatterMaterial(
     if (type == "weakly_compressible_fluid")
     {
         Real density = scaling_config.jsonToReal(config.at("density"), "Density");
-        Real u_max_factor = scaling_config.jsonToReal(config.at("max_velocity_factor"), "Dimensionless");
+        auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+        Real u_max_factor = fluid_solver_config.max_velocity_factor_;
         Real sound_speed = 10.0 * u_max_factor; // 10 times of the maximum anticipated velocity
         auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleFluid>(density, sound_speed);
         config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleFluid", &material);

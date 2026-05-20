@@ -70,8 +70,7 @@
       "name": "WaterBody",
       "material": {
         "type": "weakly_compressible_fluid",
-        "density": 1.0,
-        "max_velocity_factor": 1.0
+        "density": 1.0
       },
       "particle_reserve_factor": 350.0
     }
