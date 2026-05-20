@@ -48,7 +48,6 @@ struct FluidSolverConfig
     Real acoustic_cfl_{0.6};
     Real advection_cfl_{0.25};
     std::string surface_type_ = "free_surface";
-    std::string flow_type_ = "inviscid_flow";
     bool particle_deletion_{false};
     bool particle_sorting_{false};
     UnsignedInt sort_frequency_{0};

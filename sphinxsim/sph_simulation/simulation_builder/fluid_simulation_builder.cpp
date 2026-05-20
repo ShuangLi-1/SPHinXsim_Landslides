@@ -203,8 +203,6 @@ FluidSolverConfig FluidSimulationBuilder::parseFluidSolverConfig(
             config.at("advection_cfl"), "Dimensionless");
     if (config.contains("surface_type"))
         params.surface_type_ = config.at("surface_type").get<std::string>();
-    if (config.contains("flow_type"))
-        params.flow_type_ = config.at("flow_type").get<std::string>();
     if (config.contains("particle_sort_frequency"))
     {
         params.particle_sorting_ = true;

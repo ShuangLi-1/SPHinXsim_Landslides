@@ -179,7 +179,6 @@ class TestSimulationConfig:
                     "acoustic_cfl": 0.6,
                     "advection_cfl": 0.25,
                     "surface_type": "open_boundary",
-                    "flow_type": "viscous_flow",
                     "particle_sort_frequency": 100,
                 },
             }
