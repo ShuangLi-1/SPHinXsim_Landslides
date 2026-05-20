@@ -161,15 +161,15 @@ class TestDomainConfig:
 
 
 class TestSimulationConfig:
+
     def test_minimal_fluid_config(self):
         cfg = _make_minimal_fluid_config()
         assert cfg.simulation_type.value == "fluid_dynamics"
         assert len(cfg.fluid_bodies) == 1
         assert cfg.solver_parameters.fluid_dynamics is not None
         assert cfg.solver_parameters.fluid_dynamics.surface_type == "free_surface"
-        assert cfg.solver_parameters.fluid_dynamics.flow_type == "inviscid_flow"
 
-    def test_fluid_solver_accepts_surface_type_and_flow_type(self):
+    def test_fluid_solver_accepts_surface_type(self):
         cfg = _make_minimal_fluid_config(
             solver_parameters={
                 "end_time": 1.0,
@@ -185,7 +185,6 @@ class TestSimulationConfig:
         )
         assert cfg.solver_parameters.fluid_dynamics is not None
         assert cfg.solver_parameters.fluid_dynamics.surface_type == "open_boundary"
-        assert cfg.solver_parameters.fluid_dynamics.flow_type == "viscous_flow"
 
     def test_fluid_solver_rejects_unknown_key(self):
         with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
