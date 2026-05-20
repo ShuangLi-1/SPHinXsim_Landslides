@@ -14,7 +14,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     SPHSystem &sph_system = sim.defineSPHSystem();
     EntityManager &config_manager = sim.getConfigManager();
     RecordingBuilder &recording_builder = sim.getRecordingBuilder();
-    ScalingConfig &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    SPHSolver &sph_solver = sim.defineSPHSolver(*this, config);
     //----------------------------------------------------------------------
     //	Creating bodies with inital shape, materials and particles.
     //----------------------------------------------------------------------
@@ -32,10 +32,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_inner = sph_system.addInnerRelation(continuum_body);
     auto &continuum_solid_contact = sph_system.addContactRelation(continuum_body, solid_bodies);
     //----------------------------------------------------------------------
-    // Define SPH solver with particle methods and execution policies.
+    // Define particle methods and execution policies.
     // Generally, the host methods should be able to run immediately.
     //----------------------------------------------------------------------
-    SPHSolver &sph_solver = sim.defineSPHSolver(*this, config);
     auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
     //    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
     //----------------------------------------------------------------------
@@ -63,11 +62,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_acoustic_step_1st_half = addAcousticStep1stHalf(config_manager, main_methods, continuum_inner);
     auto &continuum_acoustic_step_2nd_half = addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner);
 
-    auto &continuum_solver_parameters = config_manager.getEntity<
-        ContinuumSolverParameters>("ContinuumSolverParameters");
-    Real U_ref = scaling_config.getScalingRef("Velocity");
+    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
     auto &continuum_advection_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, U_ref, continuum_solver_parameters.advection_cfl_);
+        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
     auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
         fluid_dynamics::AcousticTimeStepCK<>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
 

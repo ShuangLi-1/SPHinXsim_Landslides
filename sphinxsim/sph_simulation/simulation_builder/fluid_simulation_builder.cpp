@@ -16,7 +16,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     SPHSystem &sph_system = sim.defineSPHSystem();
     EntityManager &config_manager = sim.getConfigManager();
     RecordingBuilder &recording_builder = sim.getRecordingBuilder();
-    ScalingConfig &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    SPHSolver &sph_solver = sim.defineSPHSolver(*this, config);
     //----------------------------------------------------------------------
     // Creating bodies with inital geometry, materials and particles.
     //----------------------------------------------------------------------
@@ -34,9 +34,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_inner = sph_system.addInnerRelation(fluid_body);
     auto &fluid_wall_contact = sph_system.addContactRelation(fluid_body, solid_bodies);
     //----------------------------------------------------------------------
-    // Define SPH solver with particle methods and execution policies.
+    // Define particle methods and execution policies.
     //----------------------------------------------------------------------
-    SPHSolver &sph_solver = sim.defineSPHSolver(*this, config);
     auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
     //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
@@ -71,9 +70,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    Real U_ref = scaling_config.getScalingRef("Velocity");
     auto &fluid_advection_time_step = main_methods.addReduceDynamics<fluid_dynamics::AdvectionTimeStepCK>(
-        fluid_body, U_ref, fluid_solver_config.advection_cfl_);
+        fluid_body, Real(1), fluid_solver_config.advection_cfl_);
     auto &fluid_acoustic_time_step = main_methods.addReduceDynamics<fluid_dynamics::AcousticTimeStepCK<>>(
         fluid_body, fluid_solver_config.acoustic_cfl_);
     //----------------------------------------------------------------------
