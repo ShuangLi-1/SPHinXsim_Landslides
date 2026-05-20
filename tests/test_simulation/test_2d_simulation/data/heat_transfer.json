@@ -124,7 +124,10 @@
     {
       "name": "WallBoundary",
       "material": {
-        "type": "rigid_body"
+        "type": "rigid_body",
+        "thermal_properties": {
+          "thermal_boundary": "Dirichlet"
+        }
       }
     }
   ],

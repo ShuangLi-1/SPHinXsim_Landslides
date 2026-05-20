@@ -389,6 +389,8 @@ class TestSimulationConfig:
         assert thermal is not None
         assert thermal.thermal_conductivity == pytest.approx(0.6)
         assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
+        assert cfg.solid_bodies[0].material.thermal_properties is not None
+        assert cfg.solid_bodies[0].material.thermal_properties.thermal_boundary.value == "Dirichlet"
 
     def test_fluid_material_accepts_max_velocity_factor(self):
         cfg = _make_minimal_fluid_config(
@@ -458,7 +460,7 @@ class TestSimulationConfig:
         assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
 
     def test_fluid_material_rejects_incomplete_thermal_properties(self):
-        with pytest.raises(ValidationError, match="volumetric_heat_capacity"):
+        with pytest.raises(ValidationError, match="thermal_properties requires"):
             _make_minimal_fluid_config(
                 fluid_bodies=[
                     {
@@ -474,6 +476,25 @@ class TestSimulationConfig:
                     }
                 ]
             )
+
+    def test_solid_material_accepts_thermal_boundary_mode(self):
+        cfg = _make_minimal_fluid_config(
+            solid_bodies=[
+                {
+                    "name": "WallBoundary",
+                    "material": {
+                        "type": "rigid_body",
+                        "thermal_properties": {
+                            "thermal_boundary": "Dirichlet",
+                        },
+                    },
+                }
+            ]
+        )
+        thermal = cfg.solid_bodies[0].material.thermal_properties
+        assert thermal is not None
+        assert thermal.thermal_boundary is not None
+        assert thermal.thermal_boundary.value == "Dirichlet"
 
     def test_characteristic_dimensions_support_new_base_units(self):
         cfg = _make_minimal_fluid_config(

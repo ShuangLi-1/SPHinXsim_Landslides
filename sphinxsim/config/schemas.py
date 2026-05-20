@@ -353,9 +353,27 @@ class ViscosityConfig(BaseModel):
     Reynolds_number: float = Field(..., gt=0)
 
 
+class ThermalBoundaryType(str, Enum):
+    DIRICHLET = "Dirichlet"
+    NEUMANN = "Neumann"
+    ROBIN = "Robin"
+
+
 class ThermalPropertiesConfig(BaseModel):
-    thermal_conductivity: float = Field(..., gt=0)
-    volumetric_heat_capacity: float = Field(..., gt=0)
+    thermal_conductivity: Optional[float] = Field(default=None, gt=0)
+    volumetric_heat_capacity: Optional[float] = Field(default=None, gt=0)
+    thermal_boundary: Optional[ThermalBoundaryType] = None
+
+    @model_validator(mode="after")
+    def _validate_thermal_mode(self) -> "ThermalPropertiesConfig":
+        if self.thermal_boundary is not None:
+            return self
+
+        if self.thermal_conductivity is None or self.volumetric_heat_capacity is None:
+            raise ValueError(
+                "thermal_properties requires thermal_boundary or both thermal_conductivity and volumetric_heat_capacity"
+            )
+        return self
 
 
 class MaterialConfig(BaseModel):

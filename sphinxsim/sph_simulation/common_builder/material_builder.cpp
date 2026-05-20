@@ -97,13 +97,31 @@ void MaterialBuilder::addThermalProperties(
     EntityManager &config_manager, SPHBody &sph_body, const json &config)
 {
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    if (!config.contains("thermal_boundary"))
+    {
+        Real d_coeff_ref = scaling_config.jsonToReal(
+            config.at("thermal_conductivity"), "ThermalConductivity");
+        Real cv = scaling_config.jsonToReal(
+            config.at("volumetric_heat_capacity"), "VolumetricHeatCapacity");
 
-    Real d_coeff_ref = scaling_config.jsonToReal(
-        config.at("thermal_conductivity"), "ThermalConductivity");
-    Real cv = scaling_config.jsonToReal(
-        config.at("volumetric_heat_capacity"), "VolumetricHeatCapacity");
-
-    sph_body.addMaterialProperty<IsotropicDiffusion>("Temperature", "Temperature", d_coeff_ref, cv);
+        sph_body.addMaterialProperty<IsotropicDiffusion>("Temperature", "Temperature", d_coeff_ref, cv);
+        return;
+    }
+    else
+    {
+        ThermalBoundaryConfig boundary_config = parseThermalBoundaryConfig(config.at("thermal_boundary"));
+        config_manager.emplaceEntity<ThermalBoundaryConfig>(sph_body.Name(), boundary_config);
+        return;
+    }
+    throw std::runtime_error(
+        "MaterialBuilder::addThermalProperties: unsupported thermal property configuration.");
+}
+//=================================================================================================//
+ThermalBoundaryConfig MaterialBuilder::parseThermalBoundaryConfig(const json &config)
+{
+    ThermalBoundaryConfig thermal_boundary_config;
+    thermal_boundary_config.boundary_type = config.get<std::string>();
+    return thermal_boundary_config;
 }
 //=================================================================================================//
 } // namespace SPH

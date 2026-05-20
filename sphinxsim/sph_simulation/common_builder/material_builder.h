@@ -36,6 +36,11 @@ namespace SPH
 class EntityManager;
 class SPHBody;
 
+struct ThermalBoundaryConfig
+{
+    std::string boundary_type; // "Dirichlet",  "Neumann" or "Robin"
+};
+
 class MaterialBuilder
 {
   public:
@@ -46,6 +51,7 @@ class MaterialBuilder
     void addOtherMaterialProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     void addViscosity(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     void addThermalProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
+    ThermalBoundaryConfig parseThermalBoundaryConfig(const json &config);
 };
 } // namespace SPH
 #endif // MATERIAL_BUILDER_H
