@@ -374,6 +374,22 @@ class TestSimulationConfig:
         assert cfg.fluid_bodies[0].particle_reserve_factor == pytest.approx(350.0)
         assert cfg.fluid_boundary_conditions[0].type.value == "emitter"
 
+    def test_heat_transfer_fixture_accepts_thermal_properties(self):
+        fixture_path = (
+            Path(__file__).parent
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "heat_transfer.json"
+        )
+        payload = json.loads(fixture_path.read_text())
+        cfg = SimulationConfig.model_validate(payload)
+
+        thermal = cfg.fluid_bodies[0].material.thermal_properties
+        assert thermal is not None
+        assert thermal.thermal_conductivity == pytest.approx(0.6)
+        assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
+
     def test_fluid_material_accepts_max_velocity_factor(self):
         cfg = _make_minimal_fluid_config(
             fluid_bodies=[
@@ -414,6 +430,46 @@ class TestSimulationConfig:
                         "material": {
                             "type": "weakly_compressible_fluid",
                             "density": 1000.0,
+                        },
+                    }
+                ]
+            )
+
+    def test_fluid_material_accepts_thermal_properties(self):
+        cfg = _make_minimal_fluid_config(
+            fluid_bodies=[
+                {
+                    "name": "WaterBody",
+                    "material": {
+                        "type": "weakly_compressible_fluid",
+                        "density": 1000.0,
+                        "max_velocity_factor": 2.0,
+                        "thermal_properties": {
+                            "thermal_conductivity": 0.6,
+                            "volumetric_heat_capacity": 4181.3,
+                        },
+                    },
+                }
+            ]
+        )
+        thermal = cfg.fluid_bodies[0].material.thermal_properties
+        assert thermal is not None
+        assert thermal.thermal_conductivity == pytest.approx(0.6)
+        assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
+
+    def test_fluid_material_rejects_incomplete_thermal_properties(self):
+        with pytest.raises(ValidationError, match="volumetric_heat_capacity"):
+            _make_minimal_fluid_config(
+                fluid_bodies=[
+                    {
+                        "name": "WaterBody",
+                        "material": {
+                            "type": "weakly_compressible_fluid",
+                            "density": 1000.0,
+                            "max_velocity_factor": 2.0,
+                            "thermal_properties": {
+                                "thermal_conductivity": 0.6,
+                            },
                         },
                     }
                 ]

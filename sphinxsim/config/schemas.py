@@ -353,6 +353,11 @@ class ViscosityConfig(BaseModel):
     Reynolds_number: float = Field(..., gt=0)
 
 
+class ThermalPropertiesConfig(BaseModel):
+    thermal_conductivity: float = Field(..., gt=0)
+    volumetric_heat_capacity: float = Field(..., gt=0)
+
+
 class MaterialConfig(BaseModel):
     type: MaterialType
 
@@ -360,6 +365,7 @@ class MaterialConfig(BaseModel):
     sound_speed: Optional[float] = Field(default=None, gt=0)
     max_velocity_factor: Optional[float] = Field(default=None, gt=0)
     viscosity: Optional[float | ViscosityConfig] = None
+    thermal_properties: Optional[ThermalPropertiesConfig] = None
 
     youngs_modulus: Optional[float] = Field(default=None, gt=0)
     poisson_ratio: Optional[float] = None
