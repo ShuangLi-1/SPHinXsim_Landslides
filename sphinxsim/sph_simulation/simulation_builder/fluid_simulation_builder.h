@@ -87,6 +87,10 @@ class FluidSimulationBuilder : public SimulationBuilder
         SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
 
     template <class MethodContainerType>
+    void buildParticleDeletionIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body);
+
+    template <class MethodContainerType>
     void buildParticleSortIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body);
 

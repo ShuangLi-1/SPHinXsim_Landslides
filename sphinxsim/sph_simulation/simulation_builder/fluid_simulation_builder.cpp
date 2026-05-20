@@ -91,6 +91,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildBoundaryConditionsIfPresent(sim, main_methods, config);
+    buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.

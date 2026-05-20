@@ -145,6 +145,7 @@ void FluidSimulationBuilder::addBoundaryCondition(
     EntityManager &config_manager = sim.getConfigManager();
     TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
 
     const std::string body_name = config.at("body_name").get<std::string>();
     FluidBody &fluid_body = sim.getSPHSystem().getBodyByName<FluidBody>(body_name);
@@ -195,27 +196,33 @@ void FluidSimulationBuilder::addBoundaryCondition(
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleDeletionTagging, [&]()
             { bi_directional_bd.indicateOutFlowParticles(); });
+        fluid_solver_config.particle_deletion_ = true; // enable particle deletion
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleIndicationTagging, [&]()
             { bi_directional_bd.tagBufferParticles(); });
-
-        auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-        if (fluid_solver_config.particle_deletion_ == false)
-        {
-            auto &particle_deletion = main_methods.template addStateDynamics<
-                fluid_dynamics::OutflowParticleDeletion>(fluid_body);
-            fluid_solver_config.particle_deletion_ = true; // enable particle deletion
-
-            simulation_pipeline.insert_hook(
-                SimulationHookPoint::ParticleDeletion, [&]()
-                { particle_deletion.exec(); });
-        }
-
         return;
     }
     throw std::runtime_error(
         "FluidSimulationBuilder::buildBoundaryConditionsIfPresent: unsupported: " + type);
+}
+//=================================================================================================//
+template <class MethodContainerType>
+void FluidSimulationBuilder::buildParticleDeletionIfPresent(
+    SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body)
+{
+    auto &config_manager = sim.getConfigManager();
+    StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+    if (fluid_solver_config.particle_deletion_)
+    {
+        auto &particle_deletion = main_methods.template addStateDynamics<
+            fluid_dynamics::OutflowParticleDeletion>(real_body);
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ParticleDeletion, [&]()
+            { particle_deletion.exec(); });
+    }
 }
 //=================================================================================================//
 template <class MethodContainerType>
