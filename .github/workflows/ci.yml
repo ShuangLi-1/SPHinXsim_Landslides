@@ -4,23 +4,23 @@ on:
   push:
     branches: [main, master]
     paths:
-       - 'examples/**'
-       - 'tests/**'
-       - 'sphinxsim/**'
-       - 'CMakeLists.txt'
-       - 'CMakePresets.json'
-       - '*.cmake'
-       - 'pyproject.toml'
+      - "examples/**"
+      - "tests/**"
+      - "sphinxsim/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "*.cmake"
+      - "pyproject.toml"
   pull_request:
     branches: [main, master]
     paths:
-       - 'examples/**'
-       - 'tests/**'
-       - 'sphinxsim/**'
-       - 'CMakeLists.txt'
-       - 'CMakePresets.json'
-       - '*.cmake'
-       - 'pyproject.toml'
+      - "examples/**"
+      - "tests/**"
+      - "sphinxsim/**"
+      - "CMakeLists.txt"
+      - "CMakePresets.json"
+      - "*.cmake"
+      - "pyproject.toml"
   workflow_dispatch:
 
 env:
@@ -28,11 +28,28 @@ env:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-22.04
+    name: build-and-test (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
     permissions:
       contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: linux
+            os: ubuntu-22.04
+            triplet: x64-linux
+            preset: integrated-build-release
+          - name: windows
+            os: windows-2022
+            triplet: x64-windows
+            preset: integrated-build-release-windows
+          - name: macos
+            os: macos-13
+            triplet: x64-osx
+            preset: integrated-build-release
     env:
-      VCPKG_DEFAULT_TRIPLET: x64-linux
+      VCPKG_DEFAULT_TRIPLET: ${{ matrix.triplet }}
       SPHINXSIM_LLM_PROVIDER: mock
       PYTHONDONTWRITEBYTECODE: "1"
 
@@ -52,7 +69,8 @@ jobs:
         with:
           cmake-version: "3.x"
 
-      - name: Install system dependencies
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update
           sudo apt-get install -y \
@@ -66,18 +84,25 @@ jobs:
             libxmu-dev libxi-dev libgl-dev libxt-dev \
             libvtk9-dev
 
+      - name: Install macOS system dependencies
+        if: runner.os == 'macOS'
+        run: |
+          brew update
+          brew install ninja autoconf automake autoconf-archive pkg-config
+
       - name: Set up ccache
         uses: hendrikmuhs/ccache-action@v1.2
         with:
-          key: ${{ github.job }}-${{ runner.os }}
+          key: ${{ github.job }}-${{ matrix.name }}-${{ runner.os }}
 
       - name: Set up vcpkg
         uses: friendlyanon/setup-vcpkg@v1
         with:
           committish: ${{ env.VCPKG_VERSION }}
-          cache-version: ${{ env.VCPKG_VERSION }}
+          cache-version: ${{ env.VCPKG_VERSION }}-${{ matrix.name }}
 
-      - name: Install C++ dependencies via vcpkg
+      - name: Install C++ dependencies via vcpkg (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           # openblas with dynamic-arch avoids -march=native conflicts with ccache
           ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
@@ -91,34 +116,84 @@ jobs:
             spdlog \
             gtest \
             pybind11 \
+            vtk \
             nlohmann-json
 
-      - name: Configure CMake (integrated build)
+      - name: Install C++ dependencies via vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          cmake --preset integrated-build-release \
+          $vcpkg = "${{ github.workspace }}\\vcpkg\\vcpkg.exe"
+          & $vcpkg install --clean-after-build openblas[dynamic-arch] --allow-unsupported
+          & $vcpkg install --clean-after-build `
+            eigen3 `
+            tbb `
+            boost-program-options `
+            boost-geometry `
+            simbody `
+            spdlog `
+            gtest `
+            pybind11 `
+            vtk `
+            nlohmann-json
+
+      - name: Configure CMake (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cmake --preset ${{ matrix.preset }} \
             -D CMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" \
             -D CMAKE_C_COMPILER_LAUNCHER=ccache \
             -D CMAKE_CXX_COMPILER_LAUNCHER=ccache \
             -D Python3_EXECUTABLE=$(which python3)
 
-      - name: Build
+      - name: Configure CMake (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
         run: |
-          cmake --build --preset integrated-build-release \
-            --parallel $(nproc)
+          cmake --preset ${{ matrix.preset }} `
+            -D CMAKE_TOOLCHAIN_FILE="${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake" `
+            -D Python3_EXECUTABLE="$(python -c \"import sys; print(sys.executable)\")"
 
-      - name: Run C++ simulation class tests (ctest)
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build --preset ${{ matrix.preset }} --parallel $(nproc)
+
+      - name: Build (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake --build --preset ${{ matrix.preset }} --parallel "$(sysctl -n hw.logicalcpu)"
+
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          cmake --build --preset ${{ matrix.preset }} --parallel
+
+      - name: Run C++ simulation class tests (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
           ctest --test-dir ${{ github.workspace }}/build-integrated \
             --output-on-failure \
+            -R "test_(2d|3d)_simulation$"
+
+      - name: Run C++ simulation class tests (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ctest --test-dir "${{ github.workspace }}\\build-integrated" `
+            --output-on-failure `
             -R "test_(2d|3d)_simulation$"
 
       - name: Install Python package (editable with dev dependencies)
         run: |
           pip install -e ".[dev]"
 
-      - name: Run unit tests (tests/)
+      - name: Run unit tests (tests/, CI mock-LLM-only)
+        env:
+          SPHINXSIM_LLM_PROVIDER: mock
         run: |
-          pytest tests/ -v
+          pytest tests/ -v -k "not ollama"
 
       - name: Run example tests (examples/)
         run: |
