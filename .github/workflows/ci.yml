@@ -209,7 +209,7 @@ jobs:
 
   build-and-test-macos:
     name: build-and-test (macos)
-    runs-on: macos-13
+    runs-on: macos-15-intel
     permissions:
       contents: read
     env:
