@@ -61,7 +61,19 @@ if(IS_ABSOLUTE "${SPHINXSIM_PYTHON_INSTALL_DIR}")
     endif()
 endif()
 
-find_package(GTest CONFIG REQUIRED)
+if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+    set(_SPHINXSIM_VCPKG_GTEST_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/gtest")
+    if(EXISTS "${_SPHINXSIM_VCPKG_GTEST_DIR}/GTestConfig.cmake")
+        set(GTest_DIR "${_SPHINXSIM_VCPKG_GTEST_DIR}" CACHE PATH "Path to GTestConfig.cmake" FORCE)
+        find_package(GTest CONFIG REQUIRED
+            PATHS "${_SPHINXSIM_VCPKG_GTEST_DIR}"
+            NO_DEFAULT_PATH)
+    else()
+        find_package(GTest CONFIG REQUIRED)
+    endif()
+else()
+    find_package(GTest CONFIG REQUIRED)
+endif()
 include(GoogleTest)
 
 # Set SPHinXsys options to minimal for Python binding
@@ -87,17 +99,17 @@ set(BIND_SOURCE_FILES sphinxsim/bindings/sphinxsys_python.cpp)
 
 if(SPHINXSYS_2D)
     add_library(sph_simulation_2d)
+    set_target_properties(sph_simulation_2d PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_include_directories(sph_simulation_2d PUBLIC
         ${SPH_SIMULATION_INCLUDE}
         ${SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER}
         ${SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION}
         ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
         ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
-    target_sources(sph_simulation_2d INTERFACE ${SPH_SIMULATION_SOURCES})
-    target_link_libraries(sph_simulation_2d INTERFACE VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
+    target_sources(sph_simulation_2d PRIVATE ${SPH_SIMULATION_SOURCES})
+    target_link_libraries(sph_simulation_2d PUBLIC VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
     target_link_libraries(sph_simulation_2d PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sph_simulation_2d PUBLIC sphinxsys_2d)
-    target_link_libraries(sph_simulation_2d INTERFACE GTest::gtest GTest::gtest_main)
     target_compile_definitions(sph_simulation_2d PUBLIC SPHINXSYS_2D VERSION_INFO="0.1.0")
     
     pybind11_add_module(_sphinxsys_core_2d ${BIND_SOURCE_FILES})
@@ -121,17 +133,17 @@ endif()
 
 if(SPHINXSYS_3D)
     add_library(sph_simulation_3d)
+    set_target_properties(sph_simulation_3d PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_include_directories(sph_simulation_3d PUBLIC
         ${SPH_SIMULATION_INCLUDE}
         ${SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER}
         ${SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION}
         ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
         ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
-    target_sources(sph_simulation_3d INTERFACE ${SPH_SIMULATION_SOURCES})
-    target_link_libraries(sph_simulation_3d INTERFACE VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
+    target_sources(sph_simulation_3d PRIVATE ${SPH_SIMULATION_SOURCES})
+    target_link_libraries(sph_simulation_3d PUBLIC VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
     target_link_libraries(sph_simulation_3d PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sph_simulation_3d PUBLIC sphinxsys_3d)
-    target_link_libraries(sph_simulation_3d INTERFACE GTest::gtest GTest::gtest_main)
     target_compile_definitions(sph_simulation_3d PUBLIC SPHINXSYS_3D VERSION_INFO="0.1.0")
 
     pybind11_add_module(_sphinxsys_core_3d ${BIND_SOURCE_FILES})
