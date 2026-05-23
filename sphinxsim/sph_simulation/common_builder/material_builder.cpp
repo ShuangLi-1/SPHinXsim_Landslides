@@ -92,7 +92,8 @@ void MaterialBuilder::addViscosity(EntityManager &config_manager, SPHBody &sph_b
     {
         mu_ref = scaling_config.jsonToReal(config, "Viscosity");
     }
-    sph_body.addMaterialProperty<Viscosity>(mu_ref);
+    auto &viscosity = sph_body.addMaterialProperty<Viscosity>(mu_ref);
+    config_manager.addEntity(sph_body.Name() + "Viscosity", &viscosity);
 }
 //=================================================================================================//
 void MaterialBuilder::addThermalProperties(
@@ -106,7 +107,9 @@ void MaterialBuilder::addThermalProperties(
         Real cv = scaling_config.jsonToReal(
             config.at("volumetric_heat_capacity"), "VolumetricHeatCapacity");
 
-        sph_body.addMaterialProperty<IsotropicDiffusion>("Temperature", "Temperature", d_coeff_ref, cv);
+        auto &diffusion = sph_body.addMaterialProperty<IsotropicDiffusion>(
+            "Temperature", "Temperature", d_coeff_ref, cv);
+        config_manager.addEntity(sph_body.Name() + "ThermalDiffusion", &diffusion);
         return;
     }
     else
