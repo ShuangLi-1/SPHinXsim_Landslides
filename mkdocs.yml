@@ -2,6 +2,11 @@ site_name: SPHinXsim
 
 nav:
   - Home: index.md
+  - Installation:
+      - Overview: installation.md
+      - Linux: installation-linux.md
+      - Windows: installation-windows.md
+      - macOS: installation-macos.md
   - CLI Usage: cli-usage.md
   - LLM Testing: llm-testing.md
 
