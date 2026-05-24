@@ -16,6 +16,14 @@ Choose your platform-specific setup guide:
 python -m pip install -e ".[dev]"
 ```
 
+- To enable the `sphinxsim preview` visualizer, install the optional PyVista dependency:
+
+```bash
+python -m pip install -e ".[visualization]"
+```
+
+  See [Visualization](visualization.md) for details.
+
 - Run full Python tests (including examples):
 
 ```bash

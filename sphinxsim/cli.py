@@ -371,6 +371,50 @@ def cmd_run(args: argparse.Namespace) -> int:
         os.chdir(original_dir)
 
 
+def cmd_preview(args: argparse.Namespace) -> int:
+    """Render an interactive geometry/BC preview of a JSON config file."""
+    try:
+        import pyvista  # noqa: F401
+    except ImportError:
+        print(
+            "❌ PyVista is not installed.\n"
+            "   Install it with:  pip install sphinxsim[visualization]",
+            file=sys.stderr,
+        )
+        return 1
+
+    config_path = Path(args.config_file)
+    config, rc = _load_config(config_path)
+    if rc != 0:
+        return rc
+    assert config is not None
+
+    from sphinxsim.visualization.preview import ConfigVisualizer
+
+    use_cpp = not getattr(args, "no_cpp", False)
+    off_screen = getattr(args, "off_screen", False)
+
+    print(f"🖼  Building configuration preview for: {config_path}")
+    if use_cpp:
+        print("   Attempting C++ geometry build for accurate VTP meshes...")
+    else:
+        print("   Using schema-only bounding-box fallback (--no-cpp).")
+
+    visualizer = ConfigVisualizer(config, PROJECT_ROOT, off_screen=off_screen)
+    try:
+        visualizer.preview(use_cpp=use_cpp)
+    except ImportError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"❌ Preview failed: {exc}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 1
+
+    return 0
+
+
 def _schema_explore_context() -> str:
     schema = json.dumps(SimulationConfig.model_json_schema(), indent=2)
     return (
@@ -445,7 +489,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print(
         "Commands: load FILE, generate DESCRIPTION FILE, "
         "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+        "validate, run, preview [--no-cpp], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
     print("Note: relative paths are resolved under .build-temp/")
 
@@ -483,6 +527,8 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("                                 - Patch update with non-strict behavior")
             print("  explore QUESTION                - Ask about schema")
             print("  validate                        - Reload and validate config from disk")
+            print("  preview                         - Render geometry/BC preview (requires pyvista)")
+            print("  preview --no-cpp                - Preview using schema bounding-box fallback only")
             print("  run                             - Run simulation from loaded config")
             print("  lock-geometry                   - Manually lock geometry updates")
             print("  unlock-geometry                 - Unlock geometry updates")
@@ -622,6 +668,20 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print(f"✅ Reloaded and validated config: {config_path}")
             # Show config summary
             _ = cmd_validate(argparse.Namespace(config_file=str(config_path)))
+            continue
+
+        if cmd == "preview":
+            if config_path is None:
+                print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
+                continue
+            no_cpp = "--no-cpp" in parts
+            _ = cmd_preview(
+                argparse.Namespace(
+                    config_file=str(config_path),
+                    no_cpp=no_cpp,
+                    off_screen=False,
+                )
+            )
             continue
 
         if cmd == "run":
@@ -768,6 +828,29 @@ def _build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="Run a simulation from a JSON config file.")
     run.add_argument("config_file", nargs='?', default="config.json", help="Path to JSON config file.")
     run.set_defaults(func=cmd_run)
+
+    # preview
+    prev = subparsers.add_parser(
+        "preview",
+        help="Render an interactive geometry/BC preview of a JSON config file.",
+    )
+    prev.add_argument(
+        "config_file",
+        nargs="?",
+        default="config.json",
+        help="Path to JSON config file.",
+    )
+    prev.add_argument(
+        "--no-cpp",
+        action="store_true",
+        help="Skip C++ geometry build; use schema bounding-box fallback only.",
+    )
+    prev.add_argument(
+        "--off-screen",
+        action="store_true",
+        help="Render off-screen (no window). Useful for automated testing.",
+    )
+    prev.set_defaults(func=cmd_preview)
 
     # explore
     exp = subparsers.add_parser(

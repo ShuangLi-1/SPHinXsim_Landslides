@@ -66,6 +66,12 @@ Install Python package with dev dependencies:
 python -m pip install -e ".[dev]"
 ```
 
+To enable geometry preview (`sphinxsim preview`), also install:
+
+```powershell
+python -m pip install -e ".[visualization]"
+```
+
 Run Python tests:
 
 ```powershell

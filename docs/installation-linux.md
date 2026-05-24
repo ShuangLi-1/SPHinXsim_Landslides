@@ -50,7 +50,6 @@ git clone https://github.com/microsoft/vcpkg.git ../vcpkg
   spdlog \
   gtest \
   pybind11 \
-  vtk \
   nlohmann-json
 ```
 
@@ -69,6 +68,12 @@ Install Python package with dev dependencies:
 
 ```bash
 python -m pip install -e ".[dev]"
+```
+
+To enable geometry preview (`sphinxsim preview`), also install:
+
+```bash
+python -m pip install -e ".[visualization]"
 ```
 
 Run Python tests:

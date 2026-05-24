@@ -18,6 +18,9 @@ dependencies = [
 dev = [
     "pytest>=7.0",
 ]
+visualization = [
+    "pyvista>=0.43",
+]
 
 [project.scripts]
 sphinxsim = "sphinxsim.cli:main"
