@@ -64,7 +64,8 @@ class TestMockLLM:
 
     def test_velocity_override(self):
         cfg = self.llm.generate("water flowing at 3 m/s through a channel")
-        assert cfg.fluid_bodies[0].material.sound_speed == pytest.approx(30.0)
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.max_velocity_factor == pytest.approx(3.0)
 
     def test_end_time_override(self):
         cfg = self.llm.generate("simulate for 5 s")

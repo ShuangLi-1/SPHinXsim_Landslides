@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Optional
+from typing import List, Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class PhysicsType(str, Enum):
@@ -107,12 +107,12 @@ class DomainConfig(BaseModel):
 
 class GlobalResolutionConfig(BaseModel):
     particle_spacing: Optional[float] = Field(default=None, gt=0)
-    min_dimension_particles: Optional[int] = Field(default=None, gt=0)
+    characteristic_length_particles: Optional[int] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _requires_one_mode(self) -> "GlobalResolutionConfig":
-        if self.particle_spacing is None and self.min_dimension_particles is None:
-            raise ValueError("global_resolution requires particle_spacing or min_dimension_particles")
+        if self.particle_spacing is None and self.characteristic_length_particles is None:
+            raise ValueError("global_resolution requires particle_spacing or characteristic_length_particles")
         return self
 
 
@@ -329,13 +329,18 @@ class ObserverConfig(BaseModel):
 
 
 class StateRecordingVariableConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    int_type: Optional[List[str]] = None
     real_type: Optional[List[str]] = None
     vector_type: Optional[List[str]] = None
 
     @model_validator(mode="after")
     def _at_least_one(self) -> "StateRecordingVariableConfig":
-        if self.real_type is None and self.vector_type is None:
-            raise ValueError("extra_state_recording variables require real_type or vector_type")
+        if self.int_type is None and self.real_type is None and self.vector_type is None:
+            raise ValueError(
+                "extra_state_recording variables require at least one of int_type, real_type, vector_type"
+            )
         return self
 
 
@@ -344,13 +349,40 @@ class ExtraStateRecordingConfig(BaseModel):
     variables: List[StateRecordingVariableConfig] = Field(..., min_length=1)
 
 
+class ViscosityConfig(BaseModel):
+    Reynolds_number: float = Field(..., gt=0)
+
+
+class ThermalBoundaryType(str, Enum):
+    DIRICHLET = "Dirichlet"
+    NEUMANN = "Neumann"
+    ROBIN = "Robin"
+
+
+class ThermalPropertiesConfig(BaseModel):
+    thermal_conductivity: Optional[float] = Field(default=None, gt=0)
+    volumetric_heat_capacity: Optional[float] = Field(default=None, gt=0)
+    thermal_boundary: Optional[ThermalBoundaryType] = None
+
+    @model_validator(mode="after")
+    def _validate_thermal_mode(self) -> "ThermalPropertiesConfig":
+        if self.thermal_boundary is not None:
+            return self
+
+        if self.thermal_conductivity is None or self.volumetric_heat_capacity is None:
+            raise ValueError(
+                "thermal_properties requires thermal_boundary or both thermal_conductivity and volumetric_heat_capacity"
+            )
+        return self
+
+
 class MaterialConfig(BaseModel):
     type: MaterialType
 
     density: Optional[float] = Field(default=None, gt=0)
     sound_speed: Optional[float] = Field(default=None, gt=0)
-    maximum_velocity: Optional[float] = Field(default=None, gt=0)
-    viscosity: Optional[float] = Field(default=None, gt=0)
+    viscosity: Optional[float | ViscosityConfig] = None
+    thermal_properties: Optional[ThermalPropertiesConfig] = None
 
     youngs_modulus: Optional[float] = Field(default=None, gt=0)
     poisson_ratio: Optional[float] = None
@@ -362,10 +394,6 @@ class MaterialConfig(BaseModel):
         if self.type == MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
             if self.density is None:
                 raise ValueError("weakly_compressible_fluid requires density")
-            if self.sound_speed is None and self.maximum_velocity is None:
-                raise ValueError(
-                    "weakly_compressible_fluid requires sound_speed or maximum_velocity"
-                )
         elif self.type == MaterialType.RIGID_BODY:
             pass
         elif self.type == MaterialType.J2_PLASTICITY:
@@ -448,9 +476,12 @@ class RestartConfig(BaseModel):
 
 
 class FluidDynamicsSolverConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     acoustic_cfl: float = Field(default=0.6, gt=0)
     advection_cfl: float = Field(default=0.25, gt=0)
-    flow_type: str = "free_surface"
+    max_velocity_factor: float = Field(default=1.0, gt=0)
+    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 
 

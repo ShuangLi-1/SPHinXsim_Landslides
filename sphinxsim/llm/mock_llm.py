@@ -58,8 +58,7 @@ _FLUID_TEMPLATE: Dict[str, Any] = {
             "name": "WaterBody",
             "material": {
                 "type": "weakly_compressible_fluid",
-                "density": 1.0,
-                "sound_speed": 20.0,
+                "density": 1.0
             },
         }
     ],
@@ -85,7 +84,7 @@ _FLUID_TEMPLATE: Dict[str, Any] = {
         "fluid_dynamics": {
             "acoustic_cfl": 0.6,
             "advection_cfl": 0.25,
-            "flow_type": "free_surface",
+            "surface_type": "free_surface",
             "particle_sort_frequency": 100,
         },
     },
@@ -191,8 +190,7 @@ _FSI_TEMPLATE: Dict[str, Any] = {
             "name": "WaterBody",
             "material": {
                 "type": "weakly_compressible_fluid",
-                "density": 1000.0,
-                "sound_speed": 20.0,
+                "density": 1000.0
             },
         }
     ],
@@ -218,7 +216,7 @@ _FSI_TEMPLATE: Dict[str, Any] = {
         "fluid_dynamics": {
             "acoustic_cfl": 0.6,
             "advection_cfl": 0.25,
-            "flow_type": "free_surface",
+            "surface_type": "free_surface",
             "particle_sort_frequency": 100,
         },
     },
@@ -301,12 +299,11 @@ def _apply_overrides(template: Dict[str, Any], description: str) -> Dict[str, An
 
     cfg = copy.deepcopy(template)
 
-    # Velocity override (mapped to sound speed as c ~= 10U)
+    # Velocity override
     vel_match = re.search(r"(\d+(?:\.\d+)?)\s*m/s", description, re.IGNORECASE)
     if vel_match:
         speed = float(vel_match.group(1))
-        if cfg.get("fluid_bodies"):
-            cfg["fluid_bodies"][0]["material"]["sound_speed"] = max(20.0, 10.0 * speed)
+        cfg.setdefault("solver_parameters", {}).setdefault("fluid_dynamics", {})["max_velocity_factor"] = max(2.0, speed)
 
     # End-time override (e.g. "5 s", "5 sec", "5 second", "5 seconds")
     time_match = re.search(
@@ -381,7 +378,7 @@ def _apply_additions(cfg: Dict[str, Any], description: str) -> None:
             density_match = re.search(r"density\s*[:=]?\s*(\d+(?:\.\d+)?)", description, re.IGNORECASE)
             sound_speed_match = re.search(r"sound\s*speed\s*[:=]?\s*(\d+(?:\.\d+)?)", description, re.IGNORECASE)
             density = float(density_match.group(1)) if density_match else 1.0
-            sound_speed = float(sound_speed_match.group(1)) if sound_speed_match else 20.0
+            max_velocity_factor = float(sound_speed_match.group(1)) / 10.0 if sound_speed_match else 2.0
             block_shape_name = f"{block_name}Shape"
             cfg.setdefault("geometries", {}).setdefault("shapes", []).append(
                 {
@@ -397,10 +394,10 @@ def _apply_additions(cfg: Dict[str, Any], description: str) -> None:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": density,
-                        "sound_speed": sound_speed,
                     },
                 }
             )
+            cfg.setdefault("solver_parameters", {}).setdefault("fluid_dynamics", {})["max_velocity_factor"] = max_velocity_factor
 
 
 def _apply_updates(existing: Dict[str, Any], description: str) -> Dict[str, Any]:

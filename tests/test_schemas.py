@@ -54,7 +54,6 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
                 "material": {
                     "type": "weakly_compressible_fluid",
                     "density": 1000.0,
-                    "sound_speed": 20.0,
                 },
                 "particle_reserve_factor": 10.0,
             }
@@ -84,7 +83,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
             "fluid_dynamics": {
                 "acoustic_cfl": 0.6,
                 "advection_cfl": 0.25,
-                "flow_type": "free_surface",
+                "surface_type": "free_surface",
                 "particle_sort_frequency": 100,
             },
         },
@@ -161,10 +160,46 @@ class TestDomainConfig:
 
 
 class TestSimulationConfig:
+
     def test_minimal_fluid_config(self):
         cfg = _make_minimal_fluid_config()
         assert cfg.simulation_type.value == "fluid_dynamics"
         assert len(cfg.fluid_bodies) == 1
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.surface_type == "free_surface"
+
+    def test_fluid_solver_accepts_surface_type(self):
+        cfg = _make_minimal_fluid_config(
+            solver_parameters={
+                "end_time": 1.0,
+                "output_interval": 0.01,
+                "screen_interval": 100,
+                "fluid_dynamics": {
+                    "acoustic_cfl": 0.6,
+                    "advection_cfl": 0.25,
+                    "surface_type": "open_boundary",
+                    "particle_sort_frequency": 100,
+                },
+            }
+        )
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.surface_type == "open_boundary"
+
+    def test_fluid_solver_rejects_unknown_key(self):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            _make_minimal_fluid_config(
+                solver_parameters={
+                    "end_time": 1.0,
+                    "output_interval": 0.01,
+                    "screen_interval": 100,
+                    "fluid_dynamics": {
+                        "acoustic_cfl": 0.6,
+                        "advection_cfl": 0.25,
+                        "surface_type": "free_surface",
+                        "unsupported_key": "x",
+                    },
+                }
+            )
 
     def test_missing_fluid_solver_section_rejected(self):
         with pytest.raises(ValidationError, match="solver_parameters.fluid_dynamics"):
@@ -182,7 +217,6 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "sound_speed": 20.0,
                     },
                 }
             ]
@@ -324,6 +358,28 @@ class TestSimulationConfig:
                 ]
             )
 
+    def test_extra_state_recording_accepts_int_type(self):
+        cfg = _make_minimal_fluid_config(
+            extra_state_recording=[
+                {
+                    "name": "WaterBody",
+                    "variables": [{"int_type": ["BufferIndicator", "Indicator"]}],
+                }
+            ]
+        )
+        assert cfg.extra_state_recording[0].variables[0].int_type == ["BufferIndicator", "Indicator"]
+
+    def test_extra_state_recording_rejects_unknown_variable_type_key(self):
+        with pytest.raises(ValidationError, match="Extra inputs are not permitted"):
+            _make_minimal_fluid_config(
+                extra_state_recording=[
+                    {
+                        "name": "WaterBody",
+                        "variables": [{"bool_type": ["Flag"]}],
+                    }
+                ]
+            )
+
     def test_dimensionality_mismatch_rejected(self):
         with pytest.raises(ValidationError, match="dimensionality"):
             _make_minimal_fluid_config(
@@ -352,7 +408,43 @@ class TestSimulationConfig:
         assert cfg.fluid_bodies[0].particle_reserve_factor == pytest.approx(350.0)
         assert cfg.fluid_boundary_conditions[0].type.value == "emitter"
 
-    def test_fluid_material_accepts_maximum_velocity(self):
+    def test_heat_transfer_fixture_accepts_thermal_properties(self):
+        fixture_path = (
+            Path(__file__).parent
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "heat_transfer.json"
+        )
+        payload = json.loads(fixture_path.read_text())
+        cfg = SimulationConfig.model_validate(payload)
+
+        thermal = cfg.fluid_bodies[0].material.thermal_properties
+        assert thermal is not None
+        assert thermal.thermal_conductivity == pytest.approx(0.6)
+        assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
+        assert cfg.solid_bodies[0].material.thermal_properties is not None
+        assert cfg.solid_bodies[0].material.thermal_properties.thermal_boundary.value == "Dirichlet"
+
+    def test_fluid_solver_accepts_max_velocity_factor(self):
+        cfg = _make_minimal_fluid_config(
+            solver_parameters={
+                "end_time": 1.0,
+                "output_interval": 0.01,
+                "screen_interval": 100,
+                "fluid_dynamics": {
+                    "acoustic_cfl": 0.6,
+                    "advection_cfl": 0.25,
+                    "max_velocity_factor": 2.0,
+                    "surface_type": "free_surface",
+                    "particle_sort_frequency": 100,
+                },
+            }
+        )
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.max_velocity_factor == pytest.approx(2.0)
+
+    def test_fluid_material_accepts_viscosity_reynolds_number_object(self):
         cfg = _make_minimal_fluid_config(
             fluid_bodies=[
                 {
@@ -360,13 +452,74 @@ class TestSimulationConfig:
                     "material": {
                         "type": "weakly_compressible_fluid",
                         "density": 1000.0,
-                        "maximum_velocity": 2.0,
+                        "viscosity": {"Reynolds_number": 50.0},
                     },
                 }
             ]
         )
-        assert cfg.fluid_bodies[0].material.maximum_velocity == pytest.approx(2.0)
-        assert cfg.fluid_bodies[0].material.sound_speed is None
+        assert cfg.fluid_bodies[0].material.viscosity is not None
+
+    def test_fluid_solver_max_velocity_factor_default(self):
+        cfg = _make_minimal_fluid_config()
+        assert cfg.solver_parameters.fluid_dynamics is not None
+        assert cfg.solver_parameters.fluid_dynamics.max_velocity_factor == pytest.approx(1.0)
+
+    def test_fluid_material_accepts_thermal_properties(self):
+        cfg = _make_minimal_fluid_config(
+            fluid_bodies=[
+                {
+                    "name": "WaterBody",
+                    "material": {
+                        "type": "weakly_compressible_fluid",
+                        "density": 1000.0,
+                        "thermal_properties": {
+                            "thermal_conductivity": 0.6,
+                            "volumetric_heat_capacity": 4181.3,
+                        },
+                    },
+                }
+            ]
+        )
+        thermal = cfg.fluid_bodies[0].material.thermal_properties
+        assert thermal is not None
+        assert thermal.thermal_conductivity == pytest.approx(0.6)
+        assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
+
+    def test_fluid_material_rejects_incomplete_thermal_properties(self):
+        with pytest.raises(ValidationError, match="thermal_properties requires"):
+            _make_minimal_fluid_config(
+                fluid_bodies=[
+                    {
+                        "name": "WaterBody",
+                        "material": {
+                            "type": "weakly_compressible_fluid",
+                            "density": 1000.0,
+                            "thermal_properties": {
+                                "thermal_conductivity": 0.6,
+                            },
+                        },
+                    }
+                ]
+            )
+
+    def test_solid_material_accepts_thermal_boundary_mode(self):
+        cfg = _make_minimal_fluid_config(
+            solid_bodies=[
+                {
+                    "name": "WallBoundary",
+                    "material": {
+                        "type": "rigid_body",
+                        "thermal_properties": {
+                            "thermal_boundary": "Dirichlet",
+                        },
+                    },
+                }
+            ]
+        )
+        thermal = cfg.solid_bodies[0].material.thermal_properties
+        assert thermal is not None
+        assert thermal.thermal_boundary is not None
+        assert thermal.thermal_boundary.value == "Dirichlet"
 
     def test_characteristic_dimensions_support_new_base_units(self):
         cfg = _make_minimal_fluid_config(
