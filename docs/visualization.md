@@ -20,7 +20,7 @@ an intuitive picture of what the simulation will run.
 Each shape and oriented box is labelled with an annotation that includes:
 
 - **Body shapes**: material type, density, sound speed, thermal boundary type (when applicable).
-- **Oriented boxes**: BC type (emitter, bi-directional), inflow speed or pressure, constraint target.
+- **Oriented boxes**: BC type (emitter, bi-directional), inflow speed or pressure, and particle-relaxation constraints targeting that oriented box.
 - **Gravity**: shown in the lower-left corner when a gravity vector is defined.
 
 ## Installation
@@ -44,10 +44,12 @@ sphinxsim> generate "2D heat transfer in a channel" config.json
 sphinxsim> preview
 🖼  Building configuration preview for: .../config.json
    Attempting C++ geometry build for accurate VTP meshes...
+✅ Preview used C++ geometry (VTP meshes).
 
 sphinxsim> preview --no-cpp
 🖼  Building configuration preview for: .../config.json
    Using schema-only bounding-box fallback (--no-cpp).
+ℹ️ Preview used schema fallback (--no-cpp).
 ```
 
 `preview` requires a config to be loaded first (via `load` or `generate`).
@@ -112,8 +114,12 @@ viz.preview(title="My setup")     # custom window title
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `title` | `str` | `"SPHinXsim — Configuration Preview"` | Window title |
+| `title` | `str` | `"SPHinXsim - Configuration Preview"` | Window title |
 | `use_cpp` | `bool` | `True` | Attempt C++ geometry build before falling back to schema |
+
+When `use_cpp=True`, the CLI reports which mode was actually used after rendering:
+- `✅ Preview used C++ geometry (VTP meshes).`
+- `ℹ️ Preview used schema fallback (C++ geometry unavailable or build failed).`
 
 ## Two-stage rendering strategy
 

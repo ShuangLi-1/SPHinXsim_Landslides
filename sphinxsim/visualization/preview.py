@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import math
 import os
-import sys
 import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -224,6 +223,11 @@ class ConfigVisualizer:
 
         self._vtp_dir: Path | None = None
 
+    @property
+    def used_cpp_geometry(self) -> bool:
+        """Whether the most recent preview used C++-generated VTP geometry."""
+        return self._vtp_dir is not None
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -231,7 +235,7 @@ class ConfigVisualizer:
     def preview(
         self,
         *,
-        title: str = "SPHinXsim — Configuration Preview",
+        title: str = "SPHinXsim - Configuration Preview",
         use_cpp: bool = True,
     ) -> None:
         """Render the configuration preview.
@@ -256,6 +260,7 @@ class ConfigVisualizer:
         vtp_dir: Path | None = None
         if use_cpp:
             vtp_dir = self._try_build_geometries()
+        self._vtp_dir = vtp_dir
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
         self._populate_plotter(plotter, vtp_dir)

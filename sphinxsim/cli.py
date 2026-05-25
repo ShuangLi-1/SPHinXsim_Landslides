@@ -66,9 +66,12 @@ def _load_config(path: Path) -> Tuple[SimulationConfig | None, int]:
     Returns ``(config, 0)`` on success or ``(None, 1)`` after printing an
     error message to stderr.
     """
-    # If path is relative, resolve it under.build-temp directory
+    # Prefer user-provided relative paths from the current working directory.
+    # Fall back to .build-temp for backward compatibility with existing workflows.
     if not path.is_absolute():
-        path = PROJECT_ROOT / ".build-temp" / path
+        cwd_path = Path.cwd() / path
+        build_temp_path = PROJECT_ROOT / ".build-temp" / path
+        path = cwd_path if cwd_path.exists() else build_temp_path
     
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
@@ -100,7 +103,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
     output = config.model_dump_json(indent=2, exclude_none=True)
     if args.output:
-        output_path = PROJECT_ROOT / ".build-temp" / args.output
+        output_path = Path(args.output)
         try:
             if output_path.parent and not output_path.parent.exists():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -192,8 +195,6 @@ def cmd_update(args: argparse.Namespace) -> int:
         return 1
 
     output_path = Path(args.output) if args.output else config_path
-    if not output_path.is_absolute():
-        output_path = PROJECT_ROOT / ".build-temp" / output_path
 
     output = updated_config.model_dump_json(indent=2, exclude_none=True)
     try:
@@ -403,6 +404,13 @@ def cmd_preview(args: argparse.Namespace) -> int:
     visualizer = ConfigVisualizer(config, PROJECT_ROOT, off_screen=off_screen)
     try:
         visualizer.preview(use_cpp=use_cpp)
+        if use_cpp:
+            if visualizer.used_cpp_geometry:
+                print("✅ Preview used C++ geometry (VTP meshes).")
+            else:
+                print("ℹ️ Preview used schema fallback (C++ geometry unavailable or build failed).")
+        else:
+            print("ℹ️ Preview used schema fallback (--no-cpp).")
     except ImportError as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 1
@@ -460,9 +468,14 @@ def cmd_explore(args: argparse.Namespace) -> int:
 
 def _shell_resolve_config_path(config_file: str) -> Path:
     path = Path(config_file)
-    if not path.is_absolute():
-        path = PROJECT_ROOT / ".build-temp" / path
-    return path
+    if path.is_absolute():
+        return path
+
+    # In shell mode, prefer paths relative to the current working directory.
+    # Keep .build-temp fallback for existing workflows and tests.
+    cwd_path = Path.cwd() / path
+    build_temp_path = PROJECT_ROOT / ".build-temp" / path
+    return cwd_path if cwd_path.exists() else build_temp_path
 
 
 def _shell_auto_validate(config_path: Path) -> bool:
@@ -491,7 +504,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
         "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
         "validate, run, preview [--no-cpp], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
-    print("Note: relative paths are resolved under .build-temp/")
+    print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
     config_path: Path | None = None
     geometry_locked = False

@@ -87,7 +87,7 @@ Inside the shell, you can use the following commands:
 
 Notes:
 - `sphinxsim shell` starts with no file loaded.
-- Relative file paths inside the shell resolve under `.build-temp/`.
+- Relative file paths inside the shell resolve from the current directory first, then fall back to `.build-temp/`.
 - `validate` always reloads from disk, so external edits are picked up immediately.
 
 ## Geometry lock behavior
@@ -320,7 +320,8 @@ sphinxsim generate "water dam break"
 ## Output locations
 
 - **Generated configs**: Printed to stdout unless `--output` is provided
-- **Shell-generated configs**: Saved to the FILE argument used by `generate "..." FILE` (resolved under `.build-temp/` when relative)
+- **Generated configs with `--output`**: Written to the exact path you provide (relative to your current directory)
+- **Shell-generated configs**: Saved to the FILE argument used by `generate "..." FILE` (resolved from current directory first, then `.build-temp/`)
 - **Explore answers**: Printed to stdout; no files are written
 - **Simulation output**: Saved under `.build-temp/test_simulation/` (runtime output root)
 - **Temporary files**: Stored in `.build-temp/`

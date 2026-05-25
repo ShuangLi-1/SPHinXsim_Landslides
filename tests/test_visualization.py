@@ -12,6 +12,7 @@ import sys
 from pathlib import Path
 from types import ModuleType
 from typing import Any
+import copy
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -187,6 +188,50 @@ class TestOrientedBoxLabel:
         ob = next(o for o in heat_config.geometries.oriented_boxes if o.name == "Inlet")
         label = oriented_box_label(ob, heat_config)
         assert "bi_directional" in label
+
+    def test_label_includes_relaxation_constraint_for_oriented_box(self, fluid_config):
+        from sphinxsim.visualization.annotations import oriented_box_label
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["particle_generation"]["settings"]["relaxation_constraints"] = [
+            {
+                "body_name": "WaterBody",
+                "oriented_box": "Inlet",
+                "type": "fixed"
+            }
+        ]
+        cfg = SimulationConfig(**data)
+
+        ob = cfg.geometries.oriented_boxes[0]
+        label = oriented_box_label(ob, cfg)
+        assert "Relaxation constraint" in label
+        assert "WaterBody" in label
+        assert "fixed" in label
+
+    def test_label_does_not_use_body_constraints_for_oriented_box(self, fluid_config):
+        from sphinxsim.visualization.annotations import oriented_box_label
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["geometries"]["shapes"].append(
+            {
+                "name": "ConstraintRegion",
+                "type": "bounding_box",
+                "lower_bound": [0.1, 0.1],
+                "upper_bound": [0.2, 0.2],
+            }
+        )
+        data["body_constraints"] = [
+            {
+                "body_name": "WallBoundary",
+                "type": "fixed",
+                "region": "ConstraintRegion",
+            }
+        ]
+        cfg = SimulationConfig(**data)
+
+        ob = cfg.geometries.oriented_boxes[0]
+        label = oriented_box_label(ob, cfg)
+        assert "Constraint →" not in label
 
 
 class TestGravityLabel:
