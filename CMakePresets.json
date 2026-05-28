@@ -37,7 +37,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "Python3_EXECUTABLE": "$(which python3)",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
@@ -85,7 +84,6 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "Python3_EXECUTABLE": "$(which python3)",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
