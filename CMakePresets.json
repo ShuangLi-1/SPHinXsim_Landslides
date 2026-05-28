@@ -29,10 +29,15 @@
       "description": "Build SPHinXsys libraries and Python bindings together",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-integrated",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "Python3_EXECUTABLE": "/usr/bin/python3.11",
+        "Python3_EXECUTABLE": "$(which python3)",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
@@ -72,10 +77,15 @@
       "description": "Build SPHinXsys libraries and Python bindings together",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-integrated",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake",
-        "Python3_EXECUTABLE": "/usr/bin/python3.11",
+        "Python3_EXECUTABLE": "$(which python3)",
         "CMAKE_CXX_STANDARD": "17",
         "CMAKE_C_COMPILER_LAUNCHER": "ccache",
         "CMAKE_CXX_COMPILER_LAUNCHER": "ccache",
@@ -92,6 +102,11 @@
       "description": "Build SPHinXsys libraries and Python bindings together in Windows",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-integrated",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake",
@@ -113,6 +128,11 @@
       "description": "Debug build for SPHinXsys libraries and Python bindings on Windows",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build-integrated-debug",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_TOOLCHAIN_FILE": "${sourceDir}/../vcpkg/scripts/buildsystems/vcpkg.cmake",
@@ -128,7 +148,6 @@
         "SPHINXSIM_BINDINGS_OUTPUT_DIR": "${sourceDir}/sphinxsim/bindings/native"
       }
     }
-
   ],
   "buildPresets": [
     {
