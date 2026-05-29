@@ -14,9 +14,9 @@ pip install sphinxsim[visualization]
 ```
 
 The compiled C++ extension (`_sphinxsys_core_2d` or `_sphinxsys_core_3d`) is
-required for rendering simulation shapes and oriented-box meshes. Without it
-(or when using `--no-cpp`), preview still opens and renders only the system
-domain bounding box and annotations.
+required only for C++ geometry rendering (simulation shapes and oriented-box
+meshes). Without it (or when using `--no-cpp`), preview still opens and
+renders only the system domain bounding box and annotations.
 
 ## What it shows
 

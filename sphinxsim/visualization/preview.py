@@ -384,7 +384,6 @@ class ConfigVisualizer:
                     return _bounds_to_box(list(lower), list(upper))
             except Exception:
                 self._shape_bounds_cache = {}
-                pass
 
         return None
 
