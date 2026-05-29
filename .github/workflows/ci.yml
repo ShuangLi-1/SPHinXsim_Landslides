@@ -115,6 +115,7 @@ jobs:
 
       - name: Install Python package (editable with dev dependencies)
         run: |
+          export CMAKE_ARGS="-D CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
           pip install -e ".[dev]"
 
       - name: Run unit tests (tests/)
@@ -216,7 +217,9 @@ jobs:
             -R "test_(2d|3d)_simulation$"
 
       - name: Install Python package (editable with dev dependencies)
+        shell: pwsh
         run: |
+          $env:CMAKE_ARGS = "-D CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
           pip install -e ".[dev]"
 
       - name: Run unit tests (tests/, CI mock-LLM-only)
@@ -307,6 +310,7 @@ jobs:
 
       - name: Install Python package (editable with dev dependencies)
         run: |
+          export CMAKE_ARGS="-D CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
           pip install -e ".[dev]"
 
       - name: Run unit tests (tests/, CI mock-LLM-only)
