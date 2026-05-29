@@ -282,6 +282,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         config_path = PROJECT_ROOT / ".build-temp" / config_path
 
     # Write the Pydantic-validated config to a temp file before passing to C++.
+    validated_config_path: str | None = None
     tmp_cfg = tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", delete=False, prefix="sphinxsim_run_"
     )
@@ -362,12 +363,12 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     finally:
-        # Always clean up the validated temp config and restore original directory.
-        try:
-            os.unlink(validated_config_path)
-        except OSError:
-            pass
-        os.chdir(original_dir)
+        # Always clean up the validated temp config.
+        if validated_config_path:
+            try:
+                os.unlink(validated_config_path)
+            except OSError:
+                pass
 
 
 def cmd_preview(args: argparse.Namespace) -> int:
