@@ -4,7 +4,7 @@ Renders an interactive 3-D (or 2-D) preview of the simulation setup —
 geometries, boundary conditions and body annotations — from a validated
 :class:`~sphinxsim.config.schemas.SimulationConfig`.
 
-Three rendering modes are supported, tried in order:
+Two rendering modes are supported, tried in order:
 
 VTP mode (preferred)
     The C++ ``buildGeometries()`` stage is invoked and the resulting
@@ -16,21 +16,19 @@ C++ bounds fallback
     When VTP files are not produced, accurate bounding boxes are queried
     directly from the live C++ simulation object via ``getShapeBounds()``.
 
-Schema mode (fallback)
-    When the C++ extension is unavailable or ``buildGeometries()`` fails,
-    bounding boxes are reconstructed from the JSON schema in Python.
+The C++ extension (``_sphinxsys_core_2d`` or ``_sphinxsys_core_3d``) must
+be installed.  If it is not found an :class:`ImportError` is raised with
+a clear install hint.
 """
 
 from __future__ import annotations
 
-import math
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
-        GeometriesConfig,
         OrientedBoxConfig,
         ShapeConfig,
         SimulationConfig,
@@ -64,7 +62,7 @@ def _body_colour(body_name: str, config: "SimulationConfig") -> tuple[float, flo
 
 
 # ---------------------------------------------------------------------------
-# Geometry helpers (schema-only fallback)
+# Geometry helpers
 # ---------------------------------------------------------------------------
 
 def _bounds_to_box(lower: list[float], upper: list[float]) -> Any:
@@ -77,122 +75,6 @@ def _bounds_to_box(lower: list[float], upper: list[float]) -> Any:
             bounds=(lower[0], upper[0], lower[1], upper[1], -0.01, 0.01)
         )
     return pv.Box(bounds=(lower[0], upper[0], lower[1], upper[1], lower[2], upper[2]))
-
-
-def _schema_mesh_for_shape(shape: "ShapeConfig", config: "SimulationConfig") -> Any | None:
-    """Build a fallback PyVista mesh from shape schema data."""
-    import pyvista as pv  # type: ignore[import]
-
-    stype = shape.type.value
-
-    if stype in ("bounding_box", "multipolygon"):
-        if shape.lower_bound is not None and shape.upper_bound is not None:
-            return _bounds_to_box(shape.lower_bound, shape.upper_bound)
-
-        # multipolygon: compute composite bounds from polygon entries
-        if shape.polygons:
-            lbs, ubs = [], []
-            for poly in shape.polygons:
-                if poly.lower_bound and poly.upper_bound:
-                    lbs.append(poly.lower_bound)
-                    ubs.append(poly.upper_bound)
-                elif poly.inner_lower_bound and poly.inner_upper_bound:
-                    lbs.append(poly.inner_lower_bound)
-                    ubs.append(poly.inner_upper_bound)
-            if lbs and ubs:
-                lo = [min(b[i] for b in lbs) for i in range(len(lbs[0]))]
-                hi = [max(b[i] for b in ubs) for i in range(len(ubs[0]))]
-                return _bounds_to_box(lo, hi)
-
-    if stype == "box":
-        if shape.half_size is not None:
-            h = shape.half_size
-            if len(h) == 2:
-                lo, hi = [-h[0], -h[1]], [h[0], h[1]]
-            else:
-                lo, hi = [-h[0], -h[1], -h[2]], [h[0], h[1], h[2]]
-            mesh = _bounds_to_box(lo, hi)
-            if shape.transform is not None:
-                t = shape.transform.translation
-                angle = shape.transform.rotation_angle
-                if len(t) == 2:
-                    mesh.translate([t[0], t[1], 0.0], inplace=True)
-                else:
-                    mesh.translate(t, inplace=True)
-                if angle != 0.0:
-                    axis = shape.transform.rotation_axis or [0.0, 0.0, 1.0]
-                    mesh.rotate_vector(axis, math.degrees(angle), inplace=True)
-            return mesh
-
-    if stype == "expanded_box":
-        # Find the original shape and expand its bounds
-        orig_name = shape.original
-        expansion = shape.expansion or 0.0
-        for s in (config.geometries.shapes if config else []):
-            if s.name == orig_name:
-                orig_mesh = _schema_mesh_for_shape(s, config)
-                if orig_mesh is not None:
-                    orig_mesh.translate([0, 0, 0], inplace=True)  # ensure copy
-                    b = orig_mesh.bounds  # (xmin,xmax,ymin,ymax,zmin,zmax)
-                    return pv.Box(bounds=(
-                        b[0] - expansion, b[1] + expansion,
-                        b[2] - expansion, b[3] + expansion,
-                        b[4] - expansion, b[5] + expansion,
-                    ))
-
-    if stype == "triangle_mesh":
-        # Can't reconstruct without the file; return None (skip in fallback)
-        return None
-
-    if stype == "complex_shape":
-        # Boolean compound — skip; sub-shapes are rendered separately
-        return None
-
-    return None
-
-
-def _schema_mesh_for_oriented_box(ob: "OrientedBoxConfig") -> Any | None:
-    """Build a PyVista mesh for an oriented box region or in/outlet."""
-    import pyvista as pv  # type: ignore[import]
-
-    if ob.type.value == "in_outlet":
-        if ob.center is None or ob.radius is None:
-            return None
-        c = ob.center
-        r = ob.radius
-        if len(c) == 2:
-            # Thin slab centred on the inlet face
-            n = ob.normal or [1.0, 0.0]
-            # Build a small box perpendicular to normal
-            nx, ny = n[0], n[1]
-            length = r * 2
-            perp = r
-            mesh = pv.Box(bounds=(-length / 2, length / 2, -perp, perp, -0.02, 0.02))
-            angle = math.degrees(math.atan2(ny, nx))
-            mesh.rotate_z(angle, inplace=True)
-            mesh.translate([c[0], c[1], 0.0], inplace=True)
-        else:
-            mesh = pv.Sphere(radius=ob.radius, center=(c[0], c[1], c[2]))
-        return mesh
-
-    if ob.type.value == "region":
-        if ob.half_size is None or ob.transform is None:
-            return None
-        h = ob.half_size
-        t = ob.transform.translation
-        angle = ob.transform.rotation_angle
-        if len(h) == 2:
-            mesh = _bounds_to_box([-h[0], -h[1]], [h[0], h[1]])
-            mesh.translate([t[0], t[1], 0.0], inplace=True)
-        else:
-            mesh = pv.Box(bounds=(-h[0], h[0], -h[1], h[1], -h[2], h[2]))
-            mesh.translate(t, inplace=True)
-        if angle != 0.0:
-            axis = ob.transform.rotation_axis or [0.0, 0.0, 1.0]
-            mesh.rotate_vector(axis, math.degrees(angle), inplace=True)
-        return mesh
-
-    return None
 
 
 # ---------------------------------------------------------------------------
@@ -209,10 +91,9 @@ class ConfigVisualizer:
     project_root:
         Root of the SPHinXsim project (used to locate temporary build files).
     config_path:
-        Path to the original JSON config file.  When provided, the file is
-        passed directly to :class:`SPHSimulation` so it remains the single
-        source of truth — no intermediate copy is written.  When omitted,
-        C++ geometry building is skipped and only the schema fallback is used.
+        Path to the original JSON config file.  Passed directly to
+        :class:`SPHSimulation` — the file is the single source of truth.
+        Required for C++ geometry building; if omitted no shapes are rendered.
     off_screen:
         When *True*, render to an off-screen buffer instead of opening a
         window.  Useful for testing.
@@ -261,9 +142,8 @@ class ConfigVisualizer:
         title:
             Window title.
         use_cpp:
-            When *True*, attempt to call ``buildGeometries()`` from the C++
-            extension so that accurate VTP meshes are available.  Falls back
-            to schema-based bounding-box reconstruction automatically.
+            When *True*, call ``buildGeometries()`` from the C++ extension.
+            Raises :class:`ImportError` if the extension is not installed.
         """
         try:
             import pyvista as pv  # type: ignore[import]
@@ -290,7 +170,7 @@ class ConfigVisualizer:
         elif self._sim is not None:
             mode_label = "C++ bounds fallback"
         else:
-            mode_label = "Schema bounding-box fallback"
+            mode_label = "No C++ geometry"
         plotter.add_text(
             f"{title}\n[{mode_label}]",
             position="upper_left",
@@ -322,8 +202,10 @@ class ConfigVisualizer:
             try:
                 import _sphinxsys_core_3d as sph  # type: ignore[import]
             except ImportError:
-                self._sim = None
-                return None
+                raise ImportError(
+                    "C++ extension not found (_sphinxsys_core_2d / _sphinxsys_core_3d).\n"
+                    "Build and install the compiled sphinxsim package to use preview."
+                ) from None
 
         vtp_output_dir = self.project_root / ".build-temp" / "preview_geometry"
         vtp_output_dir.mkdir(parents=True, exist_ok=True)
@@ -409,8 +291,6 @@ class ConfigVisualizer:
         for ob in config.geometries.oriented_boxes:
             mesh = self._load_oriented_box_mesh(ob, vtp_dir)
             if mesh is None:
-                mesh = _schema_mesh_for_oriented_box(ob)
-            if mesh is None:
                 continue
 
             colour = _INLET_OUTLET_COLOUR if ob.type.value == "in_outlet" else _REGION_COLOUR
@@ -473,7 +353,7 @@ class ConfigVisualizer:
         vtp_dir: Path | None,
         config: "SimulationConfig",
     ) -> Any | None:
-        """Load the mesh for *shape* — VTP first, C++ bounds second, schema fallback last."""
+        """Load the mesh for *shape* — VTP first, C++ bounds second."""
         if vtp_dir is not None:
             vtp_path = vtp_dir / f"Shape{shape.name}.vtp"
             if vtp_path.exists():
@@ -492,7 +372,7 @@ class ConfigVisualizer:
             except Exception:
                 pass
 
-        return _schema_mesh_for_shape(shape, config)
+        return None
 
     def _load_oriented_box_mesh(
         self, ob: "OrientedBoxConfig", vtp_dir: Path | None

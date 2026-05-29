@@ -399,7 +399,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
     if use_cpp:
         print("   Attempting C++ geometry build for accurate VTP meshes...")
     else:
-        print("   Using schema-only bounding-box fallback (--no-cpp).")
+        print("   Skipping C++ geometry build (--no-cpp).")
 
     visualizer = ConfigVisualizer(config, PROJECT_ROOT, config_path=config_path, off_screen=off_screen)
     try:
@@ -408,9 +408,9 @@ def cmd_preview(args: argparse.Namespace) -> int:
             if visualizer.used_cpp_geometry:
                 print("✅ Preview used C++ geometry (VTP meshes).")
             else:
-                print("ℹ️ Preview used schema fallback (C++ geometry unavailable or build failed).")
+                print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
         else:
-            print("ℹ️ Preview used schema fallback (--no-cpp).")
+            print("ℹ️ Preview rendered without C++ geometry (--no-cpp).")
     except ImportError as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 1
@@ -541,7 +541,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  explore QUESTION                - Ask about schema")
             print("  validate                        - Reload and validate config from disk")
             print("  preview                         - Render geometry/BC preview (requires pyvista)")
-            print("  preview --no-cpp                - Preview using schema bounding-box fallback only")
+            print("  preview --no-cpp                - Preview without C++ geometry build")
             print("  run                             - Run simulation from loaded config")
             print("  lock-geometry                   - Manually lock geometry updates")
             print("  unlock-geometry                 - Unlock geometry updates")
@@ -856,7 +856,7 @@ def _build_parser() -> argparse.ArgumentParser:
     prev.add_argument(
         "--no-cpp",
         action="store_true",
-        help="Skip C++ geometry build; use schema bounding-box fallback only.",
+        help="Skip C++ geometry build (no shapes rendered without C++).",
     )
     prev.add_argument(
         "--off-screen",
