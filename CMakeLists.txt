@@ -33,7 +33,15 @@ endif()
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 find_package(VTK REQUIRED COMPONENTS CommonCore CommonDataModel IOXML)
-find_package(nlohmann_json CONFIG REQUIRED)
+find_package(nlohmann_json CONFIG QUIET)
+if(NOT nlohmann_json_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
+    )
+    FetchContent_MakeAvailable(nlohmann_json)
+endif()
 
 # Install bindings into Python's import path by default.
 # Keep destination prefix-relative so `cmake --install --prefix ...` works.
