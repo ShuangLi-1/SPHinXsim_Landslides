@@ -7,15 +7,16 @@ an intuitive picture of what the simulation will run.
 
 ## Requirements
 
-Both PyVista and the compiled C++ extension are required:
+PyVista is required:
 
 ```bash
 pip install sphinxsim[visualization]
 ```
 
-The C++ extension (`_sphinxsys_core_2d` or `_sphinxsys_core_3d`) must also be
-built and installed.  If it is missing, preview raises an `ImportError` with a
-clear install hint.
+The compiled C++ extension (`_sphinxsys_core_2d` or `_sphinxsys_core_3d`) is
+required only for C++ geometry rendering (simulation shapes and oriented-box
+meshes). Without it (or when using `--no-cpp`), preview still opens and
+renders only the system domain bounding box and annotations.
 
 ## What it shows
 

@@ -388,18 +388,29 @@ def cmd_preview(args: argparse.Namespace) -> int:
         return rc
     assert config is not None
 
+    resolved_config_path = config_path
+    if not resolved_config_path.is_absolute():
+        cwd_path = Path.cwd() / resolved_config_path
+        build_temp_path = PROJECT_ROOT / ".build-temp" / resolved_config_path
+        resolved_config_path = cwd_path if cwd_path.exists() else build_temp_path
+
     from sphinxsim.visualization.preview import ConfigVisualizer
 
     use_cpp = not getattr(args, "no_cpp", False)
     off_screen = getattr(args, "off_screen", False)
 
-    print(f"🖼  Building configuration preview for: {config_path}")
+    print(f"🖼  Building configuration preview for: {resolved_config_path}")
     if use_cpp:
         print("   Attempting C++ geometry build for accurate VTP meshes...")
     else:
         print("   Skipping C++ geometry build (--no-cpp).")
 
-    visualizer = ConfigVisualizer(config, PROJECT_ROOT, config_path=config_path, off_screen=off_screen)
+    visualizer = ConfigVisualizer(
+        config,
+        PROJECT_ROOT,
+        config_path=resolved_config_path,
+        off_screen=off_screen,
+    )
     try:
         visualizer.preview(use_cpp=use_cpp)
         if use_cpp:
