@@ -4,24 +4,27 @@ Renders an interactive 3-D (or 2-D) preview of the simulation setup —
 geometries, boundary conditions and body annotations — from a validated
 :class:`~sphinxsim.config.schemas.SimulationConfig`.
 
-Two rendering modes are supported:
+Three rendering modes are supported, tried in order:
 
 VTP mode (preferred)
-    The C++ ``buildGeometries()`` stage is invoked first so that the geometry
-    builders write ``Shape<Name>.vtp`` files.  Those accurate polygon meshes
-    are then loaded and displayed by PyVista.
+    The C++ ``buildGeometries()`` stage is invoked and the resulting
+    ``Shape<Name>.vtp`` polygon meshes are loaded and displayed by PyVista.
+    The live :class:`SPHSimulation` object is kept in ``_sim`` for further
+    queries.
+
+C++ bounds fallback
+    When VTP files are not produced, accurate bounding boxes are queried
+    directly from the live C++ simulation object via ``getShapeBounds()``.
 
 Schema mode (fallback)
-    When the C++ extension is not available (or building geometries fails),
-    bounding boxes are reconstructed from the JSON schema and rendered as
-    wireframe cubes / rectangles.
+    When the C++ extension is unavailable or ``buildGeometries()`` fails,
+    bounding boxes are reconstructed from the JSON schema in Python.
 """
 
 from __future__ import annotations
 
 import math
 import os
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -205,6 +208,11 @@ class ConfigVisualizer:
         Validated :class:`~sphinxsim.config.schemas.SimulationConfig`.
     project_root:
         Root of the SPHinXsim project (used to locate temporary build files).
+    config_path:
+        Path to the original JSON config file.  When provided, the file is
+        passed directly to :class:`SPHSimulation` so it remains the single
+        source of truth — no intermediate copy is written.  When omitted,
+        C++ geometry building is skipped and only the schema fallback is used.
     off_screen:
         When *True*, render to an off-screen buffer instead of opening a
         window.  Useful for testing.
@@ -215,19 +223,26 @@ class ConfigVisualizer:
         config: "SimulationConfig",
         project_root: Path,
         *,
+        config_path: Path | None = None,
         off_screen: bool = False,
     ) -> None:
         self.config = config
         self.project_root = Path(project_root)
+        self.config_path = Path(config_path) if config_path is not None else None
         self.off_screen = off_screen
 
         self._vtp_dir: Path | None = None
-        self._cpp_shape_bounds: dict[str, tuple[list[float], list[float]]] | None = None
+        self._sim: Any | None = None
 
     @property
     def used_cpp_geometry(self) -> bool:
         """Whether the most recent preview used C++-generated VTP geometry."""
         return self._vtp_dir is not None
+
+    @property
+    def used_cpp_bounds(self) -> bool:
+        """Whether the most recent preview used live C++ shape bounds."""
+        return self._sim is not None
 
     # ------------------------------------------------------------------
     # Public API
@@ -262,7 +277,7 @@ class ConfigVisualizer:
         if use_cpp:
             vtp_dir = self._try_build_geometries()
         else:
-            self._cpp_shape_bounds = None
+            self._sim = None
         self._vtp_dir = vtp_dir
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
@@ -272,7 +287,7 @@ class ConfigVisualizer:
 
         if vtp_dir:
             mode_label = "VTP geometry"
-        elif self._cpp_shape_bounds:
+        elif self._sim is not None:
             mode_label = "C++ bounds fallback"
         else:
             mode_label = "Schema bounding-box fallback"
@@ -290,50 +305,45 @@ class ConfigVisualizer:
     # ------------------------------------------------------------------
 
     def _try_build_geometries(self) -> Path | None:
-        """Run buildGeometries() and return the VTP output directory, or None."""
+        """Run buildGeometries() and return the VTP output directory, or None.
+
+        Uses ``self.config_path`` directly as the C++ config input so the
+        original JSON file is the single source of truth.  The live
+        :class:`SPHSimulation` object is kept as ``self._sim`` for further
+        queries (e.g. ``getShapeBounds()``).
+        """
+        if self.config_path is None:
+            self._sim = None
+            return None
+
         try:
             import _sphinxsys_core_2d as sph  # type: ignore[import]
         except ImportError:
             try:
                 import _sphinxsys_core_3d as sph  # type: ignore[import]
             except ImportError:
+                self._sim = None
                 return None
 
         vtp_output_dir = self.project_root / ".build-temp" / "preview_geometry"
         vtp_output_dir.mkdir(parents=True, exist_ok=True)
 
-        tmp_cfg = tempfile.NamedTemporaryFile(
-            mode="w", suffix=".json", delete=False, prefix="sphinxsim_preview_"
-        )
+        original_dir = os.getcwd()
         try:
-            tmp_cfg.write(self.config.model_dump_json(indent=2, exclude_none=True))
-            tmp_cfg.close()
-
-            original_dir = os.getcwd()
-            try:
-                sim = sph.SPHSimulation(tmp_cfg.name)
-                sim.resetOutputRoot(str(vtp_output_dir))
-                sim.buildGeometries()
-                try:
-                    self._cpp_shape_bounds = dict(sim.getShapeBounds())
-                except Exception:
-                    self._cpp_shape_bounds = None
-            finally:
-                os.chdir(original_dir)
-
+            sim = sph.SPHSimulation(str(self.config_path))
+            sim.resetOutputRoot(str(vtp_output_dir))
+            sim.buildGeometries()
+            self._sim = sim
         except Exception:
+            self._sim = None
             return None
         finally:
-            try:
-                os.unlink(tmp_cfg.name)
-            except OSError:
-                pass
+            os.chdir(original_dir)
 
         # VTPs land in <vtp_output_dir>/output/
         output_subdir = vtp_output_dir / "output"
         if output_subdir.is_dir() and any(output_subdir.glob("Shape*.vtp")):
             return output_subdir
-        # Fallback: check the root itself
         if any(vtp_output_dir.glob("Shape*.vtp")):
             return vtp_output_dir
 
@@ -473,9 +483,14 @@ class ConfigVisualizer:
                 except Exception:
                     pass
 
-        if self._cpp_shape_bounds is not None and shape.name in self._cpp_shape_bounds:
-            lower, upper = self._cpp_shape_bounds[shape.name]
-            return _bounds_to_box(list(lower), list(upper))
+        if self._sim is not None:
+            try:
+                bounds = self._sim.getShapeBounds()
+                if shape.name in bounds:
+                    lower, upper = bounds[shape.name]
+                    return _bounds_to_box(list(lower), list(upper))
+            except Exception:
+                pass
 
         return _schema_mesh_for_shape(shape, config)
 

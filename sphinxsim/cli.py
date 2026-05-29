@@ -401,7 +401,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
     else:
         print("   Using schema-only bounding-box fallback (--no-cpp).")
 
-    visualizer = ConfigVisualizer(config, PROJECT_ROOT, off_screen=off_screen)
+    visualizer = ConfigVisualizer(config, PROJECT_ROOT, config_path=config_path, off_screen=off_screen)
     try:
         visualizer.preview(use_cpp=use_cpp)
         if use_cpp:
