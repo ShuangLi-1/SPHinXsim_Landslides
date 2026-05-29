@@ -114,6 +114,7 @@ class ConfigVisualizer:
 
         self._vtp_dir: Path | None = None
         self._sim: Any | None = None
+        self._shape_bounds_cache: dict[str, Any] | None = None
 
     @property
     def used_cpp_geometry(self) -> bool:
@@ -158,6 +159,7 @@ class ConfigVisualizer:
             vtp_dir = self._try_build_geometries()
         else:
             self._sim = None
+            self._shape_bounds_cache = None
         self._vtp_dir = vtp_dir
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
@@ -209,6 +211,15 @@ class ConfigVisualizer:
 
         vtp_output_dir = self.project_root / ".build-temp" / "preview_geometry"
         vtp_output_dir.mkdir(parents=True, exist_ok=True)
+        output_subdir = vtp_output_dir / "output"
+        for stale_dir in (vtp_output_dir, output_subdir):
+            if not stale_dir.is_dir():
+                continue
+            for stale_vtp in stale_dir.glob("Shape*.vtp"):
+                try:
+                    stale_vtp.unlink()
+                except OSError:
+                    pass
 
         original_dir = os.getcwd()
         try:
@@ -216,14 +227,15 @@ class ConfigVisualizer:
             sim.resetOutputRoot(str(vtp_output_dir))
             sim.buildGeometries()
             self._sim = sim
+            self._shape_bounds_cache = None
         except Exception:
             self._sim = None
+            self._shape_bounds_cache = None
             return None
         finally:
             os.chdir(original_dir)
 
         # VTPs land in <vtp_output_dir>/output/
-        output_subdir = vtp_output_dir / "output"
         if output_subdir.is_dir() and any(output_subdir.glob("Shape*.vtp")):
             return output_subdir
         if any(vtp_output_dir.glob("Shape*.vtp")):
@@ -365,11 +377,13 @@ class ConfigVisualizer:
 
         if self._sim is not None:
             try:
-                bounds = self._sim.getShapeBounds()
-                if shape.name in bounds:
-                    lower, upper = bounds[shape.name]
+                if self._shape_bounds_cache is None:
+                    self._shape_bounds_cache = self._sim.getShapeBounds()
+                if shape.name in self._shape_bounds_cache:
+                    lower, upper = self._shape_bounds_cache[shape.name]
                     return _bounds_to_box(list(lower), list(upper))
             except Exception:
+                self._shape_bounds_cache = {}
                 pass
 
         return None

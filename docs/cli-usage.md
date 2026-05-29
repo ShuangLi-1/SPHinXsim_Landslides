@@ -189,14 +189,13 @@ sphinxsim preview config.json
 This:
 1. Validates the config
 2. Attempts to invoke `buildGeometries()` from the C++ extension to produce accurate VTP meshes
-3. Falls back to bounding-box reconstruction from the schema when C++ is unavailable
-4. Opens an interactive PyVista window with colour-coded bodies, oriented boxes, and annotations
+3. Opens an interactive PyVista window with colour-coded bodies, oriented boxes, and annotations
 
 Options:
 
 | Flag | Description |
 | --- | --- |
-| `--no-cpp` | Skip C++ geometry build; use schema bounding-box fallback only |
+| `--no-cpp` | Skip C++ geometry build; render only the system domain bounding box and annotations |
 | `--off-screen` | Render off-screen (no window) — useful for automated testing |
 
 Requires the optional `[visualization]` extra:
