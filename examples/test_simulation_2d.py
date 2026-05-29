@@ -13,6 +13,8 @@ import importlib.util
 import importlib
 from pathlib import Path
 
+from sphinxsim.bindings.loader import load_sphinxsys_core
+
 def find_project_root(start: Path | None = None):
     start = start or Path.cwd()
     for path in [start] + list(start.parents):
@@ -33,7 +35,7 @@ def main(simulation_time=2.0):
     print("=" * 45)
 
     try:
-        import _sphinxsys_core_2d as sph
+        sph = load_sphinxsys_core()
         print("✅ SPHinXsys module imported")
         import numpy as np
                 

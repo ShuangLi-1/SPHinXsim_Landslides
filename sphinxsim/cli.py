@@ -17,9 +17,14 @@ Run a simulation from a JSON config file::
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
+import shlex
 import sys
 import tempfile
+from pathlib import Path
+from typing import Tuple
 
 # Set up sys.path FIRST, before any sphinxsim imports
 def _find_project_root(start=None):
@@ -35,17 +40,10 @@ PROJECT_ROOT = _find_project_root()
 sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "build-integrated"))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "sphinxsim", "bindings", "native"))
-original_dir = os.getcwd()
-
-# NOW import everything else
-import argparse
-import json
-import shlex
-from pathlib import Path
-from typing import Tuple
 
 from pydantic import ValidationError
 
+from sphinxsim.bindings.loader import load_sphinxsys_core
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch, apply_update_patch
 from sphinxsim.llm import get_llm
@@ -271,7 +269,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     assert config is not None
 
     try:
-        import _sphinxsys_core_2d as sph
+        sph = load_sphinxsys_core()
     except ImportError:
         print("❌ C++ extension not available", file=sys.stderr)
         print("\n🔧 Please build the C++ extension:", file=sys.stderr)
@@ -702,7 +700,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
             try:
-                import _sphinxsys_core_2d as sph
+                sph = load_sphinxsys_core()
 
                 shell_sim = sph.SPHSimulation(str(config_path))
                 output_dir = PROJECT_ROOT / ".build-temp" / "test_simulation"

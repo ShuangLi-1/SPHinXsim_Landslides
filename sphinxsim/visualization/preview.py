@@ -27,6 +27,8 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from sphinxsim.bindings.loader import load_sphinxsys_core
+
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
         OrientedBoxConfig,
@@ -197,15 +199,9 @@ class ConfigVisualizer:
             return None
 
         try:
-            import _sphinxsys_core_2d as sph  # type: ignore[import]
-        except ImportError:
-            try:
-                import _sphinxsys_core_3d as sph  # type: ignore[import]
-            except ImportError:
-                raise ImportError(
-                    "C++ extension not found (_sphinxsys_core_2d / _sphinxsys_core_3d).\n"
-                    "Build and install the compiled sphinxsim package to use preview."
-                ) from None
+            sph = load_sphinxsys_core()
+        except ImportError as exc:
+            raise ImportError(str(exc)) from None
 
         vtp_output_dir = self.project_root / ".build-temp" / "preview_geometry"
         vtp_output_dir.mkdir(parents=True, exist_ok=True)

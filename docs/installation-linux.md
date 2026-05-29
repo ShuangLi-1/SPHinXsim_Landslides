@@ -55,11 +55,26 @@ git clone https://github.com/microsoft/vcpkg.git ../vcpkg
 
 ## Configure and Build
 
+For a pip-first workflow, install directly from source (this builds C++ extensions via CMake):
+
+```bash
+CMAKE_ARGS="-D CMAKE_TOOLCHAIN_FILE=$(pwd)/../vcpkg/scripts/buildsystems/vcpkg.cmake" \
+python3 -m pip install -e ".[dev,visualization]"
+```
+
+Optional manual CMake workflow:
+
 ```bash
 cmake --preset integrated-build-release \
   -D CMAKE_TOOLCHAIN_FILE="$(pwd)/../vcpkg/scripts/buildsystems/vcpkg.cmake" \
   -D Python3_EXECUTABLE="$(which python3)"
 cmake --build --preset integrated-build-release --parallel "$(nproc)"
+```
+
+Install compiled C++ extension modules into the active Python environment:
+
+```bash
+cmake --install build-integrated --prefix "$(python3 -c 'import sys; print(sys.prefix)')"
 ```
 
 ## Run Tests
