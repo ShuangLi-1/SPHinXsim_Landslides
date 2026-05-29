@@ -5,6 +5,18 @@ setup — geometries, bodies, boundary conditions, and physics annotations — b
 the expensive C++ solver starts.  This lets you catch setup mistakes early and build
 an intuitive picture of what the simulation will run.
 
+## Requirements
+
+Both PyVista and the compiled C++ extension are required:
+
+```bash
+pip install sphinxsim[visualization]
+```
+
+The C++ extension (`_sphinxsys_core_2d` or `_sphinxsys_core_3d`) must also be
+built and installed.  If it is missing, preview raises an `ImportError` with a
+clear install hint.
+
 ## What it shows
 
 | Element | Visual style | Colour |
@@ -23,36 +35,7 @@ Each shape and oriented box is labelled with an annotation that includes:
 - **Oriented boxes**: BC type (emitter, bi-directional), inflow speed or pressure, and particle-relaxation constraints targeting that oriented box.
 - **Gravity**: shown in the lower-left corner when a gravity vector is defined.
 
-## Installation
-
-PyVista is an optional dependency.  Install it alongside SPHinXsim with:
-
-```bash
-pip install sphinxsim[visualization]
-```
-
 ## CLI usage
-
-### Interactive shell
-
-`preview` is available as a first-class shell command:
-
-```
-sphinxsim> generate "2D heat transfer in a channel" config.json
-✅ Config generated and written to ...
-
-sphinxsim> preview
-🖼  Building configuration preview for: .../config.json
-   Attempting C++ geometry build for accurate VTP meshes...
-✅ Preview used C++ geometry (VTP meshes).
-
-sphinxsim> preview --no-cpp
-🖼  Building configuration preview for: .../config.json
-   Using schema-only bounding-box fallback (--no-cpp).
-ℹ️ Preview used schema fallback (--no-cpp).
-```
-
-`preview` requires a config to be loaded first (via `load` or `generate`).
 
 ### Basic preview (direct command)
 
@@ -60,20 +43,18 @@ sphinxsim> preview --no-cpp
 sphinxsim preview path/to/config.json
 ```
 
-This opens an interactive PyVista window showing the geometry.  The visualizer
-first attempts to invoke `buildGeometries()` from the C++ extension to produce
-accurate polygon-mesh VTP files.  If the extension is not available or the build
-fails, it falls back to bounding-box reconstruction from the JSON schema.
+This opens an interactive PyVista window showing the geometry.  The original
+JSON file is passed directly to the C++ `SPHSimulation` — it is the single
+source of truth, no intermediate copy is written.
 
-### Schema-only fallback (no C++ required)
+### Skip C++ geometry build
 
 ```bash
 sphinxsim preview path/to/config.json --no-cpp
 ```
 
-Skips the C++ geometry build entirely and reconstructs bounding boxes directly
-from the config.  Useful when the C++ extension is not built yet, or for rapid
-config iteration where visual accuracy is less important.
+Skips the C++ geometry build entirely.  Shapes are not rendered; only the
+system domain bounding box and annotations are shown.
 
 ### Off-screen rendering
 
@@ -84,21 +65,41 @@ sphinxsim preview path/to/config.json --off-screen
 Renders to an off-screen buffer instead of opening a window.  Intended for
 automated testing or headless environments.
 
+### Interactive shell
+
+`preview` is available as a first-class shell command:
+
+```
+sphinxsim> load config.json
+✅ Loaded config from config.json
+
+sphinxsim> preview
+🖼  Building configuration preview for: .../config.json
+   Attempting C++ geometry build for accurate VTP meshes...
+✅ Preview used C++ geometry (VTP meshes).
+
+sphinxsim> preview --no-cpp
+🖼  Building configuration preview for: .../config.json
+   Skipping C++ geometry build (--no-cpp).
+ℹ️ Preview rendered without C++ geometry (--no-cpp).
+```
+
+`preview` requires a config to be loaded first (via `load` or `generate`).
+
 ## Python API
 
-You can also invoke the visualizer directly from Python:
-
 ```python
-import json
 from pathlib import Path
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.visualization.preview import ConfigVisualizer
+import json
 
-config = SimulationConfig(**json.loads(Path("my_config.json").read_text()))
+config_path = Path("my_config.json")
+config = SimulationConfig(**json.loads(config_path.read_text()))
 
-viz = ConfigVisualizer(config, project_root=Path("."))
-viz.preview()                     # opens interactive window, tries C++ first
-viz.preview(use_cpp=False)        # schema bounding-box fallback only
+viz = ConfigVisualizer(config, project_root=Path("."), config_path=config_path)
+viz.preview()                     # opens interactive window
+viz.preview(use_cpp=False)        # skip C++ build (shapes not rendered)
 viz.preview(title="My setup")     # custom window title
 ```
 
@@ -108,6 +109,7 @@ viz.preview(title="My setup")     # custom window title
 |---|---|---|
 | `config` | `SimulationConfig` | Validated Pydantic config object |
 | `project_root` | `Path` | Root of the SPHinXsim project (locates `.build-temp/`) |
+| `config_path` | `Path \| None` | Path to the original JSON file — passed directly to C++. Required for geometry rendering. |
 | `off_screen` | `bool` | Render off-screen when `True` (default `False`) |
 
 ### `preview()` parameters
@@ -115,45 +117,43 @@ viz.preview(title="My setup")     # custom window title
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `title` | `str` | `"SPHinXsim - Configuration Preview"` | Window title |
-| `use_cpp` | `bool` | `True` | Attempt C++ geometry build before falling back to schema |
+| `use_cpp` | `bool` | `True` | Run C++ geometry build. Raises `ImportError` if extension not installed. |
 
-When `use_cpp=True`, the CLI reports which mode was actually used after rendering:
+After rendering, the CLI reports which tier was used:
 - `✅ Preview used C++ geometry (VTP meshes).`
-- `ℹ️ Preview used schema fallback (C++ geometry unavailable or build failed).`
+- `ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).`
 
-## Two-stage rendering strategy
+### Inspecting which tier was used
 
-### Stage 1 — VTP geometry (preferred)
+```python
+viz.preview()
+print(viz.used_cpp_geometry)   # True if VTP meshes were rendered
+print(viz.used_cpp_bounds)     # True if live C++ bounds were used
+```
+
+## Two-tier rendering strategy
+
+### Tier 1 — VTP geometry (preferred)
 
 When `use_cpp=True` (the default), the visualizer:
 
-1. Writes a validated config to a temporary JSON file.
+1. Passes your original JSON file directly to `SPHSimulation` (no copy written).
 2. Calls `SPHSimulation.buildGeometries()` from the C++ extension.
 3. The C++ builders write `Shape<Name>.vtp` files to `.build-temp/preview_geometry/output/`.
 4. PyVista reads and renders those polygon meshes.
+5. The live `SPHSimulation` object is kept in memory for Tier 2 queries.
 
 This gives **accurate geometry** — including rotations, boolean-composition results,
 and imported triangle meshes.
 
-### Stage 2 — Schema bounding-box fallback
+### Tier 2 — C++ shape bounds (fallback)
 
-When the C++ extension is unavailable (or `--no-cpp` is passed), the visualizer
-reconstructs approximate meshes from the JSON schema:
+When VTP files are not produced (e.g. the builder does not write VTPs for a
+given shape type), the visualizer queries `getShapeBounds()` directly from the
+live `SPHSimulation` object and renders axis-aligned bounding boxes.
 
-| Shape type | Fallback mesh |
-|---|---|
-| `bounding_box` | Axis-aligned box from `lower_bound` / `upper_bound` |
-| `box` | Box from `half_size` + `transform` (translation and rotation applied) |
-| `expanded_box` | Original shape's bounding box expanded by `expansion` |
-| `multipolygon` | Bounding box over all polygon entries' bounds |
-| `triangle_mesh` | **Not rendered** (file not available at this stage) |
-| `complex_shape` | **Not rendered** (rendered via its sub-shapes) |
-| `in_outlet` | Thin rectangular slab perpendicular to the normal direction |
-| `region` | Box from `half_size` + `transform` |
-
-!!! note
-    The bounding-box fallback is always available without a C++ build and is
-    useful for a quick sanity check of domain extents and body placement.
+Both tiers require the C++ extension.  If it is not installed, an
+`ImportError` is raised with an install hint.
 
 ## Shape types and VTP availability
 
@@ -169,8 +169,8 @@ complete mapping:
 | `triangle_mesh` (3D) | ✅ Yes |
 | `complex_shape` | ❌ No (boolean composition of named sub-shapes) |
 
-`complex_shape` geometries are skipped in both VTP mode and schema fallback;
-their constituent sub-shapes are rendered individually.
+`complex_shape` geometries are skipped in the VTP pass; their constituent
+sub-shapes are rendered individually via Tier 2 bounds.
 
 ## Annotations module
 
