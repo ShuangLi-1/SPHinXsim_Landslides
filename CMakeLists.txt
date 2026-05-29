@@ -71,20 +71,22 @@ if(IS_ABSOLUTE "${SPHINXSIM_PYTHON_INSTALL_DIR}")
     endif()
 endif()
 
-if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
-    set(_SPHINXSIM_VCPKG_GTEST_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/gtest")
-    if(EXISTS "${_SPHINXSIM_VCPKG_GTEST_DIR}/GTestConfig.cmake")
-        set(GTest_DIR "${_SPHINXSIM_VCPKG_GTEST_DIR}" CACHE PATH "Path to GTestConfig.cmake" FORCE)
-        find_package(GTest CONFIG REQUIRED
-            PATHS "${_SPHINXSIM_VCPKG_GTEST_DIR}"
-            NO_DEFAULT_PATH)
+if(SPHINXSIM_BUILD_SIMULATION_TESTS)
+    if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+        set(_SPHINXSIM_VCPKG_GTEST_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/gtest")
+        if(EXISTS "${_SPHINXSIM_VCPKG_GTEST_DIR}/GTestConfig.cmake")
+            set(GTest_DIR "${_SPHINXSIM_VCPKG_GTEST_DIR}" CACHE PATH "Path to GTestConfig.cmake" FORCE)
+            find_package(GTest CONFIG REQUIRED
+                PATHS "${_SPHINXSIM_VCPKG_GTEST_DIR}"
+                NO_DEFAULT_PATH)
+        else()
+            find_package(GTest CONFIG REQUIRED)
+        endif()
     else()
         find_package(GTest CONFIG REQUIRED)
     endif()
-else()
-    find_package(GTest CONFIG REQUIRED)
+    include(GoogleTest)
 endif()
-include(GoogleTest)
 
 # Set SPHinXsys options to minimal for Python binding
 set(SPHINXSYS_BUILD_TESTS OFF CACHE BOOL "Don't build tests")
