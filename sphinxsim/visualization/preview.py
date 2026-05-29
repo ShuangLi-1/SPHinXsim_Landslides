@@ -222,6 +222,7 @@ class ConfigVisualizer:
         self.off_screen = off_screen
 
         self._vtp_dir: Path | None = None
+        self._cpp_shape_bounds: dict[str, tuple[list[float], list[float]]] | None = None
 
     @property
     def used_cpp_geometry(self) -> bool:
@@ -260,6 +261,8 @@ class ConfigVisualizer:
         vtp_dir: Path | None = None
         if use_cpp:
             vtp_dir = self._try_build_geometries()
+        else:
+            self._cpp_shape_bounds = None
         self._vtp_dir = vtp_dir
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
@@ -267,7 +270,12 @@ class ConfigVisualizer:
         plotter.add_axes()
         plotter.show_grid()
 
-        mode_label = "VTP geometry" if vtp_dir else "Schema bounding-box fallback"
+        if vtp_dir:
+            mode_label = "VTP geometry"
+        elif self._cpp_shape_bounds:
+            mode_label = "C++ bounds fallback"
+        else:
+            mode_label = "Schema bounding-box fallback"
         plotter.add_text(
             f"{title}\n[{mode_label}]",
             position="upper_left",
@@ -306,6 +314,10 @@ class ConfigVisualizer:
                 sim = sph.SPHSimulation(tmp_cfg.name)
                 sim.resetOutputRoot(str(vtp_output_dir))
                 sim.buildGeometries()
+                try:
+                    self._cpp_shape_bounds = dict(sim.getShapeBounds())
+                except Exception:
+                    self._cpp_shape_bounds = None
             finally:
                 os.chdir(original_dir)
 
@@ -451,7 +463,7 @@ class ConfigVisualizer:
         vtp_dir: Path | None,
         config: "SimulationConfig",
     ) -> Any | None:
-        """Load the mesh for *shape* — VTP first, schema fallback second."""
+        """Load the mesh for *shape* — VTP first, C++ bounds second, schema fallback last."""
         if vtp_dir is not None:
             vtp_path = vtp_dir / f"Shape{shape.name}.vtp"
             if vtp_path.exists():
@@ -460,6 +472,11 @@ class ConfigVisualizer:
                     return pv.read(str(vtp_path))
                 except Exception:
                     pass
+
+        if self._cpp_shape_bounds is not None and shape.name in self._cpp_shape_bounds:
+            lower, upper = self._cpp_shape_bounds[shape.name]
+            return _bounds_to_box(list(lower), list(upper))
+
         return _schema_mesh_for_shape(shape, config)
 
     def _load_oriented_box_mesh(

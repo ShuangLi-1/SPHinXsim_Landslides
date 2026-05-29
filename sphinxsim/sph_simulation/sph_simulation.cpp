@@ -137,6 +137,19 @@ bool SPHSimulation::hasGeneratedParticles() const
     return particles_generated_;
 }
 //=================================================================================================//
+std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> SPHSimulation::getShapeBounds()
+{
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> result;
+    for (Shape *shape : config_manager_.entitiesWith<Shape>())
+    {
+        BoundingBoxd bounds = shape->getBounds();
+        std::vector<double> lower(bounds.lower_.data(), bounds.lower_.data() + bounds.lower_.size());
+        std::vector<double> upper(bounds.upper_.data(), bounds.upper_.data() + bounds.upper_.size());
+        result[shape->Name()] = {lower, upper};
+    }
+    return result;
+}
+//=================================================================================================//
 void SPHSimulation::buildSimulation()
 {
     if (!particle_generation_ptr_)
