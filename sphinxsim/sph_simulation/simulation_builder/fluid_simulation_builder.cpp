@@ -91,6 +91,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildBoundaryConditionsIfPresent(sim, main_methods, config);
+    buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
     //----------------------------------------------------------------------
@@ -134,6 +135,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             fluid_acoustic_step_1st_half.exec(dt);
             simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
             fluid_acoustic_step_2nd_half.exec(dt);
+            simulation_pipeline.run_hooks(SimulationHookPoint::CouplingSynchronization);
         });
 
     simulation_pipeline.main_steps.push_back( // advection or particle configuration step

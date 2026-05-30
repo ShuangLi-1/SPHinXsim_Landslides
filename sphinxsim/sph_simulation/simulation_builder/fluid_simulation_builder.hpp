@@ -5,6 +5,7 @@
 
 #include "geometry_builder.h"
 #include "sph_simulation.h"
+#include "thermal_dynamics_builder.hpp"
 
 namespace SPH
 {
@@ -290,6 +291,19 @@ void FluidSimulationBuilder::buildParticleSortIfPresent(
                 {
                     particle_sort.exec();
                 } });
+    }
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+void FluidSimulationBuilder::buildThermalDynamicsIfPresent(
+    SPHSimulation &sim, MethodContainerType &main_methods,
+    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
+{
+    auto &config_manager = sim.getConfigManager();
+    std::string body_name = inner_relation.getSPHBody().Name();
+    if (config_manager.hasEntity<IsotropicDiffusion>(body_name + "ThermalDiffusion"))
+    {
+        ThermalDynamicsBuilder::buildThermalDynamics(sim, main_methods, inner_relation, contact_relation);
     }
 }
 //=================================================================================================//
