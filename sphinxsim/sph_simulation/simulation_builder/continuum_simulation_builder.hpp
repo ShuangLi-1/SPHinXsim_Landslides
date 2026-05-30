@@ -3,6 +3,7 @@
 
 #include "continuum_simulation_builder.h"
 
+#include "all_continuum_dynamics_ck.h"
 #include "sph_simulation.h"
 
 namespace SPH
