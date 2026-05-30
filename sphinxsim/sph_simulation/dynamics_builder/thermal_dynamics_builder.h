@@ -40,7 +40,7 @@ class ThermalDynamicsBuilder
   public:
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     static void buildThermalDynamics(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MethodContainerType &method_container,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
   private:
