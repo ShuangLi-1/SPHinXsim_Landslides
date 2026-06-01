@@ -43,33 +43,10 @@ if(NOT nlohmann_json_FOUND)
     FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-# Install bindings into Python's import path by default.
-# Keep destination prefix-relative so `cmake --install --prefix ...` works.
-execute_process(
-    COMMAND "${Python3_EXECUTABLE}" -c
-            "import os, sys, sysconfig; p=sysconfig.get_path('platlib') or ''; b=sys.prefix or ''; print(os.path.relpath(p, b) if p.startswith(b) else p.lstrip('/'))"
-    OUTPUT_VARIABLE _SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-if(NOT _SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR)
-    set(_SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR ".")
-endif()
-set(_SPHINXSIM_DEFAULT_EXTENSION_INSTALL_DIR
-    "${_SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR}/sphinxsim/bindings/native")
-set(SPHINXSIM_PYTHON_INSTALL_DIR "${_SPHINXSIM_DEFAULT_EXTENSION_INSTALL_DIR}"
+# Install extension modules into the package so wheel installers place them
+# directly under site-packages/sphinxsim/bindings/native.
+set(SPHINXSIM_PYTHON_INSTALL_DIR "sphinxsim/bindings/native"
     CACHE PATH "Install destination for Python extension modules")
-if(IS_ABSOLUTE "${SPHINXSIM_PYTHON_INSTALL_DIR}")
-    execute_process(
-        COMMAND "${Python3_EXECUTABLE}" -c
-                "import os, sys; p=os.path.abspath(r'''${SPHINXSIM_PYTHON_INSTALL_DIR}'''); b=sys.prefix or ''; print(os.path.relpath(p, b) if p.startswith(b) else p.lstrip('/'))"
-        OUTPUT_VARIABLE _SPHINXSIM_NORMALIZED_PYTHON_INSTALL_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-    )
-    if(_SPHINXSIM_NORMALIZED_PYTHON_INSTALL_DIR)
-        set(SPHINXSIM_PYTHON_INSTALL_DIR "${_SPHINXSIM_NORMALIZED_PYTHON_INSTALL_DIR}"
-            CACHE PATH "Install destination for Python extension modules" FORCE)
-    endif()
-endif()
 
 if(SPHINXSIM_BUILD_SIMULATION_TESTS)
     if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
