@@ -438,7 +438,7 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           export CMAKE_ARGS="-D CMAKE_TOOLCHAIN_FILE=${{ github.workspace }}/vcpkg/scripts/buildsystems/vcpkg.cmake"
-          python -m pip wheel . -w dist
+          python -m pip wheel --no-deps . -w dist
 
       - name: Build wheel with pip (Windows)
         if: runner.os == 'Windows'
@@ -446,20 +446,20 @@ jobs:
         run: |
           $toolchain = "${{ github.workspace }}\vcpkg\scripts\buildsystems\vcpkg.cmake" -replace '\\', '/'
           $env:CMAKE_ARGS = "-D CMAKE_TOOLCHAIN_FILE=$toolchain -D CMAKE_C_COMPILER=cl -D CMAKE_CXX_COMPILER=cl"
-          python -m pip wheel . -w dist
+          python -m pip wheel --no-deps . -w dist
 
       - name: Install built wheel (Linux/macOS)
         if: runner.os != 'Windows'
         run: |
-          python -m pip install --force-reinstall dist/*.whl
+          python -m pip install --force-reinstall dist/sphinxsim-*.whl
 
       - name: Install built wheel (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $wheel = Get-ChildItem "dist\*.whl" | Select-Object -First 1
+          $wheel = Get-ChildItem "dist\sphinxsim-*.whl" | Select-Object -First 1
           if (-not $wheel) {
-            throw "No wheel file found in dist/"
+            throw "No sphinxsim wheel file found in dist/"
           }
           python -m pip install --force-reinstall $wheel.FullName
 
