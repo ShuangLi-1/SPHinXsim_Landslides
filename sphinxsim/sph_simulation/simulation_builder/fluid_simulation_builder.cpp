@@ -86,6 +86,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Define optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
+    buildInitialConditionIfPresent(sim, main_methods, config);
     buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
     buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);

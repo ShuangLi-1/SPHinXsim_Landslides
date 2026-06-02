@@ -34,35 +34,38 @@ template <class MethodContainerType>
 void SimulationBuilder::buildInitialConditionIfPresent(
     SPHSimulation &sim, MethodContainerType &method_container, const json &config)
 {
-    auto &sph_system = sim.getSPHSystem();
-    auto &config_manager = sim.getConfigManager();
-    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
-    auto &initialization_pipeline = sim.getInitializationPipeline();
-
-    auto &dynamics = method_container.addParticleDynamicsGroup();
-    for (const auto &ic : config)
+    if (config.contains("initial_conditions"))
     {
-        const std::string name = ic.at("name").get<std::string>();
-        auto &real_body = sph_system.getBodyByName<RealBody>(name);
-        for (const auto &assignment : ic.at("assignments"))
+        auto &sph_system = sim.getSPHSystem();
+        auto &config_manager = sim.getConfigManager();
+        auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+        auto &initialization_pipeline = sim.getInitializationPipeline();
+
+        auto &dynamics = method_container.addParticleDynamicsGroup();
+        for (const auto &ic : config.at("initial_conditions"))
         {
-            if (assignment.contains("region"))
+            const std::string name = ic.at("body_name").get<std::string>();
+            auto &real_body = sph_system.getBodyByName<RealBody>(name);
+            for (const auto &assignment : ic.at("assignments"))
             {
-                std::string region_name = assignment.at("region").get<std::string>();
-                auto &oriented_box = config_manager.getEntity<OrientedBox>(region_name);
-                auto &body_region = real_body.template addBodyPart<OrientedBoxByParticle>(oriented_box);
-                dynamics.add(&addVariableAssignment(method_container, body_region, scaling_config, assignment));
-            }
-            else
-            {
-                dynamics.add(&addVariableAssignment(method_container, real_body, scaling_config, assignment));
+                if (assignment.contains("region"))
+                {
+                    std::string region_name = assignment.at("region").get<std::string>();
+                    auto &oriented_box = config_manager.getEntity<OrientedBox>(region_name);
+                    auto &body_region = real_body.template addBodyPart<OrientedBoxByParticle>(oriented_box);
+                    dynamics.add(&addVariableAssignment(method_container, body_region, scaling_config, assignment));
+                }
+                else
+                {
+                    dynamics.add(&addVariableAssignment(method_container, real_body, scaling_config, assignment));
+                }
             }
         }
-    }
 
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialCondition, [&]()
-        { dynamics.exec(); });
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { dynamics.exec(); });
+    }
 }
 //=================================================================================================//
 template <class MethodContainerType, class IdentifierType>
