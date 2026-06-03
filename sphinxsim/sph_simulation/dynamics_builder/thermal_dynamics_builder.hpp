@@ -3,8 +3,8 @@
 
 #include "thermal_dynamics_builder.h"
 
-#include "sph_simulation.h"
 #include "material_builder.h"
+#include "sph_simulation.h"
 
 namespace SPH
 {
@@ -14,7 +14,7 @@ void ThermalDynamicsBuilder::buildThermalDynamics(
     SPHSimulation &sim, MethodContainerType &method_container,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
-    EntityManager &config_manager = sim.getConfigManager();
+    auto &config_manager = sim.getConfigManager();
     auto &sph_system = sim.getSPHSystem();
     auto &time_stepper = sim.getSPHSolver().getTimeStepper();
 
@@ -25,63 +25,61 @@ void ThermalDynamicsBuilder::buildThermalDynamics(
     auto &diffusion_time_step = method_container.template addReturnDynamics<
         GetDiffusionTimeStepSize>(real_body, &thermal_diffusion);
 
-    auto &runge_kutta = method_container.addParticleDynamicsGroup();
-
-    auto &diffusion_relaxation_1st_half =
+    auto &runge_kutta_1st_stage =
         method_container.template addInteractionDynamicsOneLevel<
             DiffusionRelaxationCK, RungeKutta1stStage, IsotropicDiffusion, LinearCorrectionCK>(
             inner_relation, &thermal_diffusion);
-    auto &diffusion_relaxation_2nd_half =
+    auto &runge_kutta_2nd_stage =
         method_container.template addInteractionDynamicsOneLevel<
             DiffusionRelaxationCK, RungeKutta2ndStage, IsotropicDiffusion, LinearCorrectionCK>(
             inner_relation, &thermal_diffusion);
 
     StdVec<SPHBody *> contact_bodies = contact_relation.getContactBodies();
-    StdVec<SPHBody *> contact__dirichlet_bodies;
-    StdVec<SPHBody *> contact_neumann_bodies;
-
+    StdVec<SPHBody *> dirichlet_bodies;
+    StdVec<SPHBody *> neumann_bodies;
     for (SPHBody *contact_body : contact_bodies)
     {
-        std::string contact_body_name = contact_body->Name();
-        if (config_manager.hasEntity<ThermalBoundaryConfig>(contact_body_name))
+        std::string cb_name = contact_body->Name();
+        if (config_manager.hasEntity<ThermalBoundaryConfig>(cb_name))
         {
-            ThermalBoundaryConfig &boundary_config = config_manager.getEntity<ThermalBoundaryConfig>(contact_body_name);
-            if (boundary_config.boundary_type == "Dirichlet")
+            auto &bd_config = config_manager.getEntity<ThermalBoundaryConfig>(cb_name);
+            if (bd_config.boundary_type == "Dirichlet")
             {
-                contact__dirichlet_bodies.push_back(contact_body);
+                dirichlet_bodies.push_back(contact_body);
             }
 
-            if (boundary_config.boundary_type == "Neumann")
+            if (bd_config.boundary_type == "Neumann")
             {
-                contact_neumann_bodies.push_back(contact_body);
+                neumann_bodies.push_back(contact_body);
             }
         }
     }
 
-    if (!contact__dirichlet_bodies.empty())
+    if (!dirichlet_bodies.empty())
     {
-        auto contact__dirichlet_view = makeRelationView(contact_relation, contact__dirichlet_bodies);
-        diffusion_relaxation_1st_half.template addPostContactInteraction<
+        auto contact_dirichlet_view = makeRelationView(contact_relation, dirichlet_bodies);
+        runge_kutta_1st_stage.template addPostContactInteraction<
             InteractionOnly, Dirichlet<IsotropicDiffusion>, LinearCorrectionCK>(
-            contact__dirichlet_view, &thermal_diffusion);
-        diffusion_relaxation_2nd_half.template addPostContactInteraction<
+            contact_dirichlet_view, &thermal_diffusion);
+        runge_kutta_2nd_stage.template addPostContactInteraction<
             InteractionOnly, Dirichlet<IsotropicDiffusion>, LinearCorrectionCK>(
-            contact__dirichlet_view, &thermal_diffusion);
+            contact_dirichlet_view, &thermal_diffusion);
     }
 
-    if (!contact_neumann_bodies.empty())
+    if (!neumann_bodies.empty())
     {
-        auto contact_neumann_view = makeRelationView(contact_relation, contact_neumann_bodies);
-        diffusion_relaxation_1st_half.template addPostContactInteraction<
+        auto contact_neumann_view = makeRelationView(contact_relation, neumann_bodies);
+        runge_kutta_1st_stage.template addPostContactInteraction<
             InteractionOnly, Neumann<IsotropicDiffusion>, LinearCorrectionCK>(
             contact_neumann_view, &thermal_diffusion);
-        diffusion_relaxation_2nd_half.template addPostContactInteraction<
+        runge_kutta_2nd_stage.template addPostContactInteraction<
             InteractionOnly, Neumann<IsotropicDiffusion>, LinearCorrectionCK>(
             contact_neumann_view, &thermal_diffusion);
     }
 
-    runge_kutta.add(&diffusion_relaxation_1st_half).add(&diffusion_relaxation_2nd_half);
-    StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
+    auto &runge_kutta = method_container.addParticleDynamicsGroup();
+    runge_kutta.add(&runge_kutta_1st_stage).add(&runge_kutta_2nd_stage);
+    auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
         SimulationHookPoint::CouplingSynchronization, [&]()
         { 
