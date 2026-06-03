@@ -35,8 +35,7 @@ void ThermalDynamicsBuilder::buildThermalDynamics(
             inner_relation, &thermal_diffusion);
 
     StdVec<SPHBody *> contact_bodies = contact_relation.getContactBodies();
-    StdVec<SPHBody *> dirichlet_bodies;
-    StdVec<SPHBody *> neumann_bodies;
+    StdVec<SPHBody *> dirichlet_bodies, neumann_bodies;
     for (SPHBody *contact_body : contact_bodies)
     {
         std::string cb_name = contact_body->Name();

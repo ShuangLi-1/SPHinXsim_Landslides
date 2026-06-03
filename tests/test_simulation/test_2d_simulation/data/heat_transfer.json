@@ -108,11 +108,11 @@
         "type": "weakly_compressible_fluid",
         "density": 1.0,
         "viscosity": {
-          "Reynolds_number": 50
+          "Reynolds_number": 50.0
         },
         "thermal_properties": {
-          "thermal_conductivity": 0.6,
-          "volumetric_heat_capacity": 4181.3
+          "thermal_conductivity": 1.0e-2,
+          "volumetric_heat_capacity": 1.0
         }
       },
       "particle_reserve_factor": 0.2
@@ -153,12 +153,12 @@
         {
           "region": "UpperWall",
           "variable": { "real_type": "Temperature" },
-          "value": 400.0
+          "value": 40.0
         },
         {
           "region": "LowerWall",
           "variable": { "real_type": "Temperature" },
-          "value": 300.0
+          "value": 20.0
         }
       ]
     },
@@ -167,7 +167,7 @@
       "assignments": [
         {
           "variable": { "real_type": "Temperature" },
-          "value": 350.0
+          "value": 20.0
         }
       ]
     }
