@@ -421,8 +421,16 @@ class TestSimulationConfig:
 
         thermal = cfg.fluid_bodies[0].material.thermal_properties
         assert thermal is not None
-        assert thermal.thermal_conductivity == pytest.approx(0.6)
-        assert thermal.volumetric_heat_capacity == pytest.approx(4181.3)
+        expected_conductivity = payload["fluid_bodies"][0]["material"]["thermal_properties"][
+            "thermal_conductivity"
+        ]
+        expected_heat_capacity = payload["fluid_bodies"][0]["material"]["thermal_properties"][
+            "volumetric_heat_capacity"
+        ]
+        assert thermal.thermal_conductivity == pytest.approx(expected_conductivity)
+        assert thermal.thermal_conductivity > 0.0
+        assert thermal.volumetric_heat_capacity == pytest.approx(expected_heat_capacity)
+        assert thermal.volumetric_heat_capacity > 0.0
         assert cfg.solid_bodies[0].material.thermal_properties is not None
         assert cfg.solid_bodies[0].material.thermal_properties.thermal_boundary.value == "Dirichlet"
 
