@@ -58,8 +58,8 @@ TEST(simulations, t_junction)
     SPH::SPHSimulation sim("./input/t_junction.json");
     sim.resetOutputRoot("./t_junction", true);
     sim.buildGeometries();
-    //    sim.generateParticles();
-    //    sim.buildSimulation();
-    //    sim.initializeSimulation();
-    //    sim.run();
+    sim.generateParticles();
+    sim.buildSimulation();
+    sim.initializeSimulation();
+    sim.run();
 }
