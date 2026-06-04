@@ -35,15 +35,15 @@ namespace SPH
 {
 class RealBody;
 
-class ConstraintBuilder
+class ThermalDynamicsBuilder
 {
   public:
-    template <class MethodContainerType>
-    void addConstraints(SPHSimulation &sim, MethodContainerType &method_container, const json &config);
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    static void buildThermalDynamics(
+        SPHSimulation &sim, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
   private:
-    template <class MethodContainerType>
-    void addConstraint(SPHSimulation &sim, MethodContainerType &method_container, RealBody &real_body, const json &config);
 };
 } // namespace SPH
 #endif // THERMAL_DYNAMICS_BUILDER_H

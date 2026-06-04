@@ -26,9 +26,10 @@ PlasticAcousticStep<BaseInteractionType>::PlasticAcousticStep(DynamicsIdentifier
 }
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 PlasticAcousticStep1stHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    PlasticAcousticStep1stHalf(Inner<Parameters...> &inner_relation)
-    : PlasticAcousticStep<Interaction<Inner<Parameters...>>>(inner_relation),
+    PlasticAcousticStep1stHalf(DynamicsIdentifier &identifier)
+    : PlasticAcousticStep<Interaction<Inner<Parameters...>>>(identifier),
       correction_method_(this->particles_),
       riemann_solver_(this->plastic_continuum_, this->plastic_continuum_)
 {
@@ -86,7 +87,7 @@ void PlasticAcousticStep1stHalf<Inner<OneLevel, RiemannSolverType, KernelCorrect
         Vecd nablaW_ijV_j = this->dW_ij(index_i, index_j) * Vol_[index_j] * this->e_ij(index_i, index_j);
         Matd stress_tensor_j = degradeToMatd(stress_tensor_3D_[index_j]);
         force += mass_[index_i] * rho_[index_j] * ((stress_tensor_i + stress_tensor_j) / (rho_i * rho_[index_j])) * nablaW_ijV_j;
-        rho_dissipation += riemann_solver_.DissipativeUJump(p_[index_i] - p_[index_j]) * dW_ijV_j;
+        rho_dissipation += riemann_solver_.DissipativeUJump(index_i, index_j, p_[index_i] - p_[index_j]) * dW_ijV_j;
     }
     force_[index_i] += force;
     drho_dt_[index_i] = rho_dissipation * rho_[index_i];
@@ -110,9 +111,10 @@ void PlasticAcousticStep1stHalf<Inner<OneLevel, RiemannSolverType, KernelCorrect
 
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 PlasticAcousticStep1stHalf<Contact<Wall, RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    PlasticAcousticStep1stHalf(Contact<Parameters...> &wall_contact_relation)
-    : BaseInteraction(wall_contact_relation), Interaction<Wall>(wall_contact_relation),
+    PlasticAcousticStep1stHalf(DynamicsIdentifier &identifier)
+    : BaseInteraction(identifier), Interaction<Wall>(identifier),
       correction_method_(this->particles_),
       riemann_solver_(this->plastic_continuum_, this->plastic_continuum_) {}
 //=================================================================================================//
@@ -153,7 +155,7 @@ void PlasticAcousticStep1stHalf<Contact<Wall, RiemannSolverType, KernelCorrectio
         Real face_wall_external_acceleration = (force_prior_[index_i] / mass_[index_i] - wall_acc_ave_[index_j]).dot(-e_ij);
         Real p_in_wall = p_[index_i] + rho_[index_i] * r_ij * SMAX(Real(0), face_wall_external_acceleration);
         force += 2 * mass_[index_i] * stress_tensor_i * dW_ijV_j * e_ij;
-        rho_dissipation += riemann_solver_.DissipativeUJump(p_[index_i] - p_in_wall) * dW_ijV_j;
+        rho_dissipation += riemann_solver_.DissipativeUJump(index_i, index_j, p_[index_i] - p_in_wall) * dW_ijV_j;
     }
     force_[index_i] += force / rho_[index_i];
     drho_dt_[index_i] += rho_dissipation * rho_[index_i];

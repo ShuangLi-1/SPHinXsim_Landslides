@@ -108,6 +108,11 @@ class FluidSimulationBuilder : public SimulationBuilder
     void buildSurfaceIndicationIfOpenBoundary(
         SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
+        
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    void buildThermalDynamicsIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 };
 } // namespace SPH
 #endif // FLUID_SIMULATION_BUILDER_H

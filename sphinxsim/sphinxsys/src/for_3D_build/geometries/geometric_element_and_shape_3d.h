@@ -21,60 +21,48 @@
  *                                                                           *
  * ------------------------------------------------------------------------- */
 /**
- * @file 	stress_diffusion.h
- * @brief 	Here, we define the ck_version for stress diffusion.
- * @details Refer to Feng et al(2021).
- * @author	Shuang Li, Xiangyu Hu and Shuaihao Zhang
+ * @file 	geometric_element_and_shape_3d.h
+ * @brief tbd.
+ * @author Xiangyu Hu
  */
 
-#ifndef STRESS_DIFFUSION_CK_H
-#define STRESS_DIFFUSION_CK_H
+#ifndef GEOMETRIC_ELEMENT_AND_SHAPE_3D_H
+#define GEOMETRIC_ELEMENT_AND_SHAPE_3D_H
 
-#include "base_continuum_dynamics.h"
-#include "constraint_dynamics.h"
-#include "continuum_integration_1st_ck.hpp"
-#include "fluid_integration.hpp"
-#include "general_continuum.hpp"
+#include "data_type.h"
+#include "transform_geometry.h"
+
 namespace SPH
 {
-namespace continuum_dynamics
+class GeometricCylinder
 {
-template <typename...>
-class StressDiffusionCK;
-
-template <typename... Parameters>
-class StressDiffusionCK<Inner<Parameters...>> : public PlasticAcousticStep<Interaction<Inner<Parameters...>>>
-{
-    using ConstituteKernel = typename PlasticContinuum::ConstituteKernel;
-    using BaseInteraction = PlasticAcousticStep<Interaction<Inner<Parameters...>>>;
-
   public:
-    explicit StressDiffusionCK(Inner<Parameters...> &inner_relation);
-    virtual ~StressDiffusionCK() {};
+    explicit GeometricCylinder(Real radius, Real halflength);
+    ~GeometricCylinder(){};
 
-    class InteractKernel : public BaseInteraction::InteractKernel
+    bool checkContain(const Vec3d &probe_point)
     {
-      public:
-        template <class ExecutionPolicy, class EncloserType>
-        InteractKernel(const ExecutionPolicy &ex_policy, EncloserType &encloser);
-        void interact(size_t index_i, Real dt = 0.0);
-
-      protected:
-        ConstituteKernel constitute_;
-        Real zeta_, phi_;
-        Real smoothing_length_, sound_speed_;
-        Real *mass_, *Vol_;
-        Vecd *pos_, *force_prior_;
-        Mat3d *stress_tensor_3D_, *stress_rate_3D_;
+        if (ABS(probe_point[0]) > halflength_)
+            return false;
+        return probe_point.tail(Dimensions - 1).norm() <= radius_;
     };
 
+    Vec3d findClosestPoint(const Vec3d &probe_point);
+    BoundingBox3d findBounds();
+
   protected:
-    Real dv_zeta_ = 0.1, dv_phi_; /*diffusion coefficient*/
-    Real dv_smoothing_length_, dv_sound_speed_;
-    DiscreteVariable<Vecd> *dv_pos_;
+    Real radius_;
+    Real halflength_;
 };
 
-using StressDiffusionInnerCK = StressDiffusionCK<Inner<>>;
-} // namespace continuum_dynamics
+using TransformGeometryCylinder = TransformGeometry<GeometricCylinder>;
+
+class GeometricShapeCylinder : public TransformShape<GeometricCylinder>
+{
+  public:
+    GeometricShapeCylinder(const Transform &transform, Real radius, Real halflength,
+                           const std::string &name = "GeometricShapeCylinder");
+    virtual ~GeometricShapeCylinder(){};
+};
 } // namespace SPH
-#endif // STRESS_DIFFUSION_CK_H
+#endif // GEOMETRIC_ELEMENT_AND_SHAPE_3D_H

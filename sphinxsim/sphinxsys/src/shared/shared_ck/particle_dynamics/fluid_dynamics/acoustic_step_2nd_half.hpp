@@ -9,9 +9,10 @@ namespace fluid_dynamics
 {
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 AcousticStep2ndHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    AcousticStep2ndHalf(Inner<Parameters...> &inner_relation)
-    : AcousticStep<Interaction<Inner<Parameters...>>>(inner_relation),
+    AcousticStep2ndHalf(DynamicsIdentifier &identifier)
+    : AcousticStep<Interaction<Inner<Parameters...>>>(identifier),
       kernel_correction_(this->particles_),
       fluid_(DynamicCast<FluidType>(this, this->sph_body_->getMatterMaterial())),
       riemann_solver_(this->fluid_, this->fluid_)
@@ -61,7 +62,7 @@ void AcousticStep2ndHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType
 
         Real u_jump = (vel_[index_i] - vel_[index_j]).dot(corrected_e_ij);
         density_change_rate += u_jump * dW_ijV_j;
-        p_dissipation += riemann_solver_.DissipativePJump(u_jump) * dW_ijV_j * corrected_e_ij;
+        p_dissipation += riemann_solver_.DissipativePJump(index_i, index_j, u_jump) * dW_ijV_j * corrected_e_ij;
     }
     drho_dt_[index_i] += density_change_rate * rho_[index_i];
     force_[index_i] = p_dissipation * Vol_[index_i];
@@ -82,9 +83,10 @@ void AcousticStep2ndHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType
 }
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 AcousticStep2ndHalf<Contact<Wall, RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    AcousticStep2ndHalf(Contact<Parameters...> &wall_contact_relation)
-    : BaseInteraction(wall_contact_relation), Interaction<Wall>(wall_contact_relation),
+    AcousticStep2ndHalf(DynamicsIdentifier &identifier)
+    : BaseInteraction(identifier), Interaction<Wall>(identifier),
       kernel_correction_(this->particles_),
       fluid_(DynamicCast<FluidType>(this, this->sph_body_->getMatterMaterial())),
       riemann_solver_(this->fluid_, this->fluid_) {}
@@ -122,16 +124,17 @@ void AcousticStep2ndHalf<Contact<Wall, RiemannSolverType, KernelCorrectionType, 
         Vecd vel_j_in_wall = 2.0 * wall_vel_ave_[index_j] - vel_[index_i];
         density_change_rate += (vel_[index_i] - vel_j_in_wall).dot(corrected_e_ij) * dW_ijV_j;
         Real u_jump = 2.0 * (vel_[index_i] - wall_vel_ave_[index_j]).dot(face_to_fluid_n);
-        p_dissipation += riemann_solver_.DissipativePJump(u_jump) * dW_ijV_j * face_to_fluid_n;
+        p_dissipation += riemann_solver_.DissipativePJump(index_i, index_j, u_jump) * dW_ijV_j * face_to_fluid_n;
     }
     drho_dt_[index_i] += density_change_rate * rho_[index_i];
     force_[index_i] += p_dissipation * Vol_[index_i];
 }
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 AcousticStep2ndHalf<Contact<RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    AcousticStep2ndHalf(Contact<Parameters...> &wall_contact_relation)
-    : BaseInteraction(wall_contact_relation), kernel_correction_(this->particles_)
+    AcousticStep2ndHalf(DynamicsIdentifier &identifier)
+    : BaseInteraction(identifier), kernel_correction_(this->particles_)
 {
     SourceFluidType &source_fluid =
         DynamicCast<SourceFluidType>(this, this->sph_body_->getMatterMaterial());
@@ -173,9 +176,9 @@ void AcousticStep2ndHalf<Contact<RiemannSolverType, KernelCorrectionType, Parame
         Real dW_ijV_j = this->dW_ij(index_i, index_j) * contact_Vol_[index_j];
         Vecd e_ij = this->e_ij(index_i, index_j);
 
-        Vecd vel_diff = (vel_[index_i] - riemann_solver_.AverageV(this->vel_[index_i], contact_vel_[index_j]));
+        Vecd vel_diff = (vel_[index_i] - riemann_solver_.AverageV(index_i, index_j, vel_[index_i], contact_vel_[index_j]));
         density_change_rate += 2.0 * vel_diff.dot(correction_(index_i) * e_ij) * dW_ijV_j;
-        p_dissipation += riemann_solver_.DissipativePJump((vel_[index_i] - contact_vel_[index_j]).dot(e_ij)) * dW_ijV_j * e_ij;
+        p_dissipation += riemann_solver_.DissipativePJump(index_i, index_j, (vel_[index_i] - contact_vel_[index_j]).dot(e_ij)) * dW_ijV_j * e_ij;
     }
     drho_dt_[index_i] += density_change_rate * rho_[index_i];
     force_[index_i] += p_dissipation * Vol_[index_i];

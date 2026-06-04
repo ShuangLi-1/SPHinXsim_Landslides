@@ -21,69 +21,61 @@
  *                                                                           *
  * ------------------------------------------------------------------------- */
 /**
- * @file repulsion_factor.h
- * @brief TBD.
- * @details TBD.
- * @author Xiangyu Hu
+ * @file 	stress_diffusion.h
+ * @brief 	Here, we define the ck_version for stress diffusion.
+ * @details Refer to Feng et al(2021).
+ * @author	Shuang Li, Xiangyu Hu and Shuaihao Zhang
  */
 
-#ifndef REPULSION_FACTOR_H
-#define REPULSION_FACTOR_H
+#ifndef STRESS_DIFFUSION_CK_H
+#define STRESS_DIFFUSION_CK_H
 
-#include "interaction_ck.hpp"
-
-#include <string>
-
+#include "base_continuum_dynamics.h"
+#include "constraint_dynamics.h"
+#include "continuum_integration_1st_ck.hpp"
+#include "fluid_integration.hpp"
+#include "general_continuum.hpp"
 namespace SPH
 {
-namespace solid_dynamics
+namespace continuum_dynamics
 {
-
 template <typename...>
-class RepulsionFactor;
+class StressDiffusionCK;
 
 template <typename... Parameters>
-class RepulsionFactor<Base, Contact<Parameters...>> : public Interaction<Contact<Parameters...>>
+class StressDiffusionCK<Inner<Parameters...>> : public PlasticAcousticStep<Interaction<Inner<Parameters...>>>
 {
-    using BaseInteractionType = Interaction<Contact<Parameters...>>;
+    using ConstituteKernel = typename PlasticContinuum::ConstituteKernel;
+    using BaseInteraction = PlasticAcousticStep<Interaction<Inner<Parameters...>>>;
 
   public:
     template <class DynamicsIdentifier>
-    explicit RepulsionFactor(DynamicsIdentifier &identifier, const std::string &factor_name);
-    virtual ~RepulsionFactor(){};
+    explicit StressDiffusionCK(DynamicsIdentifier &identifier);
+    virtual ~StressDiffusionCK(){};
 
-  protected:
-    DiscreteVariable<Real> *dv_repulsion_factor_;
-};
-
-template <typename... Parameters>
-class RepulsionFactor<Contact<Parameters...>>
-    : public RepulsionFactor<Base, Contact<Parameters...>>
-{
-    using BaseInteractionType = RepulsionFactor<Base, Contact<Parameters...>>;
-
-  public:
-    template <class DynamicsIdentifier>
-    explicit RepulsionFactor(DynamicsIdentifier &identifier);
-    virtual ~RepulsionFactor(){};
-
-    class InteractKernel : public BaseInteractionType::InteractKernel
+    class InteractKernel : public BaseInteraction::InteractKernel
     {
       public:
         template <class ExecutionPolicy, class EncloserType>
-        InteractKernel(const ExecutionPolicy &ex_policy, EncloserType &encloser, size_t contact_index);
+        InteractKernel(const ExecutionPolicy &ex_policy, EncloserType &encloser);
         void interact(size_t index_i, Real dt = 0.0);
 
       protected:
-        Real *repulsion_factor_;
-        Real contact_inv_rho0_;
-        Real *contact_mass_;
+        ConstituteKernel constitute_;
+        Real zeta_, phi_;
+        Real smoothing_length_, sound_speed_;
+        Real *mass_, *Vol_;
+        Vecd *pos_, *force_prior_;
+        Mat3d *stress_tensor_3D_, *stress_rate_3D_;
     };
 
   protected:
-    StdVec<Real> contact_inv_rho0_;
-    StdVec<DiscreteVariable<Real> *> dv_contact_mass_;
+    Real dv_zeta_ = 0.1, dv_phi_; /*diffusion coefficient*/
+    Real dv_smoothing_length_, dv_sound_speed_;
+    DiscreteVariable<Vecd> *dv_pos_;
 };
-} // namespace solid_dynamics
+
+using StressDiffusionInnerCK = StressDiffusionCK<Inner<>>;
+} // namespace continuum_dynamics
 } // namespace SPH
-#endif // REPULSION_FACTOR_H
+#endif // STRESS_DIFFUSION_CK_H

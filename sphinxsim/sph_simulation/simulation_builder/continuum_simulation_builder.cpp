@@ -32,22 +32,19 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_inner = sph_system.addInnerRelation(continuum_body);
     auto &continuum_solid_contact = sph_system.addContactRelation(continuum_body, solid_bodies);
     //----------------------------------------------------------------------
-    // Define particle methods and execution policies.
-    // Generally, the host methods should be able to run immediately.
+    // Define host particle methods and execution policies.
+    // Usually, these methods are used for initialization or
+    // post-processing, and they can run with host kernels.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
-    //    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
+    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
+    buildInitialConditionIfPresent(sim, host_methods, config);
     //----------------------------------------------------------------------
-    // Define the numerical methods used in the simulation.
+    // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
-    // Then the geometric models or simple objects without data dependencies,
-    // such as gravity, initialized normal direction.
-    // After that, the major physical particle dynamics model should be introduced.
-    // Finally, the auxiliary models such as time step estimator, initial condition,
-    // boundary condition and other constraints should be defined.
     //----------------------------------------------------------------------
+    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
     auto &continuum_update_configuration =
         main_methods.addParticleDynamicsGroup()
@@ -86,10 +83,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
     auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
     time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
-    //----------------------------------------------------------------------
-    // Define optional methods using hooking point in stage pipelines.
-    //----------------------------------------------------------------------
-    buildInitialConditionsIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------

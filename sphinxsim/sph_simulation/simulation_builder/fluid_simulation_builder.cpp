@@ -34,15 +34,19 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_inner = sph_system.addInnerRelation(fluid_body);
     auto &fluid_wall_contact = sph_system.addContactRelation(fluid_body, solid_bodies);
     //----------------------------------------------------------------------
-    // Define particle methods and execution policies.
+    // Define host particle methods and execution policies.
+    // Usually, these methods are used for initialization or
+    // post-processing, and they can run with host kernels.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
+    buildInitialConditionIfPresent(sim, host_methods, config);
     //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
+    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
     auto &fluid_configuration =
         main_methods.addParticleDynamicsGroup()
@@ -91,6 +95,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildBoundaryConditionsIfPresent(sim, main_methods, config);
+    buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
     //----------------------------------------------------------------------
@@ -134,6 +139,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             fluid_acoustic_step_1st_half.exec(dt);
             simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
             fluid_acoustic_step_2nd_half.exec(dt);
+            simulation_pipeline.run_hooks(SimulationHookPoint::CouplingSynchronization);
         });
 
     simulation_pipeline.main_steps.push_back( // advection or particle configuration step

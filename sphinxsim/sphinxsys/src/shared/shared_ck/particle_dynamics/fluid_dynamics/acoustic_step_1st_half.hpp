@@ -37,9 +37,10 @@ AcousticStep<BaseInteractionType>::AcousticStep(DynamicsIdentifier &identifier)
 }
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 AcousticStep1stHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    AcousticStep1stHalf(Inner<Parameters...> &inner_relation)
-    : AcousticStep<Interaction<Inner<Parameters...>>>(inner_relation),
+    AcousticStep1stHalf(DynamicsIdentifier &identifier)
+    : AcousticStep<Interaction<Inner<Parameters...>>>(identifier),
       kernel_correction_(this->particles_),
       fluid_(DynamicCast<FluidType>(this, this->sph_body_->getMatterMaterial())),
       riemann_solver_(this->fluid_, this->fluid_)
@@ -93,8 +94,12 @@ void AcousticStep1stHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType
         Real dW_ijV_j = this->dW_ij(index_i, index_j) * Vol_[index_j];
         Vecd e_ij = this->e_ij(index_i, index_j);
 
-        force -= (p_[index_i] * correction_(index_j) + p_[index_j] * correction_(index_i)) * dW_ijV_j * e_ij;
-        rho_dissipation += riemann_solver_.DissipativeUJump(p_[index_i] - p_[index_j]) * dW_ijV_j;
+        force -= riemann_solver_.AverageP(
+                     index_i, index_j,
+                     static_cast<CorrectionDataType>(correction_(index_j) * p_[index_i]),
+                     static_cast<CorrectionDataType>(correction_(index_i) * p_[index_j])) *
+                 2.0 * dW_ijV_j * e_ij;
+        rho_dissipation += riemann_solver_.DissipativeUJump(index_i, index_j, p_[index_i] - p_[index_j]) * dW_ijV_j;
     }
     force_[index_i] += force * Vol_[index_i];
     drho_dt_[index_i] = rho_dissipation * rho_[index_i];
@@ -117,9 +122,10 @@ void AcousticStep1stHalf<Inner<OneLevel, RiemannSolverType, KernelCorrectionType
 }
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 AcousticStep1stHalf<Contact<Wall, RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    AcousticStep1stHalf(Contact<Parameters...> &wall_contact_relation)
-    : BaseInteraction(wall_contact_relation), Interaction<Wall>(wall_contact_relation),
+    AcousticStep1stHalf(DynamicsIdentifier &identifier)
+    : BaseInteraction(identifier), Interaction<Wall>(identifier),
       kernel_correction_(this->particles_),
       fluid_(DynamicCast<FluidType>(this, this->sph_body_->getMatterMaterial())),
       riemann_solver_(this->fluid_, this->fluid_) {}
@@ -158,16 +164,17 @@ void AcousticStep1stHalf<Contact<Wall, RiemannSolverType, KernelCorrectionType, 
         Real face_wall_external_acceleration = (force_prior_[index_i] / mass_[index_i] - wall_acc_ave_[index_j]).dot(-e_ij);
         Real p_j_in_wall = p_[index_i] + rho_[index_i] * r_ij * SMAX(Real(0), face_wall_external_acceleration);
         force -= (p_[index_i] + p_j_in_wall) * correction_(index_i) * dW_ijV_j * e_ij;
-        rho_dissipation += riemann_solver_.DissipativeUJump(p_[index_i] - p_j_in_wall) * dW_ijV_j;
+        rho_dissipation += riemann_solver_.DissipativeUJump(index_i, index_j, p_[index_i] - p_j_in_wall) * dW_ijV_j;
     }
     force_[index_i] += force * Vol_[index_i];
     drho_dt_[index_i] += rho_dissipation * rho_[index_i];
 }
 //=================================================================================================//
 template <class RiemannSolverType, class KernelCorrectionType, typename... Parameters>
+template <class DynamicsIdentifier>
 AcousticStep1stHalf<Contact<RiemannSolverType, KernelCorrectionType, Parameters...>>::
-    AcousticStep1stHalf(Contact<Parameters...> &contact_relation)
-    : BaseInteraction(contact_relation), kernel_correction_(this->particles_)
+    AcousticStep1stHalf(DynamicsIdentifier &identifier)
+    : BaseInteraction(identifier), kernel_correction_(this->particles_)
 {
     SourceFluidType &source_fluid =
         DynamicCast<SourceFluidType>(this, this->sph_body_->getMatterMaterial());
@@ -212,10 +219,11 @@ void AcousticStep1stHalf<Contact<RiemannSolverType, KernelCorrectionType, Parame
         Vecd e_ij = this->e_ij(index_i, index_j);
 
         force -= riemann_solver_.AverageP(
+                     index_i, index_j,
                      static_cast<CorrectionDataType>(contact_correction_(index_j) * p_[index_i]),
                      static_cast<CorrectionDataType>(correction_(index_i) * contact_p_[index_j])) *
                  2.0 * dW_ijV_j * e_ij;
-        rho_dissipation += riemann_solver_.DissipativeUJump(p_[index_i] - contact_p_[index_j]) * dW_ijV_j;
+        rho_dissipation += riemann_solver_.DissipativeUJump(index_i, index_j, p_[index_i] - contact_p_[index_j]) * dW_ijV_j;
     }
     force_[index_i] += force * Vol_[index_i];
     drho_dt_[index_i] += rho_dissipation * rho_[index_i];
