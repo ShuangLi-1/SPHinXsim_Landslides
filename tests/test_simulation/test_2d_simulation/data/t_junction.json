@@ -1,0 +1,199 @@
+{
+  "characteristic_dimensions": [
+    {
+      "value": 0.05,
+      "name": "Length",
+      "hint": "geometries.oriented_boxes[name=Outlet].radius"
+    },
+    {
+      "value": 1.0,
+      "name": "Pressure",
+      "hint": "fluid_boundary_conditions[oriented_box=UpperInlet].pressure"
+    },
+    {
+      "value": 1.0,
+      "name": "Density",
+      "hint": "fluid_bodies[name=WaterBody].material.density"
+    }
+  ],
+
+  "simulation_type": "fluid_dynamics",
+
+  "geometries": {
+    "global_resolution": { "characteristic_length_particles": 15 },
+    "shapes": [
+      {
+        "name": "WaterBody",
+        "type": "multipolygon",
+        "polygons": [
+          {
+            "operation": "union",
+            "type": "box",
+            "half_size": [0.08, 0.05],
+            "transform": {
+              "translation": [0.08, 0.0],
+              "rotation_angle": 0.0
+            }
+          },
+          {
+            "operation": "union",
+            "type": "box",
+            "half_size": [0.025, 0.15],
+            "transform": {
+              "translation": [0.175, 0.0],
+              "rotation_angle": 0.0
+            }
+          }
+        ]
+      },
+      {
+        "name": "WallBoundary",
+        "type": "multipolygon",
+        "polygons": [
+          {
+            "operation": "union",
+            "type": "box",
+            "half_size": [0.125, 0.15],
+            "transform": {
+              "translation": [0.125, 0.0],
+              "rotation_angle": 0.0
+            }
+          },
+          {
+            "operation": "subtraction",
+            "type": "box",
+            "half_size": [0.1, 0.05],
+            "transform": {
+              "translation": [0.08, 0.0],
+              "rotation_angle": 0.0
+            }
+          },
+          {
+            "operation": "subtraction",
+            "type": "box",
+            "half_size": [0.025, 0.17],
+            "transform": {
+              "translation": [0.175, 0.0],
+              "rotation_angle": 0.0
+            }
+          }
+        ]
+      }
+    ],
+    "oriented_boxes": [
+      {
+        "name": "Outlet",
+        "type": "in_outlet",
+        "center": [0.0, 0.0],
+        "normal": [1.0, 0.0],
+        "radius": 0.05
+      },
+      {
+        "name": "UpperInlet",
+        "type": "in_outlet",
+        "center": [0.175, 0.15],
+        "normal": [0.0, -1.0],
+        "radius": 0.025
+      },
+      {
+        "name": "LowerInlet",
+        "type": "in_outlet",
+        "center": [0.175, -0.15],
+        "normal": [0.0, 1.0],
+        "radius": 0.025
+      }
+    ]
+  },
+
+  "particle_generation": {
+    "build_and_run": true,
+    "settings": {
+      "bodies": [
+        {
+          "name": "WaterBody"
+        },
+        {
+          "name": "WallBoundary",
+          "solid_body": {}
+        }
+      ],
+      "relaxation_parameters": {
+        "total_iterations": 1000
+      }
+    }
+  },
+
+  "fluid_bodies": [
+    {
+      "name": "WaterBody",
+      "material": {
+        "type": "weakly_compressible_fluid",
+        "density": 1.0,
+        "viscosity": {
+          "Reynolds_number": 50.0
+        },
+        "thermal_properties": {
+          "thermal_conductivity": 1.0e-2,
+          "volumetric_heat_capacity": 1.0
+        }
+      },
+      "particle_reserve_factor": 0.2
+    }
+  ],
+
+  "solid_bodies": [
+    {
+      "name": "WallBoundary",
+      "material": {
+        "type": "rigid_body",
+        "thermal_properties": {
+          "thermal_boundary": "Dirichlet"
+        }
+      }
+    }
+  ],
+
+  "fluid_boundary_conditions": [
+    {
+      "body_name": "WaterBody",
+      "oriented_box": "UpperInlet",
+      "type": "bi_directional",
+      "pressure": 1.0
+    },
+    {
+      "body_name": "WaterBody",
+      "oriented_box": "LowerInlet",
+      "type": "bi_directional",
+      "pressure": 1.0
+    },
+    {
+      "body_name": "WaterBody",
+      "oriented_box": "Outlet",
+      "type": "bi_directional",
+      "pressure": 0.0
+    }
+  ],
+
+  "extra_state_recording": [
+    {
+      "name": "WaterBody",
+      "variables": [{ "real_type": ["Density"], "int_type": ["BufferIndicator", "Indicator"] }]
+    },
+    {
+      "name": "WallBoundary",
+      "variables": [{ "vector_type": ["NormalDirection"] }]
+    }
+  ],
+
+  "solver_parameters": {
+    "end_time": 10.0,
+    "output_interval": 0.1,
+    "screen_interval": 100,
+    "fluid_dynamics": {
+      "acoustic_cfl": 0.6,
+      "advection_cfl": 0.25,
+      "surface_type": "open_boundary",
+      "particle_sort_frequency": 100
+    }
+  }
+}

@@ -101,6 +101,14 @@ MultiPolygon GeometryBuilder::parseMultiPolygon(const ScalingConfig &scaling_con
         return multi_polygon;
     }
 
+    if (polygon_type == "box")
+    {
+        Transform transform = scaling_config.jsonToTransform(config.at("transform"));
+        Vecd half_size = scaling_config.jsonToVecd(config.at("half_size"), "Length");
+        multi_polygon.addBox(transform, half_size, GeometricOps::add);
+        return multi_polygon;
+    }
+
     if (polygon_type == "container_box")
     {
         BoundingBoxd inner_box(
