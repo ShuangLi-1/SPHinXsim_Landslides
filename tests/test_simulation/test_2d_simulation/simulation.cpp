@@ -8,7 +8,7 @@
  */
 #include "sph_simulation.h"
 #include <gtest/gtest.h>
-/*
+
 TEST(simulations, dambreak)
 {
     SPH::SPHSimulation sim("./input/dambreak.json");
@@ -41,7 +41,7 @@ TEST(simulations, milling)
     sim.initializeSimulation();
     sim.run();
 }
-*/
+
 TEST(simulations, heat_transfer)
 {
     SPH::SPHSimulation sim("./input/heat_transfer.json");
