@@ -43,6 +43,7 @@ Alternatively, you can use direct commands for non-interactive workflows:
 - `sphinxsim explore` — Ask schema and functionality questions
 - `sphinxsim validate` — Check config validity
 - `sphinxsim run` — Execute a validated simulation
+- `sphinxsim preview` — Render an interactive geometry/BC preview before running
 
 The shell also includes geometry lock controls (`lock-geometry`, `unlock-geometry`, `lock-status`) for safer staged geometry tuning.
 

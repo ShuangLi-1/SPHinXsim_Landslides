@@ -51,11 +51,26 @@ git clone https://github.com/microsoft/vcpkg.git ..\vcpkg
 
 ## Configure and Build
 
+For a pip-first workflow, install directly from source (this builds C++ extensions via CMake):
+
+```powershell
+$env:CMAKE_ARGS='-D CMAKE_TOOLCHAIN_FILE="' + "$pwd\..\vcpkg\scripts\buildsystems\vcpkg.cmake" + '" -D CMAKE_C_COMPILER=cl -D CMAKE_CXX_COMPILER=cl'
+python -m pip install -e ".[dev,visualization]"
+```
+
+Optional manual CMake workflow:
+
 ```powershell
 cmake --preset integrated-build-release-windows `
   -D CMAKE_TOOLCHAIN_FILE="$pwd\..\vcpkg\scripts\buildsystems\vcpkg.cmake" `
   -D Python3_EXECUTABLE="$(python -c "import sys; print(sys.executable)")"
 cmake --build --preset integrated-build-release-windows --parallel
+```
+
+Install compiled C++ extension modules into the active Python environment (manual workflow only):
+
+```powershell
+cmake --install build-integrated --prefix "$(python -c "import sys; print(sys.prefix)")"
 ```
 
 ## Run Tests
@@ -66,10 +81,22 @@ Install Python package with dev dependencies:
 python -m pip install -e ".[dev]"
 ```
 
+To enable geometry preview (`sphinxsim preview`), also install:
+
+```powershell
+python -m pip install -e ".[visualization]"
+```
+
 Run Python tests:
 
 ```powershell
 python -m pytest tests/ examples/ -v
+```
+
+Verify extension import explicitly:
+
+```powershell
+python -c "from sphinxsim.bindings.loader import load_sphinxsys_core; print(load_sphinxsys_core().__name__)"
 ```
 
 Run C++ simulation tests:

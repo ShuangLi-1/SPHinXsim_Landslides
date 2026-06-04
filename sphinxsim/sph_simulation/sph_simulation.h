@@ -36,6 +36,10 @@
 #include "sphinxsys.h"
 
 #include <filesystem>
+#include <map>
+#include <string>
+#include <utility>
+#include <vector>
 namespace fs = std::filesystem;
 
 namespace SPH
@@ -58,6 +62,7 @@ class SPHSimulation
     bool hasBuiltGeometries() const;
     bool hasGeneratedParticles() const;
     void rerunParticleRelaxation();
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> getShapeBounds();
     void buildSimulation();
     void initializeSimulation();
     void run();

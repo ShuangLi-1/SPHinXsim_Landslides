@@ -33,48 +33,37 @@ endif()
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
 find_package(VTK REQUIRED COMPONENTS CommonCore CommonDataModel IOXML)
-find_package(nlohmann_json CONFIG REQUIRED)
-
-# Install bindings into Python's import path by default.
-# Keep destination prefix-relative so `cmake --install --prefix ...` works.
-execute_process(
-    COMMAND "${Python3_EXECUTABLE}" -c
-            "import os, sys, sysconfig; p=sysconfig.get_path('platlib') or ''; b=sys.prefix or ''; print(os.path.relpath(p, b) if p.startswith(b) else p.lstrip('/'))"
-    OUTPUT_VARIABLE _SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-)
-if(NOT _SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR)
-    set(_SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR ".")
-endif()
-set(SPHINXSIM_PYTHON_INSTALL_DIR "${_SPHINXSIM_DEFAULT_PYTHON_INSTALL_DIR}"
-    CACHE PATH "Install destination for Python extension modules")
-if(IS_ABSOLUTE "${SPHINXSIM_PYTHON_INSTALL_DIR}")
-    execute_process(
-        COMMAND "${Python3_EXECUTABLE}" -c
-                "import os, sys; p=os.path.abspath(r'''${SPHINXSIM_PYTHON_INSTALL_DIR}'''); b=sys.prefix or ''; print(os.path.relpath(p, b) if p.startswith(b) else p.lstrip('/'))"
-        OUTPUT_VARIABLE _SPHINXSIM_NORMALIZED_PYTHON_INSTALL_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+find_package(nlohmann_json CONFIG QUIET)
+if(NOT nlohmann_json_FOUND)
+    include(FetchContent)
+    FetchContent_Declare(
+        nlohmann_json
+        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
     )
-    if(_SPHINXSIM_NORMALIZED_PYTHON_INSTALL_DIR)
-        set(SPHINXSIM_PYTHON_INSTALL_DIR "${_SPHINXSIM_NORMALIZED_PYTHON_INSTALL_DIR}"
-            CACHE PATH "Install destination for Python extension modules" FORCE)
-    endif()
+    FetchContent_MakeAvailable(nlohmann_json)
 endif()
 
-if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
-    set(_SPHINXSIM_VCPKG_GTEST_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/gtest")
-    if(EXISTS "${_SPHINXSIM_VCPKG_GTEST_DIR}/GTestConfig.cmake")
-        set(GTest_DIR "${_SPHINXSIM_VCPKG_GTEST_DIR}" CACHE PATH "Path to GTestConfig.cmake" FORCE)
-        find_package(GTest CONFIG REQUIRED
-            PATHS "${_SPHINXSIM_VCPKG_GTEST_DIR}"
-            NO_DEFAULT_PATH)
+# Install extension modules into the package so wheel installers place them
+# directly under site-packages/sphinxsim/bindings/native.
+set(SPHINXSIM_PYTHON_INSTALL_DIR "sphinxsim/bindings/native"
+    CACHE PATH "Install destination for Python extension modules")
+
+if(SPHINXSIM_BUILD_SIMULATION_TESTS)
+    if(DEFINED VCPKG_INSTALLED_DIR AND DEFINED VCPKG_TARGET_TRIPLET)
+        set(_SPHINXSIM_VCPKG_GTEST_DIR "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}/share/gtest")
+        if(EXISTS "${_SPHINXSIM_VCPKG_GTEST_DIR}/GTestConfig.cmake")
+            set(GTest_DIR "${_SPHINXSIM_VCPKG_GTEST_DIR}" CACHE PATH "Path to GTestConfig.cmake" FORCE)
+            find_package(GTest CONFIG REQUIRED
+                PATHS "${_SPHINXSIM_VCPKG_GTEST_DIR}"
+                NO_DEFAULT_PATH)
+        else()
+            find_package(GTest CONFIG REQUIRED)
+        endif()
     else()
         find_package(GTest CONFIG REQUIRED)
     endif()
-else()
-    find_package(GTest CONFIG REQUIRED)
+    include(GoogleTest)
 endif()
-include(GoogleTest)
 
 # Set SPHinXsys options to minimal for Python binding
 set(SPHINXSYS_BUILD_TESTS OFF CACHE BOOL "Don't build tests")

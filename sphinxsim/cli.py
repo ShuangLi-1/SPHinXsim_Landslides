@@ -17,9 +17,14 @@ Run a simulation from a JSON config file::
 
 from __future__ import annotations
 
+import argparse
+import json
 import os
+import shlex
 import sys
 import tempfile
+from pathlib import Path
+from typing import Tuple
 
 # Set up sys.path FIRST, before any sphinxsim imports
 def _find_project_root(start=None):
@@ -35,17 +40,10 @@ PROJECT_ROOT = _find_project_root()
 sys.path.insert(0, PROJECT_ROOT)
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "build-integrated"))
 sys.path.insert(0, os.path.join(PROJECT_ROOT, "sphinxsim", "bindings", "native"))
-original_dir = os.getcwd()
-
-# NOW import everything else
-import argparse
-import json
-import shlex
-from pathlib import Path
-from typing import Tuple
 
 from pydantic import ValidationError
 
+from sphinxsim.bindings.loader import load_sphinxsys_core
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch, apply_update_patch
 from sphinxsim.llm import get_llm
@@ -66,9 +64,12 @@ def _load_config(path: Path) -> Tuple[SimulationConfig | None, int]:
     Returns ``(config, 0)`` on success or ``(None, 1)`` after printing an
     error message to stderr.
     """
-    # If path is relative, resolve it under.build-temp directory
+    # Prefer user-provided relative paths from the current working directory.
+    # Fall back to .build-temp for backward compatibility with existing workflows.
     if not path.is_absolute():
-        path = PROJECT_ROOT / ".build-temp" / path
+        cwd_path = Path.cwd() / path
+        build_temp_path = PROJECT_ROOT / ".build-temp" / path
+        path = cwd_path if cwd_path.exists() else build_temp_path
     
     if not path.exists():
         print(f"File not found: {path}", file=sys.stderr)
@@ -100,7 +101,7 @@ def cmd_generate(args: argparse.Namespace) -> int:
 
     output = config.model_dump_json(indent=2, exclude_none=True)
     if args.output:
-        output_path = PROJECT_ROOT / ".build-temp" / args.output
+        output_path = Path(args.output)
         try:
             if output_path.parent and not output_path.parent.exists():
                 output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -192,8 +193,6 @@ def cmd_update(args: argparse.Namespace) -> int:
         return 1
 
     output_path = Path(args.output) if args.output else config_path
-    if not output_path.is_absolute():
-        output_path = PROJECT_ROOT / ".build-temp" / output_path
 
     output = updated_config.model_dump_json(indent=2, exclude_none=True)
     try:
@@ -270,7 +269,7 @@ def cmd_run(args: argparse.Namespace) -> int:
     assert config is not None
 
     try:
-        import _sphinxsys_core_2d as sph
+        sph = load_sphinxsys_core()
     except ImportError:
         print("❌ C++ extension not available", file=sys.stderr)
         print("\n🔧 Please build the C++ extension:", file=sys.stderr)
@@ -283,6 +282,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         config_path = PROJECT_ROOT / ".build-temp" / config_path
 
     # Write the Pydantic-validated config to a temp file before passing to C++.
+    validated_config_path: str | None = None
     tmp_cfg = tempfile.NamedTemporaryFile(
         mode="w", suffix=".json", delete=False, prefix="sphinxsim_run_"
     )
@@ -363,12 +363,74 @@ def cmd_run(args: argparse.Namespace) -> int:
         return 1
 
     finally:
-        # Always clean up the validated temp config and restore original directory.
-        try:
-            os.unlink(validated_config_path)
-        except OSError:
-            pass
-        os.chdir(original_dir)
+        # Always clean up the validated temp config.
+        if validated_config_path:
+            try:
+                os.unlink(validated_config_path)
+            except OSError:
+                pass
+
+
+def cmd_preview(args: argparse.Namespace) -> int:
+    """Render an interactive geometry/BC preview of a JSON config file."""
+    try:
+        import pyvista  # noqa: F401
+    except ImportError:
+        print(
+            "❌ PyVista is not installed.\n"
+            "   Install it with:  pip install sphinxsim[visualization]",
+            file=sys.stderr,
+        )
+        return 1
+
+    config_path = Path(args.config_file)
+    config, rc = _load_config(config_path)
+    if rc != 0:
+        return rc
+    assert config is not None
+
+    resolved_config_path = config_path
+    if not resolved_config_path.is_absolute():
+        cwd_path = Path.cwd() / resolved_config_path
+        build_temp_path = PROJECT_ROOT / ".build-temp" / resolved_config_path
+        resolved_config_path = cwd_path if cwd_path.exists() else build_temp_path
+
+    from sphinxsim.visualization.preview import ConfigVisualizer
+
+    use_cpp = not getattr(args, "no_cpp", False)
+    off_screen = getattr(args, "off_screen", False)
+
+    print(f"🖼  Building configuration preview for: {resolved_config_path}")
+    if use_cpp:
+        print("   Attempting C++ geometry build for accurate VTP meshes...")
+    else:
+        print("   Skipping C++ geometry build (--no-cpp).")
+
+    visualizer = ConfigVisualizer(
+        config,
+        PROJECT_ROOT,
+        config_path=resolved_config_path,
+        off_screen=off_screen,
+    )
+    try:
+        visualizer.preview(use_cpp=use_cpp)
+        if use_cpp:
+            if visualizer.used_cpp_geometry:
+                print("✅ Preview used C++ geometry (VTP meshes).")
+            else:
+                print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
+        else:
+            print("ℹ️ Preview rendered without C++ geometry (--no-cpp).")
+    except ImportError as exc:
+        print(f"❌ {exc}", file=sys.stderr)
+        return 1
+    except Exception as exc:
+        print(f"❌ Preview failed: {exc}", file=sys.stderr)
+        import traceback
+        traceback.print_exc()
+        return 1
+
+    return 0
 
 
 def _schema_explore_context() -> str:
@@ -416,9 +478,14 @@ def cmd_explore(args: argparse.Namespace) -> int:
 
 def _shell_resolve_config_path(config_file: str) -> Path:
     path = Path(config_file)
-    if not path.is_absolute():
-        path = PROJECT_ROOT / ".build-temp" / path
-    return path
+    if path.is_absolute():
+        return path
+
+    # In shell mode, prefer paths relative to the current working directory.
+    # Keep .build-temp fallback for existing workflows and tests.
+    cwd_path = Path.cwd() / path
+    build_temp_path = PROJECT_ROOT / ".build-temp" / path
+    return cwd_path if cwd_path.exists() else build_temp_path
 
 
 def _shell_auto_validate(config_path: Path) -> bool:
@@ -445,9 +512,9 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print(
         "Commands: load FILE, generate DESCRIPTION FILE, "
         "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+        "validate, run, preview [--no-cpp], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
-    print("Note: relative paths are resolved under .build-temp/")
+    print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
     config_path: Path | None = None
     geometry_locked = False
@@ -483,6 +550,8 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("                                 - Patch update with non-strict behavior")
             print("  explore QUESTION                - Ask about schema")
             print("  validate                        - Reload and validate config from disk")
+            print("  preview                         - Render geometry/BC preview (requires pyvista)")
+            print("  preview --no-cpp                - Preview without C++ geometry build")
             print("  run                             - Run simulation from loaded config")
             print("  lock-geometry                   - Manually lock geometry updates")
             print("  unlock-geometry                 - Unlock geometry updates")
@@ -624,12 +693,26 @@ def cmd_shell(args: argparse.Namespace) -> int:
             _ = cmd_validate(argparse.Namespace(config_file=str(config_path)))
             continue
 
+        if cmd == "preview":
+            if config_path is None:
+                print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
+                continue
+            no_cpp = "--no-cpp" in parts
+            _ = cmd_preview(
+                argparse.Namespace(
+                    config_file=str(config_path),
+                    no_cpp=no_cpp,
+                    off_screen=False,
+                )
+            )
+            continue
+
         if cmd == "run":
             if config_path is None:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
             try:
-                import _sphinxsys_core_2d as sph
+                sph = load_sphinxsys_core()
 
                 shell_sim = sph.SPHSimulation(str(config_path))
                 output_dir = PROJECT_ROOT / ".build-temp" / "test_simulation"
@@ -768,6 +851,29 @@ def _build_parser() -> argparse.ArgumentParser:
     run = subparsers.add_parser("run", help="Run a simulation from a JSON config file.")
     run.add_argument("config_file", nargs='?', default="config.json", help="Path to JSON config file.")
     run.set_defaults(func=cmd_run)
+
+    # preview
+    prev = subparsers.add_parser(
+        "preview",
+        help="Render an interactive geometry/BC preview of a JSON config file.",
+    )
+    prev.add_argument(
+        "config_file",
+        nargs="?",
+        default="config.json",
+        help="Path to JSON config file.",
+    )
+    prev.add_argument(
+        "--no-cpp",
+        action="store_true",
+        help="Skip C++ geometry build (no shapes rendered without C++).",
+    )
+    prev.add_argument(
+        "--off-screen",
+        action="store_true",
+        help="Render off-screen (no window). Useful for automated testing.",
+    )
+    prev.set_defaults(func=cmd_preview)
 
     # explore
     exp = subparsers.add_parser(

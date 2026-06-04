@@ -1,6 +1,6 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core>=0.10", "pybind11>=2.10"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "sphinxsim"
@@ -18,14 +18,19 @@ dependencies = [
 dev = [
     "pytest>=7.0",
 ]
+visualization = [
+    "pyvista>=0.43",
+]
 
 [project.scripts]
 sphinxsim = "sphinxsim.cli:main"
 
-[tool.setuptools.packages.find]
-where = ["."]
-include = ["sphinxsim*"]
-exclude = ["sphinxsim.sphinxsys*"]
+[tool.scikit-build]
+cmake.version = ">=3.16"
+wheel.packages = ["sphinxsim"]
+
+[tool.scikit-build.cmake.define]
+SPHINXSIM_BUILD_SIMULATION_TESTS = "OFF"
 
 [tool.pytest.ini_options]
 cache_dir = ".build-temp/.pytest_cache"

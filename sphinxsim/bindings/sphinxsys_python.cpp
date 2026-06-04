@@ -51,6 +51,8 @@ PYBIND11_MODULE(MODULE_NAME, m)
              "Return whether particles have been generated in this simulator instance")
         .def("rerunParticleRelaxation", &SPHSimulation::rerunParticleRelaxation,
              "Rerun particle relaxation workflow")
+        .def("getShapeBounds", &SPHSimulation::getShapeBounds,
+             "Return dict of shape_name -> (lower_bound, upper_bound) after buildGeometries()")
         .def("buildSimulation", &SPHSimulation::buildSimulation,
              "Build simulation (relations, dynamics, etc.) from JSON configuration")
         .def("initializeSimulation", &SPHSimulation::initializeSimulation,

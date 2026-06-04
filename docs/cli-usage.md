@@ -76,6 +76,8 @@ Inside the shell, you can use the following commands:
 | `update --patch-mode --strict false "instruction"` | Use non-strict patch apply behavior |
 | `explore "question"` | Ask the configured LLM questions about the simulator schema and capabilities |
 | `validate` | Reload the loaded file from disk and validate it |
+| `preview` | Render an interactive geometry/BC preview of the loaded config |
+| `preview --no-cpp` | Preview using schema bounding-box fallback only (no C++ build) |
 | `run` | Build and execute the loaded config |
 | `lock-geometry` | Lock geometry updates for the active shell session |
 | `unlock-geometry` | Unlock geometry updates (and reset downstream simulator state when attached) |
@@ -85,7 +87,7 @@ Inside the shell, you can use the following commands:
 
 Notes:
 - `sphinxsim shell` starts with no file loaded.
-- Relative file paths inside the shell resolve under `.build-temp/`.
+- Relative file paths inside the shell resolve from the current directory first, then fall back to `.build-temp/`.
 - `validate` always reloads from disk, so external edits are picked up immediately.
 
 ## Geometry lock behavior
@@ -176,6 +178,34 @@ This:
 3. Runs the simulation
 4. Saves output to `build-integrated/output`
 
+### Preview
+
+Render an interactive 3-D geometry/BC preview before running the solver:
+
+```bash
+sphinxsim preview config.json
+```
+
+This:
+1. Validates the config
+2. Attempts to invoke `buildGeometries()` from the C++ extension to produce accurate VTP meshes
+3. Opens an interactive PyVista window with colour-coded bodies, oriented boxes, and annotations
+
+Options:
+
+| Flag | Description |
+| --- | --- |
+| `--no-cpp` | Skip C++ geometry build; render only the system domain bounding box and annotations |
+| `--off-screen` | Render off-screen (no window) — useful for automated testing |
+
+Requires the optional `[visualization]` extra:
+
+```bash
+pip install sphinxsim[visualization]
+```
+
+See [Visualization](visualization.md) for full details.
+
 ## Workflow examples
 
 ### Example 1: Quick iteration with the shell
@@ -224,7 +254,19 @@ for desc in "water dam break" "sloshing tank" "wave propagation"; do
 done
 ```
 
-### Example 5: Geometry edit safety loop in shell
+### Example 5: Preview before running
+
+```bash
+sphinxsim shell
+> generate "2D heat transfer in a channel" config.json
+> validate
+> preview                   # inspect geometry and BCs interactively
+> preview --no-cpp          # quick bounding-box fallback if C++ not built
+> run
+> exit
+```
+
+### Example 6: Geometry edit safety loop in shell
 
 ```bash
 sphinxsim shell
@@ -277,7 +319,8 @@ sphinxsim generate "water dam break"
 ## Output locations
 
 - **Generated configs**: Printed to stdout unless `--output` is provided
-- **Shell-generated configs**: Saved to the FILE argument used by `generate "..." FILE` (resolved under `.build-temp/` when relative)
+- **Generated configs with `--output`**: Written to the exact path you provide (relative to your current directory)
+- **Shell-generated configs**: Saved to the FILE argument used by `generate "..." FILE` (resolved from current directory first, then `.build-temp/`)
 - **Explore answers**: Printed to stdout; no files are written
 - **Simulation output**: Saved under `.build-temp/test_simulation/` (runtime output root)
 - **Temporary files**: Stored in `.build-temp/`
@@ -293,5 +336,6 @@ If config generation or validation fails:
 
 ## See also
 
+- [Visualization](visualization.md) for the pre-run geometry/BC preview
 - [LLM Testing](llm-testing.md) for local testing with mock and Ollama
 - [Schema reference](index.md#current-capabilities) for supported simulation types and materials
