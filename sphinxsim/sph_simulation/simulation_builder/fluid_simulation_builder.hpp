@@ -10,13 +10,67 @@
 namespace SPH
 {
 //=================================================================================================//
+using namespace fluid_dynamics;
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+BaseDynamics<void> &FluidSimulationBuilder::addAcousticStep1stHalf(
+    EntityManager &config_manager, MethodContainerType &main_methods,
+    InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact)
+{
+    std::string body_name = inner_relation.getSPHBody().Name();
+    if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
+    {
+        using RiemannSolverType = RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
+        return main_methods.template addInteractionDynamicsOneLevel<
+                               AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
+    }
+
+    if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
+    {
+        using RiemannSolverType = RiemannSolver<WeaklyCompressibleMixture, WeaklyCompressibleMixture, TruncatedLinear>;
+        return main_methods.template addInteractionDynamicsOneLevel<
+                               AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
+    }
+
+    throw std::runtime_error(
+        "FluidSimulationBuilder::addAcousticStep1stHalf: no supported fluid type found!");
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+BaseDynamics<void> &FluidSimulationBuilder::addAcousticStep2ndHalf(
+    EntityManager &config_manager, MethodContainerType &main_methods,
+    InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact)
+{
+    std::string body_name = inner_relation.getSPHBody().Name();
+    if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
+    {
+        using RiemannSolverType = RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
+        return main_methods.template addInteractionDynamicsOneLevel<
+                               AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
+    }
+
+    if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
+    {
+        using RiemannSolverType = RiemannSolver<WeaklyCompressibleMixture, WeaklyCompressibleMixture, TruncatedLinear>;
+        return main_methods.template addInteractionDynamicsOneLevel<
+                               AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
+    }
+
+    throw std::runtime_error(
+        "FluidSimulationBuilder::addAcousticStep2ndHalf: no supported fluid type found!");
+}
+//=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidSimulationBuilder::addDensitySummationAndRegularization(
     EntityManager &config_manager, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     auto &fluid_density_regularization =
-        main_methods.template addInteractionDynamics<fluid_dynamics::DensitySummationCK>(inner_relation)
+        main_methods.template addInteractionDynamics<DensitySummationCK>(inner_relation)
             .addPostContactInteraction(contact_relation);
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
@@ -24,22 +78,21 @@ BaseDynamics<void> &FluidSimulationBuilder::addDensitySummationAndRegularization
     if (fluid_solver_config.surface_type_ == "confined")
     {
         fluid_density_regularization.template addPostStateDynamics<
-            fluid_dynamics::DensityRegularization, Internal>(inner_relation.getSPHBody());
+            DensityRegularization, Internal>(inner_relation.getSPHBody());
         return fluid_density_regularization;
     }
 
     if (fluid_solver_config.surface_type_ == "free_surface")
     {
         fluid_density_regularization.template addPostStateDynamics<
-            fluid_dynamics::DensityRegularization, FreeSurface>(inner_relation.getSPHBody());
+            DensityRegularization, FreeSurface>(inner_relation.getSPHBody());
         return fluid_density_regularization;
     }
 
     if (fluid_solver_config.surface_type_ == "open_boundary")
     {
         fluid_density_regularization.template addPostStateDynamics<
-            fluid_dynamics::DensityRegularization, Internal, ExcludeBufferParticles>(
-            inner_relation.getSPHBody());
+            DensityRegularization, Internal, ExcludeBufferParticles>(inner_relation.getSPHBody());
         return fluid_density_regularization;
     }
 
@@ -85,14 +138,14 @@ void FluidSimulationBuilder::addTransportVelocityCorrection(
     if (fluid_solver_config.surface_type_ == "confined")
     {
         kernel_gradient_integral.template addPostStateDynamics<
-            fluid_dynamics::TransportVelocityCorrectionCK, TruncatedLinear>(sph_body);
+            TransportVelocityCorrectionCK, TruncatedLinear>(sph_body);
         return;
     }
 
     if (fluid_solver_config.surface_type_ == "open_boundary")
     {
         kernel_gradient_integral.template addPostStateDynamics<
-            fluid_dynamics::TransportVelocityCorrectionCK, TruncatedLinear, BulkParticles>(sph_body);
+            TransportVelocityCorrectionCK, TruncatedLinear, BulkParticles>(sph_body);
         return;
     }
     throw std::runtime_error(
@@ -110,7 +163,7 @@ void FluidSimulationBuilder::buildViscousForceIfPresent(
     {
         auto &viscous_force =
             main_methods.template addInteractionDynamicsWithUpdate<
-                            fluid_dynamics::ViscousForceCK, Viscosity, NoKernelCorrectionCK>(inner_relation)
+                            ViscousForceCK, Viscosity, NoKernelCorrectionCK>(inner_relation)
                 .template addPostContactInteraction<Wall, Viscosity, NoKernelCorrectionCK>(contact_relation);
 
         auto &initialization_pipeline = sim.getInitializationPipeline();
@@ -159,10 +212,10 @@ void FluidSimulationBuilder::addBoundaryCondition(
     { // must be aligned box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
         auto &inflow_condition = main_methods.template addStateDynamics<
-            fluid_dynamics::EmitterInflowConditionCK, ConstantInflowSpeed>(
+            EmitterInflowConditionCK, ConstantInflowSpeed>(
             emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
         auto &injection = main_methods.template addStateDynamics<
-            fluid_dynamics::EmitterInflowInjectionCK>(emitter);
+            EmitterInflowInjectionCK>(emitter);
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
@@ -219,7 +272,7 @@ void FluidSimulationBuilder::buildParticleDeletionIfPresent(
     if (fluid_solver_config.particle_deletion_)
     {
         auto &particle_deletion = main_methods.template addStateDynamics<
-            fluid_dynamics::OutflowParticleDeletion>(real_body);
+            OutflowParticleDeletion>(real_body);
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleDeletion, [&]()
@@ -228,7 +281,7 @@ void FluidSimulationBuilder::buildParticleDeletionIfPresent(
 }
 //=================================================================================================//
 template <class MethodContainerType>
-fluid_dynamics::AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiDirectionBoundary(
+AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiDirectionBoundary(
     OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
     MethodContainerType &main_methods, const json &config)
 {
@@ -236,7 +289,7 @@ fluid_dynamics::AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiD
     if (config.contains("pressure"))
     {
         auto &bi_directional_bd = main_methods.template addGeneralDynamics<
-            fluid_dynamics::BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<>>(
+            BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<>>(
             oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
         return bi_directional_bd;
     }
@@ -256,7 +309,7 @@ void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
     {
         auto &fluid_surface_indication =
             main_methods.template addInteractionDynamicsWithUpdate<
-                            fluid_dynamics::FreeSurfaceIndicationCK>(inner_relation)
+                            FreeSurfaceIndicationCK>(inner_relation)
                 .addPostContactInteraction(contact_relation);
 
         auto &initialization_pipeline = sim.getInitializationPipeline();

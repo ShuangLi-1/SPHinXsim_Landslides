@@ -60,15 +60,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         main_methods.addInteractionDynamics<LinearCorrectionMatrix, WithUpdate>(fluid_inner, 0.5)
             .addPostContactInteraction(fluid_wall_contact);
 
-    auto &fluid_acoustic_step_1st_half =
-        main_methods.addInteractionDynamicsOneLevel<
-                        fluid_dynamics::AcousticStep1stHalf, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_inner)
-            .addPostContactInteraction<Wall, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_wall_contact);
+    auto &fluid_acoustic_step_1st_half = addAcousticStep1stHalf(
+        config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
-    auto &fluid_acoustic_step_2nd_half =
-        main_methods.addInteractionDynamicsOneLevel<
-                        fluid_dynamics::AcousticStep2ndHalf, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_inner)
-            .addPostContactInteraction<Wall, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_wall_contact);
+    auto &fluid_acoustic_step_2nd_half = addAcousticStep2ndHalf(
+        config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_density_regularization = addDensitySummationAndRegularization(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
