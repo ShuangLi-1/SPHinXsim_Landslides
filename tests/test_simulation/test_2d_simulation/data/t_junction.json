@@ -124,8 +124,21 @@
     {
       "name": "WaterBody",
       "material": {
-        "type": "weakly_compressible_fluid",
-        "density": 1.0,
+        "type": "weakly_compressible_mixture",
+        "species": [
+          {
+            "name": "Water",
+            "density": 1.0
+          },
+          {
+            "name": "SpeciesA",
+            "density": 2.0
+          },
+          {
+            "name": "SpeciesB",
+            "density": 0.5
+          }
+        ],
         "viscosity": {
           "Reynolds_number": 50.0
         }
