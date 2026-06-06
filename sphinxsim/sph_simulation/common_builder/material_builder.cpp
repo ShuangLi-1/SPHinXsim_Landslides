@@ -39,6 +39,7 @@ void MaterialBuilder::addMatterMaterial(
         Real sound_speed = getWeaklyCompressibleSoundSpeed(config_manager);
         auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleMixture>(species_data, sound_speed);
         config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleMixture", &material);
+        return;
     }
 
     if (type == "rigid_body")

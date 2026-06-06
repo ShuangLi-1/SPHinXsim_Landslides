@@ -13,7 +13,7 @@
     {
       "value": 1.0,
       "name": "Density",
-      "hint": "fluid_bodies[name=WaterBody].material.density"
+      "hint": "fluid_bodies[name=WaterBody].material.species[name=Water].density"
     }
   ],
 
