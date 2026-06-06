@@ -64,6 +64,26 @@ BaseDynamics<void> &FluidSimulationBuilder::addAcousticStep2ndHalf(
         "FluidSimulationBuilder::addAcousticStep2ndHalf: no supported fluid type found!");
 }
 //=================================================================================================//
+template <class MethodContainerType>
+BaseDynamics<Real> &FluidSimulationBuilder::addAcousticTimeStep(
+    EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body)
+{
+    std::string body_name = real_body.Name();
+    Real cfl = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig").acoustic_cfl_;
+    if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
+    {
+        return main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleFluid>>(real_body, cfl);
+    }
+
+    if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
+    {
+        return main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleMixture>>(real_body, cfl);
+    }
+
+    throw std::runtime_error(
+        "FluidSimulationBuilder::addAcousticTimeStep: no supported fluid type found!");
+}
+//=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidSimulationBuilder::addDensitySummationAndRegularization(
     EntityManager &config_manager, MethodContainerType &main_methods,
@@ -288,11 +308,24 @@ AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiDirectionBoundary
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     if (config.contains("pressure"))
     {
-        auto &bi_directional_bd = main_methods.template addGeneralDynamics<
-            BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<>>(
-            oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
-        return bi_directional_bd;
+        std::string body_name = oriented_box_by_cell.getSPHBody().Name();
+        if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
+        {
+            auto &bi_directional_bd = main_methods.template addGeneralDynamics<
+                BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<WeaklyCompressibleFluid>>(
+                oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
+            return bi_directional_bd;
+        }
+
+        if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
+        {
+            auto &bi_directional_bd = main_methods.template addGeneralDynamics<
+                BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<WeaklyCompressibleMixture>>(
+                oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
+            return bi_directional_bd;
+        }
     }
+
     throw std::runtime_error(
         "FluidSimulationBuilder::createBiDirectionBoundary: unsupported boundary condition type");
 }

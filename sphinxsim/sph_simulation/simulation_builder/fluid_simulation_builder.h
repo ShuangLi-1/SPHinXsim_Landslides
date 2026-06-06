@@ -73,6 +73,10 @@ class FluidSimulationBuilder : public SimulationBuilder
         EntityManager &config_manager, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
 
+    template <class MethodContainerType>
+    BaseDynamics<Real> &addAcousticTimeStep(
+        EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body);
+
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addDensitySummationAndRegularization(
         EntityManager &config_manager, MethodContainerType &main_methods,
