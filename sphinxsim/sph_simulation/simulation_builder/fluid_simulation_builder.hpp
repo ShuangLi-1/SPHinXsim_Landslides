@@ -296,6 +296,24 @@ void FluidSimulationBuilder::addBoundaryCondition(
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleIndicationTagging, [&]()
             { bi_directional_bd.tagBufferParticles(); });
+
+        if (config_manager.hasEntity<WeaklyCompressibleMixture>(
+                body_name + "WeaklyCompressibleMixture"))
+        {
+            auto &mixture = config_manager.getEntity<WeaklyCompressibleMixture>(
+                body_name + "WeaklyCompressibleMixture");
+            if (config.contains("mass_fractions"))
+            {
+                StdVec<Real> mass_fractions;
+                for (const auto &mf : config.at("mass_fractions"))
+                {
+                    mass_fractions.push_back(scaling_config.jsonToReal(mf, "Dimensionless"));
+                }
+                bi_directional_bd.template addSupplementaryCondition<
+                    typename MethodContainerType::ExPolicy, PrescribedReferenceDensity>(
+                    oriented_box_by_cell, mixture, mass_fractions);
+            }
+        }
         return;
     }
     throw std::runtime_error(

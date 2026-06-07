@@ -161,7 +161,8 @@
       "body_name": "WaterBody",
       "oriented_box": "UpperInlet",
       "type": "bi_directional",
-      "pressure": 1.0
+      "pressure": 1.0,
+      "mass_fractions": [0.5, 0.3, 0.2]
     },
     {
       "body_name": "WaterBody",
@@ -196,7 +197,7 @@
       "acoustic_cfl": 0.6,
       "advection_cfl": 0.25,
       "surface_type": "open_boundary",
-      "particle_sort_frequency": 100
+      "particle_sort_frequency": 0
     }
   }
 }
