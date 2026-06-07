@@ -161,7 +161,7 @@
       "body_name": "WaterBody",
       "oriented_box": "UpperInlet",
       "type": "bi_directional",
-      "pressure": 1.2
+      "pressure": 1.0
     },
     {
       "body_name": "WaterBody",
