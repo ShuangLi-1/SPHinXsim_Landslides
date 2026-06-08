@@ -52,3 +52,14 @@ TEST(simulations, heat_transfer)
     sim.initializeSimulation();
     sim.run();
 }
+
+TEST(simulations, t_junction)
+{
+    SPH::SPHSimulation sim("./input/t_junction.json");
+    sim.resetOutputRoot("./t_junction", true);
+    sim.buildGeometries();
+    sim.generateParticles();
+    sim.buildSimulation();
+    sim.initializeSimulation();
+    sim.run();
+}

@@ -21,11 +21,24 @@ void MaterialBuilder::addMatterMaterial(
     if (type == "weakly_compressible_fluid")
     {
         Real density = scaling_config.jsonToReal(config.at("density"), "Density");
-        auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-        Real u_max_factor = fluid_solver_config.max_velocity_factor_;
-        Real sound_speed = 10.0 * u_max_factor; // 10 times of the maximum anticipated velocity
+        Real sound_speed = getWeaklyCompressibleSoundSpeed(config_manager);
         auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleFluid>(density, sound_speed);
         config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleFluid", &material);
+        return;
+    }
+
+    if (type == "weakly_compressible_mixture")
+    {
+        StdVec<std::pair<std::string, Real>> species_data;
+        for (const auto &species_config : config.at("species"))
+        {
+            std::string species_name = species_config.at("name").get<std::string>();
+            Real density = scaling_config.jsonToReal(species_config.at("density"), "Density");
+            species_data.emplace_back(species_name, density);
+        }
+        Real sound_speed = getWeaklyCompressibleSoundSpeed(config_manager);
+        auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleMixture>(species_data, sound_speed);
+        config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleMixture", &material);
         return;
     }
 
@@ -127,6 +140,13 @@ ThermalBoundaryConfig MaterialBuilder::parseThermalBoundaryConfig(const json &co
     ThermalBoundaryConfig thermal_boundary_config;
     thermal_boundary_config.boundary_type = config.get<std::string>();
     return thermal_boundary_config;
+}
+//=================================================================================================//
+Real MaterialBuilder::getWeaklyCompressibleSoundSpeed(EntityManager &config_manager)
+{
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+    Real u_max_factor = fluid_solver_config.max_velocity_factor_;
+    return 10.0 * u_max_factor; // 10 times of the maximum anticipated velocity
 }
 //=================================================================================================//
 } // namespace SPH

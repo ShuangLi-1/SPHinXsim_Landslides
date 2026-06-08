@@ -26,6 +26,22 @@ inline void BufferIndicationCK::UpdateKernel::update(size_t index_i, Real dt)
     }
 }
 //=================================================================================================//
+template <class ExecutionPolicy, class EncloserType>
+ResetBufferCorrectionMatrixCK::UpdateKernel::UpdateKernel(
+    const ExecutionPolicy &ex_policy, EncloserType &encloser)
+    : oriented_box_(encloser.sv_oriented_box_->DelegatedData(ex_policy)),
+      pos_(encloser.dv_pos_->DelegatedData(ex_policy)),
+      B_(encloser.dv_B_->DelegatedData(ex_policy)),
+      radius_(encloser.radius_) {}
+//=================================================================================================//
+inline void ResetBufferCorrectionMatrixCK::UpdateKernel::update(size_t index_i, Real dt)
+{
+    if (oriented_box_->checkLowerBound(pos_[index_i], -radius_))
+    {
+        B_[index_i] = Matd::Identity();
+    }
+}
+//=================================================================================================//
 template <class ConditionType>
 template <typename... Args>
 BufferInflowInjectionCK<ConditionType>::
@@ -51,7 +67,7 @@ template <class ConditionType>
 template <class ExecutionPolicy, class EncloserType>
 BufferInflowInjectionCK<ConditionType>::
     UpdateKernel::UpdateKernel(const ExecutionPolicy &ex_policy, EncloserType &encloser)
-    : part_id_(encloser.part_id_), eos_(encloser.fluid_), condition_(encloser.condition_),
+    : part_id_(encloser.part_id_), eos_(ex_policy, encloser.fluid_), condition_(encloser.condition_),
       oriented_box_(encloser.sv_oriented_box_->DelegatedData(ex_policy)),
       total_real_particles_(encloser.sv_total_real_particles_->DelegatedData(ex_policy)),
       spawn_real_particle_(ex_policy, encloser.spawn_real_particle_method_),
@@ -75,7 +91,7 @@ void BufferInflowInjectionCK<ConditionType>::UpdateKernel::update(size_t index_i
             buffer_indicator_[new_particle_index] = 0;
             pos_[index_i] = oriented_box_->getUpperPeriodic(pos_[index_i]);
             p_[index_i] = condition_.getPressure(p_[index_i], *physical_time_);
-            rho_[index_i] = eos_.DensityFromPressure(p_[index_i]);
+            rho_[index_i] = eos_.DensityFromPressure(index_i, p_[index_i]);
         }
     }
 }
@@ -163,11 +179,49 @@ void PressureVelocityCondition<KernelCorrectionType, ConditionType>::
     }
 }
 //=================================================================================================//
+template <typename ConditionType>
+template <typename... Args>
+SupplementaryCondition<ConditionType>::SupplementaryCondition(
+    OrientedBoxByCell &oriented_box_part, Args &&...args)
+    : BaseLocalDynamics<OrientedBoxByCell>(oriented_box_part),
+      sv_oriented_box_(oriented_box_part.svOrientedBox()),
+      condition_method_(this->particles_, std::forward<Args>(args)...),
+      dv_pos_(particles_->getVariableByName<Vecd>("Position")) {}
+//=================================================================================================//
+template <typename ConditionType>
+template <class ExecutionPolicy, class EncloserType>
+SupplementaryCondition<ConditionType>::UpdateKernel::UpdateKernel(
+    const ExecutionPolicy &ex_policy, EncloserType &encloser)
+    : oriented_box_(encloser.sv_oriented_box_->DelegatedData(ex_policy)),
+      condition_(ex_policy, encloser.condition_method_),
+      pos_(encloser.dv_pos_->DelegatedDataView(ex_policy)) {}
+//=================================================================================================//
+template <typename ConditionType>
+void SupplementaryCondition<ConditionType>::UpdateKernel::update(size_t index_i, Real dt)
+{
+    if (oriented_box_->checkContain(pos_[index_i]))
+    {
+        condition_(index_i, dt);
+    }
+}
+//=================================================================================================//
+template <class ExecutionPolicy, class ConditionType, typename... Args>
+AbstractBidirectionalBoundary &AbstractBidirectionalBoundary::
+    addSupplementaryCondition(OrientedBoxByCell &oriented_box_part, Args &&...args)
+{
+    auto *condition = supplementary_conditions_keeper_.template createPtr<
+        StateDynamics<ExecutionPolicy, SupplementaryCondition<ConditionType>>>(
+        oriented_box_part, std::forward<Args>(args)...);
+    supplementary_conditions_.push_back(condition);
+    return *this;
+}
+//=================================================================================================//
 template <typename ExecutionPolicy, class KernelCorrectionType, class ConditionType>
 template <typename... Args>
 BidirectionalBoundaryCK<ExecutionPolicy, KernelCorrectionType, ConditionType>::
     BidirectionalBoundaryCK(OrientedBoxByCell &oriented_box_part, Args &&...args)
     : AbstractBidirectionalBoundary(), tag_buffer_particles_(oriented_box_part),
+      reset_buffer_correction_matrix_(oriented_box_part),
       boundary_condition_(oriented_box_part, std::forward<Args>(args)...),
       inflow_injection_(oriented_box_part, std::forward<Args>(args)...),
       outflow_indication_(oriented_box_part) {}

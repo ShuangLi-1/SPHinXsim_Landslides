@@ -52,6 +52,7 @@ class MaterialBuilder
     void addViscosity(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     void addThermalProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     ThermalBoundaryConfig parseThermalBoundaryConfig(const json &config);
+    Real getWeaklyCompressibleSoundSpeed(EntityManager &config_manager);
 };
 } // namespace SPH
 #endif // MATERIAL_BUILDER_H

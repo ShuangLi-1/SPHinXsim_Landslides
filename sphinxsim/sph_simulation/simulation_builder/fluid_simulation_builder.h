@@ -64,9 +64,27 @@ class FluidSimulationBuilder : public SimulationBuilder
     FluidSolverConfig parseFluidSolverConfig(const ScalingConfig &scaling_config, const json &config);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    BaseDynamics<void> &addAcousticStep1stHalf(
+        EntityManager &config_manager, MethodContainerType &main_methods,
+        InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
+
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    BaseDynamics<void> &addAcousticStep2ndHalf(
+        EntityManager &config_manager, MethodContainerType &main_methods,
+        InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
+
+    template <class MethodContainerType>
+    BaseDynamics<Real> &addAcousticTimeStep(
+        EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body);
+
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addDensitySummationAndRegularization(
         EntityManager &config_manager, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
+
+    template <class FluidType, class CompressionSummationType>
+    BaseDynamics<void> &addDensityRegularization(
+        CompressionSummationType &compression_summation, SPHBody &sph_body, std::string &flow_type);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     void buildTransportVelocityFormulationIfNotFreeSurface(
@@ -108,7 +126,7 @@ class FluidSimulationBuilder : public SimulationBuilder
     void buildSurfaceIndicationIfOpenBoundary(
         SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
-        
+
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     void buildThermalDynamicsIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods,

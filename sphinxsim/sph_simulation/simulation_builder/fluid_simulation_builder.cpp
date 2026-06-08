@@ -60,15 +60,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         main_methods.addInteractionDynamics<LinearCorrectionMatrix, WithUpdate>(fluid_inner, 0.5)
             .addPostContactInteraction(fluid_wall_contact);
 
-    auto &fluid_acoustic_step_1st_half =
-        main_methods.addInteractionDynamicsOneLevel<
-                        fluid_dynamics::AcousticStep1stHalf, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_inner)
-            .addPostContactInteraction<Wall, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_wall_contact);
+    auto &fluid_acoustic_step_1st_half = addAcousticStep1stHalf(
+        config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
-    auto &fluid_acoustic_step_2nd_half =
-        main_methods.addInteractionDynamicsOneLevel<
-                        fluid_dynamics::AcousticStep2ndHalf, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_inner)
-            .addPostContactInteraction<Wall, AcousticRiemannSolverCK, LinearCorrectionCK>(fluid_wall_contact);
+    auto &fluid_acoustic_step_2nd_half = addAcousticStep2ndHalf(
+        config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_density_regularization = addDensitySummationAndRegularization(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
@@ -76,8 +72,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     auto &fluid_advection_time_step = main_methods.addReduceDynamics<fluid_dynamics::AdvectionTimeStepCK>(
         fluid_body, Real(1), fluid_solver_config.advection_cfl_);
-    auto &fluid_acoustic_time_step = main_methods.addReduceDynamics<fluid_dynamics::AcousticTimeStepCK<>>(
-        fluid_body, fluid_solver_config.acoustic_cfl_);
+    auto &fluid_acoustic_time_step = addAcousticTimeStep(config_manager, main_methods, fluid_body);
     //----------------------------------------------------------------------
     //	Define time integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------

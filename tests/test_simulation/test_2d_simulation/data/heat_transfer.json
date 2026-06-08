@@ -176,7 +176,9 @@
   "extra_state_recording": [
     {
       "name": "WaterBody",
-      "variables": [{ "real_type": ["Density"], "int_type": ["BufferIndicator", "Indicator"] }]
+      "variables": [
+        { "real_type": ["Density", "Pressure"], "int_type": ["BufferIndicator", "Indicator"] }
+      ]
     },
     {
       "name": "WallBoundary",

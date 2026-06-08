@@ -7,7 +7,7 @@
 namespace SPH
 {
 //=================================================================================================//
-ParticleGeneration::ParticleGeneration(){}
+ParticleGeneration::ParticleGeneration() {}
 //=================================================================================================//
 ParticleGeneration::~ParticleGeneration() = default;
 //=================================================================================================//
@@ -26,7 +26,7 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
     // Define SPH solver with particle methods and execution policies.
     // Generally, the host methods should be able to run immediately.
     //----------------------------------------------------------------------
-    SPHSolver &sph_solver = defineSPHSolver(relaxation_system, config.at("relaxation_parameters"));
+    SPHSolver &sph_solver = defineSPHSolver(relaxation_system, config);
     auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
     auto &randomize_particle_position = randomizeParticlePositions(relaxation_system, host_methods);
 
@@ -138,7 +138,10 @@ RelaxationSystem &ParticleGeneration::defineRelaxationSystem(
 //=================================================================================================//
 SPHSolver &ParticleGeneration::defineSPHSolver(RelaxationSystem &relaxation_system, const json &config)
 {
-    relaxation_parameters_ = parseRelaxationParameters(config);
+    if (config.contains("relaxation_parameters"))
+    {
+        relaxation_parameters_ = parseRelaxationParameters(config.at("relaxation_parameters"));
+    }
     sph_solver_ptr_ = std::make_unique<SPHSolver>(relaxation_system);
     return *sph_solver_ptr_.get();
 }
