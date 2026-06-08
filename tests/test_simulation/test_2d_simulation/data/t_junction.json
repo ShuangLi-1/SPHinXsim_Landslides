@@ -196,8 +196,7 @@
     "fluid_dynamics": {
       "acoustic_cfl": 0.6,
       "advection_cfl": 0.25,
-      "surface_type": "open_boundary",
-      "particle_sort_frequency": 0
+      "surface_type": "open_boundary"
     }
   }
 }
