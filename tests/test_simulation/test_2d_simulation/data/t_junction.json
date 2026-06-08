@@ -6,7 +6,7 @@
       "hint": "geometries.oriented_boxes[name=Outlet].radius"
     },
     {
-      "value": 1.2,
+      "value": 1.0,
       "name": "Pressure",
       "hint": "fluid_boundary_conditions[oriented_box=UpperInlet].pressure"
     },
@@ -181,7 +181,7 @@
   "extra_state_recording": [
     {
       "name": "WaterBody",
-      "variables": [{ "real_type": ["Density"], "int_type": ["BufferIndicator", "Indicator"] }]
+      "variables": [{ "real_type": ["Density", "ReferenceDensity", "Pressure"] }]
     },
     {
       "name": "WallBoundary",

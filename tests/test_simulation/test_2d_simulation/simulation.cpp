@@ -41,7 +41,7 @@ TEST(simulations, milling)
     sim.initializeSimulation();
     sim.run();
 }
-
+*/
 TEST(simulations, heat_transfer)
 {
     SPH::SPHSimulation sim("./input/heat_transfer.json");
@@ -51,7 +51,7 @@ TEST(simulations, heat_transfer)
     sim.buildSimulation();
     sim.initializeSimulation();
     sim.run();
-}*/
+}
 
 TEST(simulations, t_junction)
 {
