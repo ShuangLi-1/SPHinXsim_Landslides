@@ -56,9 +56,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_advection_step_setup = main_methods.addStateDynamics<fluid_dynamics::AdvectionStepSetup>(fluid_body);
     auto &fluid_particle_position = main_methods.addStateDynamics<fluid_dynamics::UpdateParticlePosition>(fluid_body);
 
-    auto &fluid_linear_correction_matrix =
-        main_methods.addInteractionDynamics<LinearCorrectionMatrix, WithUpdate>(fluid_inner, 0.5)
-            .addPostContactInteraction(fluid_wall_contact);
+    auto &fluid_linear_correction_matrix = addLinearCorrectionMatrixWithScope(
+        config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_acoustic_step_1st_half = addAcousticStep1stHalf(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
@@ -110,11 +109,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             solid_cell_linked_list.exec();
             fluid_configuration.exec();
 
-            fluid_linear_correction_matrix.exec();
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterAdvectionStepSetup);
+            fluid_linear_correction_matrix.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialObservation);
             body_state_recorder.writeToFile();
@@ -173,11 +172,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleSort);
 
                 fluid_configuration.exec();
-                fluid_linear_correction_matrix.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 fluid_density_regularization.exec();
                 fluid_advection_step_setup.exec();
-                simulation_pipeline.run_hooks(SimulationHookPoint::AfterAdvectionStepSetup);
+                fluid_linear_correction_matrix.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterLinearCorrectionMatrix);
             }
         });
 }
