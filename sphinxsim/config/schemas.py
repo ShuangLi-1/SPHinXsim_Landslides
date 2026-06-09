@@ -58,6 +58,7 @@ class BodyShapeType(str, Enum):
 
 
 class MultiPolygonPrimitiveType(str, Enum):
+    BOX = "box"
     BOUNDING_BOX = "bounding_box"
     CONTAINER_BOX = "container_box"
     DATA_FILE = "data_file"
@@ -70,6 +71,7 @@ class OrientedBoxType(str, Enum):
 
 class MaterialType(str, Enum):
     WEAKLY_COMPRESSIBLE_FLUID = "weakly_compressible_fluid"
+    WEAKLY_COMPRESSIBLE_MIXTURE = "weakly_compressible_mixture"
     RIGID_BODY = "rigid_body"
     J2_PLASTICITY = "j2_plasticity"
     GENERAL_CONTINUUM = "general_continuum"
@@ -125,6 +127,8 @@ class TransformConfig(BaseModel):
 class MultiPolygonEntryConfig(BaseModel):
     operation: GeometricOperationType
     type: MultiPolygonPrimitiveType
+    half_size: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
+    transform: Optional[TransformConfig] = None
     lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     upper_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     inner_lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
@@ -134,7 +138,10 @@ class MultiPolygonEntryConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_shape_payload(self) -> "MultiPolygonEntryConfig":
-        if self.type == MultiPolygonPrimitiveType.BOUNDING_BOX:
+        if self.type == MultiPolygonPrimitiveType.BOX:
+            if self.half_size is None or self.transform is None:
+                raise ValueError("multipolygon box requires half_size and transform")
+        elif self.type == MultiPolygonPrimitiveType.BOUNDING_BOX:
             if self.lower_bound is None or self.upper_bound is None:
                 raise ValueError("multipolygon bounding_box requires lower_bound and upper_bound")
             if len(self.lower_bound) != len(self.upper_bound):
@@ -353,6 +360,11 @@ class ViscosityConfig(BaseModel):
     Reynolds_number: float = Field(..., gt=0)
 
 
+class MixtureSpeciesConfig(BaseModel):
+    name: str = Field(..., min_length=1)
+    density: float = Field(..., gt=0)
+
+
 class ThermalBoundaryType(str, Enum):
     DIRICHLET = "Dirichlet"
     NEUMANN = "Neumann"
@@ -380,6 +392,7 @@ class MaterialConfig(BaseModel):
     type: MaterialType
 
     density: Optional[float] = Field(default=None, gt=0)
+    species: List[MixtureSpeciesConfig] = Field(default_factory=list)
     sound_speed: Optional[float] = Field(default=None, gt=0)
     viscosity: Optional[float | ViscosityConfig] = None
     thermal_properties: Optional[ThermalPropertiesConfig] = None
@@ -394,6 +407,9 @@ class MaterialConfig(BaseModel):
         if self.type == MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
             if self.density is None:
                 raise ValueError("weakly_compressible_fluid requires density")
+        elif self.type == MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE:
+            if not self.species:
+                raise ValueError("weakly_compressible_mixture requires species")
         elif self.type == MaterialType.RIGID_BODY:
             pass
         elif self.type == MaterialType.J2_PLASTICITY:
@@ -426,8 +442,13 @@ class FluidBodyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _material_type(self) -> "FluidBodyConfig":
-        if self.material.type != MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
-            raise ValueError("fluid body material type must be weakly_compressible_fluid")
+        if self.material.type not in (
+            MaterialType.WEAKLY_COMPRESSIBLE_FLUID,
+            MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
+        ):
+            raise ValueError(
+                "fluid body material type must be weakly_compressible_fluid or weakly_compressible_mixture"
+            )
         return self
 
 
@@ -459,6 +480,7 @@ class FluidBoundaryConditionConfig(BaseModel):
     type: FluidBoundaryConditionType
     inflow_speed: Optional[float] = Field(default=None, gt=0)
     pressure: Optional[float] = None
+    mass_fractions: Optional[List[float]] = None
 
     @model_validator(mode="after")
     def _type_specific_requirements(self) -> "FluidBoundaryConditionConfig":
@@ -466,7 +488,27 @@ class FluidBoundaryConditionConfig(BaseModel):
             raise ValueError("emitter boundary condition requires inflow_speed")
         if self.type == FluidBoundaryConditionType.BI_DIRECTIONAL and self.pressure is None:
             raise ValueError("bi_directional boundary condition requires pressure")
+        if self.mass_fractions is not None:
+            if self.type != FluidBoundaryConditionType.BI_DIRECTIONAL:
+                raise ValueError("mass_fractions are only supported for bi_directional boundary conditions")
+            if not self.mass_fractions:
+                raise ValueError("mass_fractions must be non-empty when provided")
+            if any(fraction < 0.0 or fraction > 1.0 for fraction in self.mass_fractions):
+                raise ValueError("mass_fractions values must be in [0, 1]")
+            if abs(sum(self.mass_fractions) - 1.0) > 1.0e-6:
+                raise ValueError("mass_fractions must sum to 1.0")
         return self
+
+
+class InitialConditionAssignmentConfig(BaseModel):
+    region: Optional[str] = None
+    variable: VariableConfig
+    value: float | List[float]
+
+
+class InitialConditionConfig(BaseModel):
+    body_name: str = Field(..., min_length=1)
+    assignments: List[InitialConditionAssignmentConfig] = Field(..., min_length=1)
 
 
 class RestartConfig(BaseModel):
@@ -539,6 +581,7 @@ class SimulationConfig(BaseModel):
     observers: List[ObserverConfig] = Field(default_factory=list)
     fluid_boundary_conditions: List[FluidBoundaryConditionConfig] = Field(default_factory=list)
     body_constraints: List[BodyConstraintConfig] = Field(default_factory=list)
+    initial_conditions: List[InitialConditionConfig] = Field(default_factory=list)
     extra_state_recording: List[ExtraStateRecordingConfig] = Field(default_factory=list)
 
     solver_parameters: SolverParametersConfig
@@ -599,11 +642,23 @@ class SimulationConfig(BaseModel):
 
         # Boundary condition references
         fluid_names = {body.name for body in self.fluid_bodies}
+        fluid_body_map = {body.name: body for body in self.fluid_bodies}
         for bc in self.fluid_boundary_conditions:
             if bc.body_name not in fluid_names:
                 raise ValueError("fluid_boundary_conditions body_name must reference an existing fluid body")
             if bc.oriented_box not in oriented_box_names:
                 raise ValueError("fluid_boundary_conditions oriented_box must exist in geometries.oriented_boxes")
+            if bc.mass_fractions is not None:
+                fluid_body = fluid_body_map[bc.body_name]
+                if fluid_body.material.type != MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE:
+                    raise ValueError(
+                        "mass_fractions require boundary-condition body material type weakly_compressible_mixture"
+                    )
+                species_count = len(fluid_body.material.species)
+                if species_count != len(bc.mass_fractions):
+                    raise ValueError(
+                        "mass_fractions length must match number of material species for weakly_compressible_mixture"
+                    )
 
         # Observer references
         observed_names = fluid_names | {body.name for body in self.continuum_bodies}
@@ -618,6 +673,17 @@ class SimulationConfig(BaseModel):
                 raise ValueError("body_constraints body_name must reference an existing continuum/solid body")
             if constraint.region is not None and constraint.region not in shape_names:
                 raise ValueError("body_constraints region must reference an existing shape name")
+
+        # Initial-condition references
+        initial_condition_body_names = fluid_names | real_body_names
+        for initial_condition in self.initial_conditions:
+            if initial_condition.body_name not in initial_condition_body_names:
+                raise ValueError("initial_conditions body_name must reference an existing body")
+            for assignment in initial_condition.assignments:
+                if assignment.region is not None and assignment.region not in oriented_box_names:
+                    raise ValueError(
+                        "initial_conditions assignment region must reference an existing oriented box name"
+                    )
 
         # Simbody constraints require restart section to exist at runtime.
         if any(constraint.type == BodyConstraintType.SIMBODY for constraint in self.body_constraints):
