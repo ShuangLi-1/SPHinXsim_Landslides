@@ -358,6 +358,36 @@ class TestSimulationConfig:
                 ]
             )
 
+    def test_global_resolution_is_required(self):
+        data = _make_minimal_fluid_config().model_dump(mode="json")
+        del data["geometries"]["global_resolution"]
+
+        with pytest.raises(ValidationError, match="global_resolution"):
+            SimulationConfig.model_validate(data)
+
+    def test_body_constraint_region_requires_existing_oriented_box(self):
+        cfg = _make_minimal_fluid_config(
+            body_constraints=[
+                {
+                    "body_name": "WallBoundary",
+                    "type": "fixed",
+                    "region": "Inlet",
+                }
+            ]
+        )
+        assert cfg.body_constraints[0].region == "Inlet"
+
+        with pytest.raises(ValidationError, match="existing oriented box"):
+            _make_minimal_fluid_config(
+                body_constraints=[
+                    {
+                        "body_name": "WallBoundary",
+                        "type": "fixed",
+                        "region": "WallBoundary",
+                    }
+                ]
+            )
+
     def test_extra_state_recording_accepts_int_type(self):
         cfg = _make_minimal_fluid_config(
             extra_state_recording=[
@@ -480,7 +510,7 @@ class TestSimulationConfig:
         payload = json.loads(fixture_path.read_text())
         payload["fluid_boundary_conditions"][0]["mass_fractions"] = [1.2, -0.1, -0.1]
 
-        with pytest.raises(ValidationError, match="mass_fractions values must be in \[0, 1\]"):
+        with pytest.raises(ValidationError, match="mass_fractions values must be in \\[0, 1\\]"):
             SimulationConfig.model_validate(payload)
 
     def test_fluid_solver_accepts_max_velocity_factor(self):
@@ -652,4 +682,3 @@ class TestSimulationConfig:
                     ],
                 }
             )
-

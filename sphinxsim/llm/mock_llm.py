@@ -9,14 +9,20 @@ from __future__ import annotations
 
 import re
 import json
+from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List
 
-from sphinxsim.config.schemas import (
-    PhysicsType,
-    SimulationConfig,
-)
+from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
+
+
+class PhysicsType(str, Enum):
+    """Heuristic physics category used by the mock NLP layer."""
+
+    FLUID = "fluid"
+    SOLID = "solid"
+    FSI = "fsi"
 
 
 # ---------------------------------------------------------------------------

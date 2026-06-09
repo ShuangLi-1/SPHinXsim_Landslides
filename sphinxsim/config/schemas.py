@@ -8,14 +8,6 @@ from typing import List, Literal, Optional
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
-class PhysicsType(str, Enum):
-    """Heuristic physics category used by the NLP mock layer."""
-
-    FLUID = "fluid"
-    SOLID = "solid"
-    FSI = "fsi"
-
-
 class SimulationType(str, Enum):
     FLUID_DYNAMICS = "fluid_dynamics"
     CONTINUUM_DYNAMICS = "continuum_dynamics"
@@ -246,7 +238,7 @@ class OrientedBoxConfig(BaseModel):
 
 class GeometriesConfig(BaseModel):
     system_domain: Optional[DomainConfig] = None
-    global_resolution: Optional[GlobalResolutionConfig] = None
+    global_resolution: GlobalResolutionConfig
     shapes: List[ShapeConfig] = Field(..., min_length=1)
     oriented_boxes: List[OrientedBoxConfig] = Field(default_factory=list)
 
@@ -407,11 +399,22 @@ class MaterialConfig(BaseModel):
         if self.type == MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
             if self.density is None:
                 raise ValueError("weakly_compressible_fluid requires density")
+            if self.sound_speed is not None:
+                raise ValueError(
+                    "weakly_compressible_fluid does not support sound_speed; "
+                    "use solver_parameters.fluid_dynamics.max_velocity_factor"
+                )
         elif self.type == MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE:
             if not self.species:
                 raise ValueError("weakly_compressible_mixture requires species")
+            if self.sound_speed is not None:
+                raise ValueError(
+                    "weakly_compressible_mixture does not support sound_speed; "
+                    "use solver_parameters.fluid_dynamics.max_velocity_factor"
+                )
         elif self.type == MaterialType.RIGID_BODY:
-            pass
+            if self.sound_speed is not None:
+                raise ValueError("rigid_body does not support sound_speed")
         elif self.type == MaterialType.J2_PLASTICITY:
             required = (
                 self.density,
@@ -671,8 +674,8 @@ class SimulationConfig(BaseModel):
         for constraint in self.body_constraints:
             if constraint.body_name not in real_body_names:
                 raise ValueError("body_constraints body_name must reference an existing continuum/solid body")
-            if constraint.region is not None and constraint.region not in shape_names:
-                raise ValueError("body_constraints region must reference an existing shape name")
+            if constraint.region is not None and constraint.region not in oriented_box_names:
+                raise ValueError("body_constraints region must reference an existing oriented box name")
 
         # Initial-condition references
         initial_condition_body_names = fluid_names | real_body_names

@@ -3,8 +3,8 @@
 import pytest
 from pydantic import ValidationError
 
-from sphinxsim.config.schemas import PhysicsType, SimulationConfig
-from sphinxsim.llm.mock_llm import MockLLM, _detect_physics
+from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.llm.mock_llm import MockLLM, PhysicsType, _detect_physics
 
 
 # ---------------------------------------------------------------------------
