@@ -150,7 +150,7 @@ BaseDynamics<void> &FluidSimulationBuilder::addLinearCorrectionMatrixWithScope(
     auto &fluid_linear_correction_matrix = main_methods.addParticleDynamicsGroup();
     fluid_linear_correction_matrix.add(
         &main_methods.template addInteractionDynamicsWithUpdate<LinearCorrectionMatrix>(inner_relation, 0.5)
-             .template addPostContactInteraction(contact_relation));
+             .addPostContactInteraction(contact_relation));
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     if (fluid_solver_config.surface_type_ == "open_boundary")
