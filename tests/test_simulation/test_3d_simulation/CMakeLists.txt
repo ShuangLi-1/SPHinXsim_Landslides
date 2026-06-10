@@ -10,15 +10,20 @@ SET(EXECUTABLE_OUTPUT_PATH "${PROJECT_BINARY_DIR}/bin/")
 SET(BUILD_INPUT_PATH "${EXECUTABLE_OUTPUT_PATH}/input")
 SET(BUILD_RELOAD_PATH "${EXECUTABLE_OUTPUT_PATH}/reload")
 
+# Remove stale inputs from previous configurations before copying current test data.
+file(REMOVE_RECURSE ${BUILD_INPUT_PATH})
 file(MAKE_DIRECTORY ${BUILD_INPUT_PATH})
 file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/data/ DESTINATION ${BUILD_INPUT_PATH})
 
 add_executable(${PROJECT_NAME})
 aux_source_directory(. DIR_SRCS)
 target_sources(${PROJECT_NAME} PRIVATE ${DIR_SRCS})
-target_link_libraries(${PROJECT_NAME} PRIVATE sph_simulation_3d GTest::gtest GTest::gtest_main)
+target_link_libraries(${PROJECT_NAME} PRIVATE sph_simulation_3d GTest::gtest)
 set_target_properties(${PROJECT_NAME} PROPERTIES VS_DEBUGGER_WORKING_DIRECTORY "${EXECUTABLE_OUTPUT_PATH}")
 
-add_test(NAME ${PROJECT_NAME} COMMAND ${PROJECT_NAME}
-    WORKING_DIRECTORY ${EXECUTABLE_OUTPUT_PATH})
-set_tests_properties(${PROJECT_NAME} PROPERTIES LABELS "simulation_class")
+include(GoogleTest)
+gtest_discover_tests(${PROJECT_NAME}
+    WORKING_DIRECTORY ${EXECUTABLE_OUTPUT_PATH}
+    DISCOVERY_MODE PRE_TEST
+    TEST_PREFIX "${PROJECT_NAME}."
+    PROPERTIES LABELS "simulation_class")

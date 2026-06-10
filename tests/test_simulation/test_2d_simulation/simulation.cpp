@@ -7,12 +7,124 @@
  * @author Xiangyu Hu
  */
 #include "sph_simulation.h"
+#include <algorithm>
+#include <cctype>
+#include <filesystem>
 #include <gtest/gtest.h>
+#include <iostream>
+#include <string>
+#include <vector>
 
-TEST(simulations, dambreak)
+namespace fs = std::filesystem;
+
+namespace
 {
-    SPH::SPHSimulation sim("./input/dambreak.json");
-    sim.resetOutputRoot("./dambreak");
+fs::path g_selected_json;
+
+bool consumeJsonArg(int *argc, char **argv)
+{
+    for (int i = 1; i < *argc; ++i)
+    {
+        const std::string arg = argv[i];
+        if (arg == "--json")
+        {
+            if (i + 1 >= *argc)
+            {
+                std::cerr << "Missing value for --json" << std::endl;
+                return false;
+            }
+            g_selected_json = argv[i + 1];
+            for (int j = i; j + 2 < *argc; ++j)
+            {
+                argv[j] = argv[j + 2];
+            }
+            *argc -= 2;
+            --i;
+            continue;
+        }
+
+        constexpr const char *kPrefix = "--json=";
+        if (arg.rfind(kPrefix, 0) == 0)
+        {
+            g_selected_json = arg.substr(std::char_traits<char>::length(kPrefix));
+            for (int j = i; j + 1 < *argc; ++j)
+            {
+                argv[j] = argv[j + 1];
+            }
+            *argc -= 1;
+            --i;
+        }
+    }
+
+    return true;
+}
+
+std::vector<fs::path> collectJsonConfigs(const fs::path &input_dir)
+{
+    if (!g_selected_json.empty())
+    {
+        return {g_selected_json};
+    }
+
+    std::vector<fs::path> json_files;
+    if (!fs::exists(input_dir) || !fs::is_directory(input_dir))
+    {
+        return json_files;
+    }
+
+    for (const auto &entry : fs::directory_iterator(input_dir))
+    {
+        if (entry.is_regular_file() && entry.path().extension() == ".json")
+        {
+            json_files.push_back(entry.path());
+        }
+    }
+
+    std::sort(json_files.begin(), json_files.end());
+    return json_files;
+}
+
+std::string sanitizeCaseName(const std::string &name)
+{
+    std::string sanitized;
+    sanitized.reserve(name.size());
+    for (char ch : name)
+    {
+        if (std::isalnum(static_cast<unsigned char>(ch)))
+        {
+            sanitized.push_back(ch);
+        }
+        else
+        {
+            sanitized.push_back('_');
+        }
+    }
+
+    if (sanitized.empty() || std::isdigit(static_cast<unsigned char>(sanitized.front())))
+    {
+        sanitized.insert(sanitized.begin(), '_');
+    }
+    return sanitized;
+}
+} // namespace
+
+class Json : public ::testing::TestWithParam<fs::path>
+{
+};
+
+TEST(simulations, has_json)
+{
+    const auto json_files = collectJsonConfigs("./input");
+    ASSERT_FALSE(json_files.empty()) << "No JSON examples found in ./input";
+}
+
+TEST_P(Json, run)
+{
+    const fs::path config = GetParam();
+    ASSERT_TRUE(fs::exists(config)) << "Missing config file: " << config.string();
+
+    SPH::SPHSimulation sim(config);
+    sim.resetOutputRoot(fs::path("./") / config.stem(), true);
     sim.buildGeometries();
     sim.generateParticles();
     sim.buildSimulation();
@@ -20,46 +132,26 @@ TEST(simulations, dambreak)
     sim.run();
 }
 
-TEST(simulations, filling_tank)
-{
-    SPH::SPHSimulation sim("./input/filling_tank.json");
-    sim.resetOutputRoot("./filling_tank", true);
-    sim.buildGeometries();
-    sim.generateParticles();
-    sim.buildSimulation();
-    sim.initializeSimulation();
-    sim.run();
-}
+INSTANTIATE_TEST_SUITE_P(
+    json,
+    Json,
+    ::testing::ValuesIn(collectJsonConfigs("./input")),
+    [](const ::testing::TestParamInfo<Json::ParamType> &info)
+    {
+        return sanitizeCaseName(info.param.stem().string());
+    });
 
-TEST(simulations, milling)
+int main(int argc, char **argv)
 {
-    SPH::SPHSimulation sim("./input/milling.json");
-    sim.resetOutputRoot("./milling", true);
-    sim.buildGeometries();
-    sim.generateParticles();
-    sim.buildSimulation();
-    sim.initializeSimulation();
-    sim.run();
-}
+    if (!consumeJsonArg(&argc, argv))
+    {
+        return 2;
+    }
 
-TEST(simulations, heat_transfer)
-{
-    SPH::SPHSimulation sim("./input/heat_transfer.json");
-    sim.resetOutputRoot("./heat_transfer", true);
-    sim.buildGeometries();
-    sim.generateParticles();
-    sim.buildSimulation();
-    sim.initializeSimulation();
-    sim.run();
-}
-
-TEST(simulations, t_junction)
-{
-    SPH::SPHSimulation sim("./input/t_junction.json");
-    sim.resetOutputRoot("./t_junction", true);
-    sim.buildGeometries();
-    sim.generateParticles();
-    sim.buildSimulation();
-    sim.initializeSimulation();
-    sim.run();
+    ::testing::InitGoogleTest(&argc, argv);
+    if (!g_selected_json.empty() && ::testing::GTEST_FLAG(filter) == "*")
+    {
+        ::testing::GTEST_FLAG(filter) = "json/Json.run/*";
+    }
+    return RUN_ALL_TESTS();
 }

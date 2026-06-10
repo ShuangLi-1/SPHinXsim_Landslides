@@ -115,9 +115,6 @@ if(SPHINXSYS_2D)
             COMMENT "Copying _sphinxsys_core_2d to ${SPHINXSIM_BINDINGS_OUTPUT_DIR}")
     endif()
 
-    if(SPHINXSIM_BUILD_SIMULATION_TESTS)
-        add_subdirectory(tests/test_simulation/test_2d_simulation)
-    endif()
 endif()
 
 if(SPHINXSYS_3D)
@@ -149,7 +146,8 @@ if(SPHINXSYS_3D)
             COMMENT "Copying _sphinxsys_core_3d to ${SPHINXSIM_BINDINGS_OUTPUT_DIR}")
     endif()
 
-    if(SPHINXSIM_BUILD_SIMULATION_TESTS)
-        add_subdirectory(tests/test_simulation/test_3d_simulation)
-    endif()
+endif()
+
+if(SPHINXSIM_BUILD_SIMULATION_TESTS)
+    add_subdirectory(tests/test_simulation)
 endif()

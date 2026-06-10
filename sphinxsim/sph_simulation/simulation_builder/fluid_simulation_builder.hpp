@@ -3,6 +3,8 @@
 
 #include "fluid_simulation_builder.h"
 
+#include <cmath>
+
 #include "geometry_builder.h"
 #include "sph_simulation.h"
 #include "thermal_dynamics_builder.hpp"
@@ -305,9 +307,29 @@ void FluidSimulationBuilder::addBoundaryCondition(
             if (config.contains("mass_fractions"))
             {
                 StdVec<Real> mass_fractions;
+                Real mass_fraction_sum = 0.0;
                 for (const auto &mf : config.at("mass_fractions"))
                 {
-                    mass_fractions.push_back(scaling_config.jsonToReal(mf, "Dimensionless"));
+                    Real fraction = scaling_config.jsonToReal(mf, "Dimensionless");
+                    if (fraction < 0.0 || fraction > 1.0)
+                    {
+                        throw std::runtime_error(
+                            "FluidSimulationBuilder::addBoundaryCondition: mass_fractions values must be in [0, 1]");
+                    }
+                    mass_fractions.push_back(fraction);
+                    mass_fraction_sum += fraction;
+                }
+
+                if (mass_fractions.empty())
+                {
+                    throw std::runtime_error(
+                        "FluidSimulationBuilder::addBoundaryCondition: mass_fractions must be non-empty when provided");
+                }
+
+                if (std::abs(mass_fraction_sum - 1.0) > 1.0e-6)
+                {
+                    throw std::runtime_error(
+                        "FluidSimulationBuilder::addBoundaryCondition: mass_fractions must sum to 1.0");
                 }
                 bi_directional_bd.template addSupplementaryCondition<
                     typename MethodContainerType::ExPolicy, PrescribedReferenceDensity>(

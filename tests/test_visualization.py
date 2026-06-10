@@ -75,7 +75,6 @@ def _minimal_fluid_config() -> dict:
                 "material": {
                     "type": "weakly_compressible_fluid",
                     "density": 1000.0,
-                    "sound_speed": 10.0,
                 },
             }
         ],
@@ -123,11 +122,11 @@ class TestBodyLabel:
         assert "Fluid: WaterBody" in label
         assert "1000.0" in label
 
-    def test_fluid_body_label_includes_sound_speed(self, fluid_config):
+    def test_fluid_body_label_omits_sound_speed(self, fluid_config):
         from sphinxsim.visualization.annotations import body_label
 
         label = body_label("WaterBody", fluid_config)
-        assert "10.0" in label
+        assert "c=" not in label
 
     def test_solid_body_label(self, fluid_config):
         from sphinxsim.visualization.annotations import body_label
@@ -212,19 +211,11 @@ class TestOrientedBoxLabel:
         from sphinxsim.visualization.annotations import oriented_box_label
 
         data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
-        data["geometries"]["shapes"].append(
-            {
-                "name": "ConstraintRegion",
-                "type": "bounding_box",
-                "lower_bound": [0.1, 0.1],
-                "upper_bound": [0.2, 0.2],
-            }
-        )
         data["body_constraints"] = [
             {
                 "body_name": "WallBoundary",
                 "type": "fixed",
-                "region": "ConstraintRegion",
+                "region": "Inlet",
             }
         ]
         cfg = SimulationConfig(**data)

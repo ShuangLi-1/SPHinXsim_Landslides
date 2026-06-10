@@ -493,13 +493,17 @@ SolverCommonConfig SimulationBuilder::parseSolverCommonConfig(
     const ScalingConfig &scaling_config, const json &config)
 {
     SolverCommonConfig solver_common_config;
+
     if (config.contains("end_time"))
         solver_common_config.end_time_ = scaling_config.jsonToReal(config.at("end_time"), "Time");
+
     if (config.contains("output_interval"))
         solver_common_config.output_interval_ = scaling_config.jsonToReal(config.at("output_interval"), "Time");
     else
         solver_common_config.output_interval_ = solver_common_config.end_time_ / 100.0; // default to 100 output frames
 
+    if (config.contains("screen_interval"))
+        solver_common_config.screen_interval_ = config.at("screen_interval").get<UnsignedInt>();
     return solver_common_config;
 }
 //=================================================================================================//
