@@ -43,10 +43,17 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
+    //----------------------------------------------------------------------
+    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    //----------------------------------------------------------------------
+    // Define dependent optional methods using hooking point in stage pipelines.
+    //----------------------------------------------------------------------
+    buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
+    //----------------------------------------------------------------------
+    // The essential main methods used for the simulation.
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
     auto &fluid_configuration =
         main_methods.addParticleDynamicsGroup()
@@ -81,11 +88,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
     time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
     //----------------------------------------------------------------------
-    // Define optional methods using hooking point in stage pipelines.
+    // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
-    buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildBoundaryConditionsIfPresent(sim, main_methods, config);

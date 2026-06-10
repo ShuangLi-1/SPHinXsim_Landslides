@@ -153,13 +153,11 @@ BaseDynamics<void> &FluidSimulationBuilder::addLinearCorrectionMatrixWithScope(
              .template addPostContactInteraction(contact_relation));
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-
     if (fluid_solver_config.surface_type_ == "open_boundary")
     {
-        SPHBody &sph_body = inner_relation.getSPHBody();
-        sph_body.getBaseParticles().template registerStateVariable<int>("Indicator", 0);
         fluid_linear_correction_matrix.add(
-            &main_methods.template addStateDynamics<LinearCorrectionMatrixScope, BulkParticles>(sph_body));
+            &main_methods.template addStateDynamics<LinearCorrectionMatrixScope, BulkParticles>(
+                inner_relation.getSPHBody()));
     }
 
     return fluid_linear_correction_matrix;
