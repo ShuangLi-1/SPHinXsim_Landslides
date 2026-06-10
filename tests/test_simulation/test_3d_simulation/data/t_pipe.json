@@ -139,6 +139,13 @@
     }
   ],
 
+  "extra_state_recording": [
+    {
+      "name": "BloodBody",
+      "variables": [{ "real_type": ["Pressure"] }]
+    }
+  ],
+
   "solver_parameters": {
     "end_time": 0.1,
     "output_interval": 0.01,
