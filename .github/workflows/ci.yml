@@ -111,7 +111,7 @@ jobs:
         run: |
           ctest --test-dir ${{ github.workspace }}/build-integrated \
             --output-on-failure \
-            -R "test_(2d|3d)_simulation$"
+            -L "simulation_class"
 
       - name: Install Python package (editable with dev dependencies)
         run: |
@@ -214,7 +214,7 @@ jobs:
         run: |
           ctest --test-dir "${{ github.workspace }}\\build-integrated" `
             --output-on-failure `
-            -R "test_(2d|3d)_simulation$"
+            -L "simulation_class"
 
       - name: Install Python package (editable with dev dependencies)
         shell: pwsh
@@ -307,7 +307,7 @@ jobs:
         run: |
           ctest --test-dir ${{ github.workspace }}/build-integrated \
             --output-on-failure \
-            -R "test_(2d|3d)_simulation$"
+            -L "simulation_class"
 
       - name: Install Python package (editable with dev dependencies)
         run: |
