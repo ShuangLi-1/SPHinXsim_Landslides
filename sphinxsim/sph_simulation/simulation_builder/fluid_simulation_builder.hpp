@@ -143,6 +143,27 @@ BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+BaseDynamics<void> &FluidSimulationBuilder::addLinearCorrectionMatrixWithScope(
+    EntityManager &config_manager, MethodContainerType &main_methods,
+    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
+{
+    auto &fluid_linear_correction_matrix = main_methods.addParticleDynamicsGroup();
+    fluid_linear_correction_matrix.add(
+        &main_methods.template addInteractionDynamicsWithUpdate<LinearCorrectionMatrix>(inner_relation, 0.5)
+             .addPostContactInteraction(contact_relation));
+
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+    if (fluid_solver_config.surface_type_ == "open_boundary")
+    {
+        fluid_linear_correction_matrix.add(
+            &main_methods.template addStateDynamics<LinearCorrectionMatrixScope, BulkParticles>(
+                inner_relation.getSPHBody()));
+    }
+
+    return fluid_linear_correction_matrix;
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 void FluidSimulationBuilder::buildTransportVelocityFormulationIfNotFreeSurface(
     SPHSimulation &sim, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
@@ -162,12 +183,12 @@ void FluidSimulationBuilder::buildTransportVelocityFormulationIfNotFreeSurface(
 
         auto &initialization_pipeline = sim.getInitializationPipeline();
         initialization_pipeline.insert_hook(
-            InitializationHookPoint::InitialAfterAdvectionStepSetup, [&]()
+            InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [&]()
             { transport_velocity_correction.exec(); });
 
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
-            SimulationHookPoint::AfterAdvectionStepSetup, [&]()
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
             { transport_velocity_correction.exec(); });
     }
 }
@@ -210,12 +231,12 @@ void FluidSimulationBuilder::buildViscousForceIfPresent(
 
         auto &initialization_pipeline = sim.getInitializationPipeline();
         initialization_pipeline.insert_hook(
-            InitializationHookPoint::InitialAfterAdvectionStepSetup, [&]()
+            InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [&]()
             { viscous_force.exec(); });
 
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
-            SimulationHookPoint::AfterAdvectionStepSetup, [&]()
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
             { viscous_force.exec(); });
     }
 }

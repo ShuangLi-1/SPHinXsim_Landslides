@@ -43,10 +43,17 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
+    //----------------------------------------------------------------------
+    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    //----------------------------------------------------------------------
+    // Define dependent optional methods using hooking point in stage pipelines.
+    //----------------------------------------------------------------------
+    buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
+    //----------------------------------------------------------------------
+    // The essential main methods used for the simulation.
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
     auto &fluid_configuration =
         main_methods.addParticleDynamicsGroup()
@@ -56,9 +63,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_advection_step_setup = main_methods.addStateDynamics<fluid_dynamics::AdvectionStepSetup>(fluid_body);
     auto &fluid_particle_position = main_methods.addStateDynamics<fluid_dynamics::UpdateParticlePosition>(fluid_body);
 
-    auto &fluid_linear_correction_matrix =
-        main_methods.addInteractionDynamics<LinearCorrectionMatrix, WithUpdate>(fluid_inner, 0.5)
-            .addPostContactInteraction(fluid_wall_contact);
+    auto &fluid_linear_correction_matrix = addLinearCorrectionMatrixWithScope(
+        config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_acoustic_step_1st_half = addAcousticStep1stHalf(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
@@ -82,11 +88,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
     time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
     //----------------------------------------------------------------------
-    // Define optional methods using hooking point in stage pipelines.
+    // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
-    buildSurfaceIndicationIfOpenBoundary(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildBoundaryConditionsIfPresent(sim, main_methods, config);
@@ -110,11 +115,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             solid_cell_linked_list.exec();
             fluid_configuration.exec();
 
-            fluid_linear_correction_matrix.exec();
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterAdvectionStepSetup);
+            fluid_linear_correction_matrix.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialObservation);
             body_state_recorder.writeToFile();
@@ -173,11 +178,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleSort);
 
                 fluid_configuration.exec();
-                fluid_linear_correction_matrix.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 fluid_density_regularization.exec();
                 fluid_advection_step_setup.exec();
-                simulation_pipeline.run_hooks(SimulationHookPoint::AfterAdvectionStepSetup);
+                fluid_linear_correction_matrix.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterLinearCorrectionMatrix);
             }
         });
 }

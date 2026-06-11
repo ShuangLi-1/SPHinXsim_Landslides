@@ -91,6 +91,11 @@ class FluidSimulationBuilder : public SimulationBuilder
         SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    BaseDynamics<void> &addLinearCorrectionMatrixWithScope(
+        EntityManager &config_manager, MethodContainerType &main_methods,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
+
     template <class KernelGradientIntegralType>
     void addTransportVelocityCorrection(
         KernelGradientIntegralType &kernel_gradient_integral,
