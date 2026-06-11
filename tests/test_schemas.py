@@ -260,6 +260,64 @@ class TestSimulationConfig:
         cfg = _make_minimal_fluid_config(geometries=geometries)
         assert any(shape.name == "ExpandedWaterBody" for shape in cfg.geometries.shapes)
 
+    def test_multipolygon_accepts_new_polygon_types(self):
+        geometries = {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "WaterBody",
+                    "type": "multipolygon",
+                    "polygons": [
+                        {
+                            "operation": "union",
+                            "type": "circle",
+                            "center": [0.2, 0.2],
+                            "radius": 0.1,
+                            "resolution": 24,
+                        },
+                        {
+                            "operation": "union",
+                            "type": "triangle",
+                            "half_size": [0.1, 0.05],
+                            "transform": {
+                                "translation": [0.35, 0.25],
+                                "rotation_angle": 0.0,
+                            },
+                        },
+                        {
+                            "operation": "union",
+                            "type": "clockwise_points",
+                            "points": [[0.6, 0.6], [0.8, 0.6], [0.8, 0.8], [0.6, 0.6]],
+                        },
+                    ],
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+            "oriented_boxes": [
+                {
+                    "name": "Inlet",
+                    "type": "region",
+                    "half_size": [0.1, 0.05],
+                    "transform": {"translation": [0.05, 0.2], "rotation_angle": 0.0},
+                }
+            ],
+        }
+
+        cfg = _make_minimal_fluid_config(geometries=geometries)
+        multipolygon = cfg.geometries.shapes[0]
+        assert multipolygon.type.value == "multipolygon"
+        assert [polygon.type.value for polygon in multipolygon.polygons] == [
+            "circle",
+            "triangle",
+            "clockwise_points",
+        ]
+
     def test_shape_duplicate_name_rejected(self):
         geometries = {
             "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
