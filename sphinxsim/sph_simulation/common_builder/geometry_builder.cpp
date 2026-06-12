@@ -119,10 +119,45 @@ MultiPolygon GeometryBuilder::parseMultiPolygon(const ScalingConfig &scaling_con
         return multi_polygon;
     }
 
+    if (polygon_type == "circle")
+    {
+        Vecd center = scaling_config.jsonToVecd(config.at("center"), "Length");
+        Real radius = scaling_config.jsonToReal(config.at("radius"), "Length");
+        int resolution = config.at("resolution").get<int>();
+        multi_polygon.addCircle(center, radius, resolution, GeometricOps::add);
+        return multi_polygon;
+    }
+
+    if (polygon_type == "triangle")
+    {
+        Transform transform = scaling_config.jsonToTransform(config.at("transform"));
+        Vecd half_size = scaling_config.jsonToVecd(config.at("half_size"), "Length");
+        multi_polygon.addTriangle(transform, half_size, GeometricOps::add);
+        return multi_polygon;
+    }
+
+    if (polygon_type == "clockwise_points")
+    {
+        std::vector<Vecd> points;
+        for (const auto &p : config.at("points"))
+        {
+            points.push_back(scaling_config.jsonToVecd(p, "Length"));
+        }
+
+        if ((points[0] - points.back()).norm() > Eps)
+        {
+            throw std::runtime_error(
+                "GeometryBuilder::parseMultiPolygon: the first and last of clockwise points must be the same!");
+        }
+        multi_polygon.addPolygon(points, GeometricOps::add);
+        return multi_polygon;
+    }
+
     if (polygon_type == "data_file")
     {
-        multi_polygon.addPolygonFromFile(config.at("file_path").get<std::string>(), GeometricOps::add,
-                                         Vecd::Zero(), 1.0 / scaling_config.getScalingRef("Length"));
+        multi_polygon.addPolygonFromFile(
+            config.at("file_path").get<std::string>(), GeometricOps::add,
+            Vecd::Zero(), 1.0 / scaling_config.getScalingRef("Length"));
         return multi_polygon;
     }
 

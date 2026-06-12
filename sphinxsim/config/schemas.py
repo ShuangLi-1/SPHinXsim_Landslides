@@ -53,6 +53,9 @@ class MultiPolygonPrimitiveType(str, Enum):
     BOX = "box"
     BOUNDING_BOX = "bounding_box"
     CONTAINER_BOX = "container_box"
+    CIRCLE = "circle"
+    TRIANGLE = "triangle"
+    CLOCKWISE_POINTS = "clockwise_points"
     DATA_FILE = "data_file"
 
 
@@ -121,6 +124,10 @@ class MultiPolygonEntryConfig(BaseModel):
     type: MultiPolygonPrimitiveType
     half_size: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     transform: Optional[TransformConfig] = None
+    center: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
+    radius: Optional[float] = Field(default=None, gt=0)
+    resolution: Optional[int] = Field(default=None, gt=0)
+    points: Optional[List[List[float]]] = None
     lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     upper_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     inner_lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
@@ -145,6 +152,17 @@ class MultiPolygonEntryConfig(BaseModel):
                 )
             if len(self.inner_lower_bound) != len(self.inner_upper_bound):
                 raise ValueError("multipolygon container_box dimensionality must match")
+        elif self.type == MultiPolygonPrimitiveType.CIRCLE:
+            if self.center is None or self.radius is None or self.resolution is None:
+                raise ValueError("multipolygon circle requires center, radius and resolution")
+        elif self.type == MultiPolygonPrimitiveType.TRIANGLE:
+            if self.half_size is None or self.transform is None:
+                raise ValueError("multipolygon triangle requires half_size and transform")
+        elif self.type == MultiPolygonPrimitiveType.CLOCKWISE_POINTS:
+            if not self.points:
+                raise ValueError("multipolygon clockwise_points requires points")
+            if self.points[0] != self.points[-1]:
+                raise ValueError("multipolygon clockwise_points must repeat the first point as the last point")
         elif self.type == MultiPolygonPrimitiveType.DATA_FILE:
             if not self.file_path:
                 raise ValueError("multipolygon data_file requires file_path")
