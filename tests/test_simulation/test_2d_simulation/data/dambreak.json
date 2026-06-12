@@ -34,10 +34,16 @@
       },
       {
         "name": "WallBoundary",
-        "type": "container_box",
-        "inner_lower_bound": [0.0, 0.0],
-        "inner_upper_bound": [5.366, 5.366],
-        "thickness": 0.1
+        "type": "multipolygon",
+        "polygons": [
+          {
+            "operation": "union",
+            "type": "container_box",
+            "inner_lower_bound": [0.0, 0.0],
+            "inner_upper_bound": [5.366, 5.366],
+            "thickness": 0.1
+          }
+        ]
       }
     ]
   },
