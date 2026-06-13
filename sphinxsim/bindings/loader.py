@@ -62,6 +62,42 @@ def _configure_module_search_path() -> None:
             sys.path.insert(0, path_str)
 
 
+def load_sphinxsys_core_nd(ndim: int) -> ModuleType:
+    """Load and return the SPHinXsim C++ extension for the given spatial dimension.
+
+    Parameters
+    ----------
+    ndim:
+        Spatial dimension of the simulation — 2 or 3.
+    """
+    if ndim not in (2, 3):
+        raise ValueError(f"ndim must be 2 or 3, got {ndim}")
+
+    _configure_windows_loader()
+    _configure_module_search_path()
+
+    suffix = "2d" if ndim == 2 else "3d"
+    module_names = [
+        f"_sphinxsys_core_{suffix}",
+        f"sphinxsim.bindings.native._sphinxsys_core_{suffix}",
+    ]
+    errors: list[str] = []
+    for module_name in module_names:
+        try:
+            return importlib.import_module(module_name)
+        except ImportError as exc:
+            errors.append(f"{module_name}: {exc}")
+
+    searched_dirs = ", ".join(str(p) for p in _candidate_search_dirs())
+    details = "\n  - ".join(errors)
+    raise ImportError(
+        f"C++ extension not found (_sphinxsys_core_{suffix}).\n"
+        "Build and install the compiled sphinxsim package to use this command.\n"
+        f"Searched directories: {searched_dirs}\n"
+        f"Import errors:\n  - {details}"
+    )
+
+
 def load_sphinxsys_core() -> ModuleType:
     """Load and return the SPHinXsim C++ extension module.
 

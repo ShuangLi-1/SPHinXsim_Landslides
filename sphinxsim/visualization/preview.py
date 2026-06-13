@@ -26,7 +26,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sphinxsim.bindings.loader import load_sphinxsys_core
+from sphinxsim.bindings.loader import load_sphinxsys_core, load_sphinxsys_core_nd
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
@@ -165,6 +165,43 @@ class ConfigVisualizer:
         self._vtp_dir: Path | None = None
         self._bounds_sim: Any | None = None
         self._shape_bounds_cache: dict[str, Any] | None = None
+
+    def _spatial_dim(self) -> int:
+        """Return the spatial dimension (2 or 3) inferred from the config.
+
+        Checks multiple vector fields in order of reliability so the correct
+        binding module is selected even when ``system_domain`` is absent.
+        """
+        geo = self.config.geometries
+
+        # Most reliable: system_domain explicitly declares the bounding box.
+        if geo.system_domain is not None:
+            return len(geo.system_domain.lower_bound)
+
+        # Top-level gravity vector.
+        if self.config.gravity is not None:
+            return len(self.config.gravity)
+
+        # Walk shapes: bounding_box / box / expanded_box carry explicit vectors.
+        for shape in geo.shapes:
+            for vec in (shape.lower_bound, shape.upper_bound, shape.half_size):
+                if vec is not None:
+                    return len(vec)
+            if shape.transform is not None:
+                return len(shape.transform.translation)
+            # triangle_mesh: translation field is 3-D only (min_length=3).
+            if shape.translation is not None:
+                return len(shape.translation)
+
+        # Walk oriented boxes: center / normal / half_size.
+        for ob in geo.oriented_boxes:
+            for vec in (ob.center, ob.normal, ob.half_size):
+                if vec is not None:
+                    return len(vec)
+            if ob.transform is not None:
+                return len(ob.transform.translation)
+
+        return 3  # safe default — 3-D module handles most cases
 
     @property
     def used_cpp_geometry(self) -> bool:
@@ -314,8 +351,9 @@ class ConfigVisualizer:
             self._bounds_sim = None
             return None
 
+        ndim = self._spatial_dim()
         try:
-            sph = load_sphinxsys_core()
+            sph = load_sphinxsys_core_nd(ndim)
         except ImportError as exc:
             raise ImportError(str(exc)) from None
 
@@ -332,6 +370,9 @@ class ConfigVisualizer:
                     pass
 
         original_dir = os.getcwd()
+        # Change to the config file's directory so that relative paths in the
+        # JSON (e.g. STL file_path for 3-D triangle_mesh shapes) resolve correctly.
+        os.chdir(self.config_path.parent)
         try:
             builder = sph.GeometryBuilder(str(self.config_path))
             builder.resetOutputRoot(str(vtp_output_dir))
