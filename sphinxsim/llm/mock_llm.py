@@ -278,11 +278,27 @@ def _extract_name(description: str) -> str:
 
 
 def _sync_geometry(cfg: Dict[str, Any]) -> None:
-    dims = cfg["geometries"]["system_domain"]["upper_bound"]
+    geometries = cfg.setdefault("geometries", {})
+    system_domain = geometries.setdefault("system_domain", {})
+    dims = system_domain.get("upper_bound")
+
+    if not isinstance(dims, list) or not dims:
+        inferred_dims = None
+        for shape in geometries.get("shapes", []):
+            upper = shape.get("upper_bound")
+            if isinstance(upper, list) and upper:
+                inferred_dims = upper
+                break
+        dims = inferred_dims or [1.0, 1.0]
+        system_domain["upper_bound"] = dims
+
+    if "lower_bound" not in system_domain or not isinstance(system_domain["lower_bound"], list):
+        system_domain["lower_bound"] = [0.0] * len(dims)
+
     domain_x = dims[0]
     domain_y = dims[1] if len(dims) > 1 else dims[0]
 
-    shape_by_name = {s["name"]: s for s in cfg["geometries"].get("shapes", [])}
+    shape_by_name = {s["name"]: s for s in geometries.get("shapes", [])}
     if "WaterBody" in shape_by_name:
         shape_by_name["WaterBody"]["upper_bound"] = [0.4 * domain_x, 0.2 * domain_y]
     if "WallBoundary" in shape_by_name:
@@ -324,8 +340,16 @@ def _apply_overrides(template: Dict[str, Any], description: str) -> Dict[str, An
     domain_match = re.search(r"(\d+(?:\.\d+)?)\s*m\s+domain", description, re.IGNORECASE)
     if domain_match:
         size = float(domain_match.group(1))
-        dim = len(cfg["geometries"]["system_domain"]["upper_bound"])
-        cfg["geometries"]["system_domain"]["upper_bound"] = [size] * dim
+        geometries = cfg.setdefault("geometries", {})
+        system_domain = geometries.setdefault("system_domain", {})
+        upper_bound = system_domain.get("upper_bound")
+        if isinstance(upper_bound, list) and upper_bound:
+            dim = len(upper_bound)
+        else:
+            lower_bound = system_domain.get("lower_bound")
+            dim = len(lower_bound) if isinstance(lower_bound, list) and lower_bound else 2
+        system_domain.setdefault("lower_bound", [0.0] * dim)
+        system_domain["upper_bound"] = [size] * dim
 
     # Resolution override (e.g. "5 mm resolution")
     res_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s+resolution", description, re.IGNORECASE)
