@@ -111,7 +111,7 @@ def _label_anchor_point(mesh: Any) -> tuple[float, float, float]:
 
     try:
         points = pv.PolyData(candidates)
-        selected = points.select_enclosed_points(
+        selected = points.select_interior_points(
             mesh,
             tolerance=1e-6,
             check_surface=False,
@@ -372,7 +372,7 @@ class ConfigVisualizer:
         original_dir = os.getcwd()
         # Change to the config file's directory so that relative paths in the
         # JSON (e.g. STL file_path for 3-D triangle_mesh shapes) resolve correctly.
-        os.chdir(self.config_path.parent)
+        os.chdir(self.config_path.parent.parent)
         try:
             builder = sph.GeometryBuilder(str(self.config_path))
             builder.resetOutputRoot(str(vtp_output_dir))

@@ -25,7 +25,7 @@ void GeometryBuilder::buildGeometries()
 {
     json config = loadConfig();
     config_manager_.clear();
-    config_manager_.emplaceEntity<ScalingConfig>("ScalingConfig", ScalingConfig());
+    config_manager_.emplaceEntity<ScalingConfig>("ScalingConfig", config);
     createGeometries(config_manager_, config.at("geometries"));
 }
 //=================================================================================================//
