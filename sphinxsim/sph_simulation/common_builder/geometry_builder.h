@@ -32,6 +32,9 @@
 #include "base_simulation_builder.h"
 #include "sphinxsys.h"
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 namespace SPH
 {
 class EntityManager;
@@ -46,6 +49,12 @@ struct SystemDomainConfig
 class GeometryBuilder
 {
   public:
+    GeometryBuilder(const fs::path &config_path);
+    ~GeometryBuilder();
+    void resetOutputRoot(const fs::path &output_root);
+    //----------------------------------------------------------------------
+    // static functions for geometry construction used in simulation builder
+    //----------------------------------------------------------------------
     static void createGeometries(EntityManager &config_manager, const json &config);
     static BoundingBoxd parseBoundingBox(const ScalingConfig &scaling_config, const json &config);
     static TransformGeometryBox parseBox(const ScalingConfig &scaling_config, const json &config);
@@ -57,7 +66,12 @@ class GeometryBuilder
 #endif
 
   private:
-    static Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+    std::filesystem::path config_path_;
+    EntityManager config_manager_;
+    ScalingConfig default_scaling_config_;
+
+    static Shape *
+    addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
     static GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
 };

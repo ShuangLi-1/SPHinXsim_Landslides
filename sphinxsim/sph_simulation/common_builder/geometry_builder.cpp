@@ -3,6 +3,24 @@
 namespace SPH
 {
 //=================================================================================================//
+GeometryBuilder::GeometryBuilder(const fs::path &config_path)
+    : config_path_(config_path)
+{
+    IO::initEnvironment();
+}
+//=================================================================================================//
+GeometryBuilder::~GeometryBuilder() = default;
+//=================================================================================================//
+void GeometryBuilder::resetOutputRoot(const fs::path &output_root)
+{
+    IOEnvironment &io_env = IO::getEnvironment();
+    if (!fs::exists(output_root))
+    {
+        fs::create_directories(output_root);
+    }
+    io_env.resetOutputFolder((output_root / "output").string(), true);
+}
+//=================================================================================================//
 void SystemDomainConfig::updateSystemDomain(const BoundingBoxd &shape_bounds)
 {
     system_bounds_ = system_bounds_.add(shape_bounds);
