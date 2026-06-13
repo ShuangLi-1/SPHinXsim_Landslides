@@ -8,8 +8,9 @@
 #include <pybind11/pybind11.h>
 
 // Include SPHinXsys headers FIRST to ensure proper type definitions
-#include "sph_simulation.h" // High-level user API
-#include "sphinxsys.h"      // Core SPH functionality - must be first
+#include "geometry_builder.h" // For geometry construction
+#include "sph_simulation.h"   // High-level user API
+#include "sphinxsys.h"        // Core SPH functionality - must be first
 
 // Include pybind11 headers AFTER SPHinXsys to avoid type conflicts
 #include <pybind11/stl.h>
@@ -63,6 +64,15 @@ PYBIND11_MODULE(MODULE_NAME, m)
              "Advance simulation to target physical time")
         .def("stepBy", &SPHSimulation::stepBy, py::arg("interval"),
              "Advance simulation by interval in physical time");
+
+    // Bind geometry builder utilities
+    py::class_<GeometryBuilder>(m, "GeometryBuilder")
+        .def(py::init<const std::filesystem::path &>(), py::arg("config_path"),
+             "Initialize GeometryBuilder with path to JSON config file")
+        .def("resetOutputRoot", &GeometryBuilder::resetOutputRoot, py::arg("output_root"),
+             "Override output/restart/reload root folder. Call before building geometries.")
+        .def("buildGeometries", &GeometryBuilder::buildGeometries,
+             "Build geometries from JSON configuration file");
 
     // Module version info
     m.attr("__version__") = "0.1.0";

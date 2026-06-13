@@ -9,8 +9,7 @@ Two rendering modes are supported, tried in order:
 VTP mode (preferred)
     The C++ ``buildGeometries()`` stage is invoked and the resulting
     ``Shape<Name>.vtp`` polygon meshes are loaded and displayed by PyVista.
-    The live :class:`SPHSimulation` object is kept in ``_sim`` for further
-    queries.
+    The lightweight C++ ``GeometryBuilder`` is used for this stage.
 
 C++ bounds fallback
     When VTP files are not produced, accurate bounding boxes are queried
@@ -164,7 +163,7 @@ class ConfigVisualizer:
         self.off_screen = off_screen
 
         self._vtp_dir: Path | None = None
-        self._sim: Any | None = None
+        self._bounds_sim: Any | None = None
         self._shape_bounds_cache: dict[str, Any] | None = None
 
     @property
@@ -175,7 +174,7 @@ class ConfigVisualizer:
     @property
     def used_cpp_bounds(self) -> bool:
         """Whether the most recent preview used live C++ shape bounds."""
-        return self._sim is not None
+        return self._bounds_sim is not None
 
     # ------------------------------------------------------------------
     # Public API
@@ -209,26 +208,26 @@ class ConfigVisualizer:
         if use_cpp:
             vtp_dir = self._try_build_geometries()
         else:
-            self._sim = None
+            self._bounds_sim = None
             self._shape_bounds_cache = None
         self._vtp_dir = vtp_dir
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
         self._populate_plotter(plotter, vtp_dir)
         plotter.add_axes()
-        plotter.show_grid()
+        plotter.show_grid(font_size=10)
         self._add_view_direction_widgets(plotter)
 
         if vtp_dir:
             mode_label = "VTP geometry"
-        elif self._sim is not None:
+        elif self._bounds_sim is not None:
             mode_label = "C++ bounds fallback"
         else:
             mode_label = "No C++ geometry"
         plotter.add_text(
             f"{title}\n[{mode_label}]",
             position="upper_right",
-            font_size=10,
+            font_size=8,
             color="white",
         )
 
@@ -275,7 +274,7 @@ class ConfigVisualizer:
 
         group = "camera_view_direction"
         _, height = plotter.window_size
-        size = 11
+        size = 9
         margin_x = 14.0
         margin_top = 32.0
         y0 = max(10.0, float(height) - margin_top)
@@ -283,7 +282,7 @@ class ConfigVisualizer:
         plotter.add_text(
             "Views:",
             position=(margin_x, y0 + 2.0),
-            font_size=8,
+            font_size=7,
             color="white",
         )
 
@@ -306,12 +305,13 @@ class ConfigVisualizer:
         """Run buildGeometries() and return the VTP output directory, or None.
 
         Uses ``self.config_path`` directly as the C++ config input so the
-        original JSON file is the single source of truth.  The live
-        :class:`SPHSimulation` object is kept as ``self._sim`` for further
-        queries (e.g. ``getShapeBounds()``).
+        original JSON file is the single source of truth. Geometry generation
+        uses the lightweight ``GeometryBuilder`` class. If VTPs are not
+        produced, a live :class:`SPHSimulation` is created as a fallback for
+        ``getShapeBounds()`` queries.
         """
         if self.config_path is None:
-            self._sim = None
+            self._bounds_sim = None
             return None
 
         try:
@@ -333,13 +333,13 @@ class ConfigVisualizer:
 
         original_dir = os.getcwd()
         try:
-            sim = sph.SPHSimulation(str(self.config_path))
-            sim.resetOutputRoot(str(vtp_output_dir))
-            sim.buildGeometries()
-            self._sim = sim
+            builder = sph.GeometryBuilder(str(self.config_path))
+            builder.resetOutputRoot(str(vtp_output_dir))
+            builder.buildGeometries()
+            self._bounds_sim = None
             self._shape_bounds_cache = None
         except Exception:
-            self._sim = None
+            self._bounds_sim = None
             self._shape_bounds_cache = None
             return None
         finally:
@@ -350,6 +350,17 @@ class ConfigVisualizer:
             return output_subdir
         if any(vtp_output_dir.glob("Shape*.vtp")):
             return vtp_output_dir
+
+        # Fallback: build via SPHSimulation so we can query shape bounds.
+        try:
+            sim = sph.SPHSimulation(str(self.config_path))
+            sim.resetOutputRoot(str(vtp_output_dir))
+            sim.buildGeometries()
+            self._bounds_sim = sim
+            self._shape_bounds_cache = None
+        except Exception:
+            self._bounds_sim = None
+            self._shape_bounds_cache = None
 
         return None
 
@@ -464,6 +475,7 @@ class ConfigVisualizer:
                 (entry[0], [int(c * 255) for c in entry[1]])
                 for entry in legend_entries
             ],
+            size=(0.16, 0.16),
             bcolor="black",
             border=True,
         )
@@ -484,10 +496,10 @@ class ConfigVisualizer:
                 except Exception:
                     pass
 
-        if self._sim is not None:
+        if self._bounds_sim is not None:
             try:
                 if self._shape_bounds_cache is None:
-                    self._shape_bounds_cache = self._sim.getShapeBounds()
+                    self._shape_bounds_cache = self._bounds_sim.getShapeBounds()
                 if shape.name in self._shape_bounds_cache:
                     lower, upper = self._shape_bounds_cache[shape.name]
                     return _bounds_to_box(list(lower), list(upper))

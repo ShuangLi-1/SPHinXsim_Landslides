@@ -52,6 +52,7 @@ class GeometryBuilder
     GeometryBuilder(const fs::path &config_path);
     ~GeometryBuilder();
     void resetOutputRoot(const fs::path &output_root);
+    void buildGeometries();
     //----------------------------------------------------------------------
     // static functions for geometry construction used in simulation builder
     //----------------------------------------------------------------------
@@ -68,7 +69,7 @@ class GeometryBuilder
   private:
     std::filesystem::path config_path_;
     EntityManager config_manager_;
-    ScalingConfig default_scaling_config_;
+    json loadConfig();
 
     static Shape *
     addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
