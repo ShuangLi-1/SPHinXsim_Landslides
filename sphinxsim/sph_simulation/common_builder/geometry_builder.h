@@ -46,19 +46,19 @@ struct SystemDomainConfig
 class GeometryBuilder
 {
   public:
-    void createGeometries(EntityManager &config_manager, const json &config);
+    static void createGeometries(EntityManager &config_manager, const json &config);
     static BoundingBoxd parseBoundingBox(const ScalingConfig &scaling_config, const json &config);
     static TransformGeometryBox parseBox(const ScalingConfig &scaling_config, const json &config);
-    GeometricOps parseGeometricOp(const std::string &op_str);
-    SystemDomainConfig parseSystemDomainConfig(const ScalingConfig &scaling_config, const json &config);
-    Real parseGlobalResolution(const ScalingConfig &scaling_config, const json &config);
+    static GeometricOps parseGeometricOp(const std::string &op_str);
+    static SystemDomainConfig parseSystemDomainConfig(const ScalingConfig &scaling_config, const json &config);
+    static Real parseGlobalResolution(const ScalingConfig &scaling_config, const json &config);
 #ifdef SPHINXSYS_2D
-    MultiPolygon parseMultiPolygon(const ScalingConfig &scaling_config, const json &config);
+    static MultiPolygon parseMultiPolygon(const ScalingConfig &scaling_config, const json &config);
 #endif
 
   private:
-    Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
-    GeometricShapeBox addOrientedBox(
+    static Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+    static GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
 };
 } // namespace SPH

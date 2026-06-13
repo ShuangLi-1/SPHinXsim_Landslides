@@ -92,7 +92,6 @@ class SPHSimulation
     EntityManager config_manager_;
     StagePipeline<InitializationHookPoint> initialization_pipeline_;
     StagePipeline<SimulationHookPoint> simulation_pipeline_;
-    std::unique_ptr<GeometryBuilder> geometry_builder_ptr_;
     std::unique_ptr<RecordingBuilder> recording_builder_ptr_;
     std::unique_ptr<ParticleGeneration> particle_generation_ptr_;
     std::unique_ptr<SPHSystem> sph_system_ptr_;

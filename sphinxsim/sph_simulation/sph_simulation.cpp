@@ -11,9 +11,7 @@ namespace SPH
 {
 //=================================================================================================//
 SPHSimulation::SPHSimulation(const fs::path &config_path)
-    : config_path_(config_path),
-      geometry_builder_ptr_(std::make_unique<GeometryBuilder>()),
-      recording_builder_ptr_(std::make_unique<RecordingBuilder>())
+    : config_path_(config_path), recording_builder_ptr_(std::make_unique<RecordingBuilder>())
 {
     IO::initEnvironment();
 }
@@ -68,13 +66,6 @@ EntityManager &SPHSimulation::getConfigManager()
 //=================================================================================================//
 void SPHSimulation::generateParticles()
 {
-    if (!geometry_builder_ptr_)
-    {
-        std::cerr << "SPHSimulation::generateParticles: GeometryBuilder not found. "
-                     "Call buildGeometries() before generateParticles().\n";
-
-        exit(1);
-    }
     if (!geometry_built_)
     {
         std::cerr << "SPHSimulation::generateParticles: Geometries are not built. "
@@ -105,7 +96,7 @@ void SPHSimulation::buildGeometries()
     json config = loadConfig();
     config_manager_.clear();
     config_manager_.emplaceEntity<ScalingConfig>("ScalingConfig", config);
-    geometry_builder_ptr_->createGeometries(config_manager_, config.at("geometries"));
+    GeometryBuilder::createGeometries(config_manager_, config.at("geometries"));
     geometry_built_ = true;
     executable_simulation_state_ready_ = false;
 }
