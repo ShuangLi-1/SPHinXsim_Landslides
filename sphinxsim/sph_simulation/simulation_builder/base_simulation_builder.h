@@ -61,6 +61,7 @@ struct CharacteristicDimension
 class ScalingConfig
 {
   public:
+    ScalingConfig() = default;
     ScalingConfig(const json &config);
     bool isScalingEnabled() const;
     Vecd jsonToVecd(const nlohmann::json &arr, const std::string &unit_name) const;

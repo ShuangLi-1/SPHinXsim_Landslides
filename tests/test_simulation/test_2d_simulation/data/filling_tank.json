@@ -46,7 +46,6 @@
       }
     ]
   },
-
   "particle_generation": {
     "build_and_run": true,
     "settings": {
@@ -64,7 +63,6 @@
       }
     }
   },
-
   "fluid_bodies": [
     {
       "name": "WaterBody",
@@ -75,7 +73,6 @@
       "particle_reserve_factor": 350.0
     }
   ],
-
   "solid_bodies": [
     {
       "name": "WallBoundary",
@@ -84,7 +81,6 @@
       }
     }
   ],
-
   "fluid_boundary_conditions": [
     {
       "body_name": "WaterBody",
@@ -93,9 +89,7 @@
       "inflow_speed": 2.0
     }
   ],
-
   "gravity": [0.0, -1.0],
-
   "solver_parameters": {
     "end_time": 30.0,
     "output_interval": 0.01,

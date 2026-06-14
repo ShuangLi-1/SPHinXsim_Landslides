@@ -32,6 +32,9 @@
 #include "base_simulation_builder.h"
 #include "sphinxsys.h"
 
+#include <filesystem>
+namespace fs = std::filesystem;
+
 namespace SPH
 {
 class EntityManager;
@@ -46,19 +49,31 @@ struct SystemDomainConfig
 class GeometryBuilder
 {
   public:
-    void createGeometries(EntityManager &config_manager, const json &config);
+    GeometryBuilder(const fs::path &config_path);
+    ~GeometryBuilder();
+    void resetOutputRoot(const fs::path &output_root);
+    void buildGeometries();
+    //----------------------------------------------------------------------
+    // static functions for geometry construction used in simulation builder
+    //----------------------------------------------------------------------
+    static void createGeometries(EntityManager &config_manager, const json &config);
     static BoundingBoxd parseBoundingBox(const ScalingConfig &scaling_config, const json &config);
     static TransformGeometryBox parseBox(const ScalingConfig &scaling_config, const json &config);
-    GeometricOps parseGeometricOp(const std::string &op_str);
-    SystemDomainConfig parseSystemDomainConfig(const ScalingConfig &scaling_config, const json &config);
-    Real parseGlobalResolution(const ScalingConfig &scaling_config, const json &config);
+    static GeometricOps parseGeometricOp(const std::string &op_str);
+    static SystemDomainConfig parseSystemDomainConfig(const ScalingConfig &scaling_config, const json &config);
+    static Real parseGlobalResolution(const ScalingConfig &scaling_config, const json &config);
 #ifdef SPHINXSYS_2D
-    MultiPolygon parseMultiPolygon(const ScalingConfig &scaling_config, const json &config);
+    static MultiPolygon parseMultiPolygon(const ScalingConfig &scaling_config, const json &config);
 #endif
 
   private:
-    Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
-    GeometricShapeBox addOrientedBox(
+    std::filesystem::path config_path_;
+    EntityManager config_manager_;
+    json loadConfig();
+
+    static Shape *
+    addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+    static GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
 };
 } // namespace SPH

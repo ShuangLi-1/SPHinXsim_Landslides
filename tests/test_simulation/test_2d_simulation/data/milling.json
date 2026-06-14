@@ -22,7 +22,7 @@
           {
             "operation": "union",
             "type": "data_file",
-            "file_path": "./input/milling_tool.dat"
+            "file_path": "milling_tool.dat"
           }
         ]
       }

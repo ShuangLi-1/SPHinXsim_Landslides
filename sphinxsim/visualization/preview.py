@@ -9,8 +9,7 @@ Two rendering modes are supported, tried in order:
 VTP mode (preferred)
     The C++ ``buildGeometries()`` stage is invoked and the resulting
     ``Shape<Name>.vtp`` polygon meshes are loaded and displayed by PyVista.
-    The live :class:`SPHSimulation` object is kept in ``_sim`` for further
-    queries.
+    The lightweight C++ ``GeometryBuilder`` is used for this stage.
 
 C++ bounds fallback
     When VTP files are not produced, accurate bounding boxes are queried
@@ -27,7 +26,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sphinxsim.bindings.loader import load_sphinxsys_core
+from sphinxsim.bindings.loader import load_sphinxsys_core, load_sphinxsys_core_nd
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
@@ -79,6 +78,55 @@ def _bounds_to_box(lower: list[float], upper: list[float]) -> Any:
     return pv.Box(bounds=(lower[0], upper[0], lower[1], upper[1], lower[2], upper[2]))
 
 
+def _label_anchor_point(mesh: Any) -> tuple[float, float, float]:
+    """Choose a label position inside *mesh* when possible.
+
+    For concave shapes the geometric center can lie outside. We sample a few
+    points inside the axis-aligned bounds and keep the first point confirmed as
+    enclosed by the surface. If enclosure checks are unavailable, we fall back
+    to the mesh center.
+    """
+    try:
+        import pyvista as pv  # type: ignore[import]
+    except Exception:
+        return tuple(float(v) for v in mesh.center)
+
+    bounds = mesh.bounds
+    x0, x1, y0, y1, z0, z1 = (float(v) for v in bounds)
+    center = tuple(float(v) for v in mesh.center)
+
+    # Probe from center outward; using interior fractions avoids boundary points.
+    fractions = (0.5, 0.35, 0.65, 0.2, 0.8)
+    candidates = []
+    for fx in fractions:
+        x = x0 + (x1 - x0) * fx
+        for fy in fractions:
+            y = y0 + (y1 - y0) * fy
+            for fz in fractions:
+                z = z0 + (z1 - z0) * fz
+                candidates.append((x, y, z))
+
+    # Ensure the geometric center is always tested first.
+    candidates.insert(0, center)
+
+    try:
+        points = pv.PolyData(candidates)
+        selected = points.select_interior_points(
+            mesh,
+            tolerance=1e-6,
+            check_surface=False,
+        )
+        mask = selected["SelectedPoints"]
+        for idx, value in enumerate(mask):
+            if int(value) == 1:
+                point = candidates[idx]
+                return (float(point[0]), float(point[1]), float(point[2]))
+    except Exception:
+        pass
+
+    return center
+
+
 # ---------------------------------------------------------------------------
 # Main class
 # ---------------------------------------------------------------------------
@@ -115,8 +163,45 @@ class ConfigVisualizer:
         self.off_screen = off_screen
 
         self._vtp_dir: Path | None = None
-        self._sim: Any | None = None
+        self._bounds_sim: Any | None = None
         self._shape_bounds_cache: dict[str, Any] | None = None
+
+    def _spatial_dim(self) -> int:
+        """Return the spatial dimension (2 or 3) inferred from the config.
+
+        Checks multiple vector fields in order of reliability so the correct
+        binding module is selected even when ``system_domain`` is absent.
+        """
+        geo = self.config.geometries
+
+        # Most reliable: system_domain explicitly declares the bounding box.
+        if geo.system_domain is not None:
+            return len(geo.system_domain.lower_bound)
+
+        # Top-level gravity vector.
+        if self.config.gravity is not None:
+            return len(self.config.gravity)
+
+        # Walk shapes: bounding_box / box / expanded_box carry explicit vectors.
+        for shape in geo.shapes:
+            for vec in (shape.lower_bound, shape.upper_bound, shape.half_size):
+                if vec is not None:
+                    return len(vec)
+            if shape.transform is not None:
+                return len(shape.transform.translation)
+            # triangle_mesh: translation field is 3-D only (min_length=3).
+            if shape.translation is not None:
+                return len(shape.translation)
+
+        # Walk oriented boxes: center / normal / half_size.
+        for ob in geo.oriented_boxes:
+            for vec in (ob.center, ob.normal, ob.half_size):
+                if vec is not None:
+                    return len(vec)
+            if ob.transform is not None:
+                return len(ob.transform.translation)
+
+        return 3  # safe default — 3-D module handles most cases
 
     @property
     def used_cpp_geometry(self) -> bool:
@@ -126,7 +211,7 @@ class ConfigVisualizer:
     @property
     def used_cpp_bounds(self) -> bool:
         """Whether the most recent preview used live C++ shape bounds."""
-        return self._sim is not None
+        return self._bounds_sim is not None
 
     # ------------------------------------------------------------------
     # Public API
@@ -160,25 +245,26 @@ class ConfigVisualizer:
         if use_cpp:
             vtp_dir = self._try_build_geometries()
         else:
-            self._sim = None
+            self._bounds_sim = None
             self._shape_bounds_cache = None
         self._vtp_dir = vtp_dir
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
         self._populate_plotter(plotter, vtp_dir)
         plotter.add_axes()
-        plotter.show_grid()
+        plotter.show_grid(font_size=10)
+        self._add_view_direction_widgets(plotter)
 
         if vtp_dir:
             mode_label = "VTP geometry"
-        elif self._sim is not None:
+        elif self._bounds_sim is not None:
             mode_label = "C++ bounds fallback"
         else:
             mode_label = "No C++ geometry"
         plotter.add_text(
             f"{title}\n[{mode_label}]",
-            position="upper_left",
-            font_size=10,
+            position="upper_right",
+            font_size=8,
             color="white",
         )
 
@@ -188,20 +274,86 @@ class ConfigVisualizer:
     # Internal helpers
     # ------------------------------------------------------------------
 
+    def _add_view_direction_widgets(self, plotter: Any) -> None:
+        """Add on-screen camera view-direction buttons."""
+
+        def set_plus_x() -> None:
+            plotter.view_yz(negative=False)
+
+        def set_minus_x() -> None:
+            plotter.view_yz(negative=True)
+
+        def set_plus_y() -> None:
+            plotter.view_xz(negative=False)
+
+        def set_minus_y() -> None:
+            plotter.view_xz(negative=True)
+
+        def set_plus_z() -> None:
+            plotter.view_xy(negative=False)
+
+        def set_minus_z() -> None:
+            plotter.view_xy(negative=True)
+
+        def set_isometric() -> None:
+            plotter.view_isometric()
+
+        # Radio buttons are mutually exclusive, so they behave like view presets.
+        buttons = [
+            ("+x", set_plus_x, False),
+            ("-x", set_minus_x, False),
+            ("-y", set_minus_y, False),
+            ("+y", set_plus_y, False),
+            ("+z", set_plus_z, False),
+            ("-z", set_minus_z, False),
+            ("isometric", set_isometric, True),
+        ]
+
+        group = "camera_view_direction"
+        _, height = plotter.window_size
+        size = 9
+        margin_x = 14.0
+        margin_top = 32.0
+        y0 = max(10.0, float(height) - margin_top)
+
+        plotter.add_text(
+            "Views:",
+            position=(margin_x, y0 + 2.0),
+            font_size=7,
+            color="white",
+        )
+
+        x0 = margin_x + 52.0
+        dx = 62.0
+        for idx, (title, callback, is_default) in enumerate(buttons):
+            plotter.add_radio_button_widget(
+                callback,
+                group,
+                value=is_default,
+                title=title,
+                position=(x0 + dx * idx, y0),
+                size=size,
+                border_size=1,
+                color_on="dodgerblue",
+                color_off="gray",
+            )
+
     def _try_build_geometries(self) -> Path | None:
         """Run buildGeometries() and return the VTP output directory, or None.
 
         Uses ``self.config_path`` directly as the C++ config input so the
-        original JSON file is the single source of truth.  The live
-        :class:`SPHSimulation` object is kept as ``self._sim`` for further
-        queries (e.g. ``getShapeBounds()``).
+        original JSON file is the single source of truth. Geometry generation
+        uses the lightweight ``GeometryBuilder`` class. If VTPs are not
+        produced, a live :class:`SPHSimulation` is created as a fallback for
+        ``getShapeBounds()`` queries.
         """
         if self.config_path is None:
-            self._sim = None
+            self._bounds_sim = None
             return None
 
+        ndim = self._spatial_dim()
         try:
-            sph = load_sphinxsys_core()
+            sph = load_sphinxsys_core_nd(ndim)
         except ImportError as exc:
             raise ImportError(str(exc)) from None
 
@@ -218,14 +370,17 @@ class ConfigVisualizer:
                     pass
 
         original_dir = os.getcwd()
+        # Change to the config file's directory so that relative paths in the
+        # JSON (e.g. STL file_path for 3-D triangle_mesh shapes) resolve correctly.
+        os.chdir(self.config_path.parent.parent)
         try:
-            sim = sph.SPHSimulation(str(self.config_path))
-            sim.resetOutputRoot(str(vtp_output_dir))
-            sim.buildGeometries()
-            self._sim = sim
+            builder = sph.GeometryBuilder(str(self.config_path))
+            builder.resetOutputRoot(str(vtp_output_dir))
+            builder.buildGeometries()
+            self._bounds_sim = None
             self._shape_bounds_cache = None
         except Exception:
-            self._sim = None
+            self._bounds_sim = None
             self._shape_bounds_cache = None
             return None
         finally:
@@ -236,6 +391,17 @@ class ConfigVisualizer:
             return output_subdir
         if any(vtp_output_dir.glob("Shape*.vtp")):
             return vtp_output_dir
+
+        # Fallback: build via SPHSimulation so we can query shape bounds.
+        try:
+            sim = sph.SPHSimulation(str(self.config_path))
+            sim.resetOutputRoot(str(vtp_output_dir))
+            sim.buildGeometries()
+            self._bounds_sim = sim
+            self._shape_bounds_cache = None
+        except Exception:
+            self._bounds_sim = None
+            self._shape_bounds_cache = None
 
         return None
 
@@ -282,11 +448,10 @@ class ConfigVisualizer:
                 label=shape.name,
             )
 
-            # Label at mesh centroid
-            centre = mesh.center
+            label_anchor = _label_anchor_point(mesh)
             label_text = body_label(shape.name, config) if is_body else shape.name
             plotter.add_point_labels(
-                [centre],
+                [label_anchor],
                 [label_text],
                 point_size=0,
                 font_size=8,
@@ -351,6 +516,7 @@ class ConfigVisualizer:
                 (entry[0], [int(c * 255) for c in entry[1]])
                 for entry in legend_entries
             ],
+            size=(0.16, 0.16),
             bcolor="black",
             border=True,
         )
@@ -371,10 +537,10 @@ class ConfigVisualizer:
                 except Exception:
                     pass
 
-        if self._sim is not None:
+        if self._bounds_sim is not None:
             try:
                 if self._shape_bounds_cache is None:
-                    self._shape_bounds_cache = self._sim.getShapeBounds()
+                    self._shape_bounds_cache = self._bounds_sim.getShapeBounds()
                 if shape.name in self._shape_bounds_cache:
                     lower, upper = self._shape_bounds_cache[shape.name]
                     return _bounds_to_box(list(lower), list(upper))

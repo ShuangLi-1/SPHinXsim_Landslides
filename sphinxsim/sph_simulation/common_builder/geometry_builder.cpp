@@ -3,6 +3,45 @@
 namespace SPH
 {
 //=================================================================================================//
+GeometryBuilder::GeometryBuilder(const fs::path &config_path)
+    : config_path_(config_path)
+{
+    IO::initEnvironment();
+}
+//=================================================================================================//
+GeometryBuilder::~GeometryBuilder() = default;
+//=================================================================================================//
+void GeometryBuilder::resetOutputRoot(const fs::path &output_root)
+{
+    IOEnvironment &io_env = IO::getEnvironment();
+    if (!fs::exists(output_root))
+    {
+        fs::create_directories(output_root);
+    }
+    io_env.resetOutputFolder((output_root / "output").string(), true);
+}
+//=================================================================================================//
+void GeometryBuilder::buildGeometries()
+{
+    json config = loadConfig();
+    config_manager_.clear();
+    config_manager_.emplaceEntity<ScalingConfig>("ScalingConfig", config);
+    createGeometries(config_manager_, config.at("geometries"));
+}
+//=================================================================================================//
+json GeometryBuilder::loadConfig()
+{
+    json config;
+    std::ifstream file(config_path_);
+    if (!file.is_open())
+    {
+        throw std::runtime_error(
+            "GeometryBuilder::loadConfig: unable to open config file " + config_path_.string());
+    }
+    file >> config;
+    return config;
+}
+//=================================================================================================//
 void SystemDomainConfig::updateSystemDomain(const BoundingBoxd &shape_bounds)
 {
     system_bounds_ = system_bounds_.add(shape_bounds);

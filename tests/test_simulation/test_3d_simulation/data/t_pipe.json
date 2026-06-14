@@ -25,13 +25,13 @@
       {
         "name": "BloodBody",
         "type": "triangle_mesh",
-        "file_path": "./input/blood.stl",
+        "file_path": "blood.stl",
         "scale": 0.001
       },
       {
         "name": "WallBoundary",
         "type": "triangle_mesh",
-        "file_path": "./input/t_pipe.stl",
+        "file_path": "t_pipe.stl",
         "scale": 0.001
       }
     ],
