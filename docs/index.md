@@ -54,7 +54,7 @@ For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 - `sphinxsim/cli.py`:
   Command-line entry point for `generate`, `update`, `validate`, and `run`. It resolves project-local paths, validates configs before execution, and routes runtime output into project-managed build directories.
 - `sphinxsim/config/schemas.py`:
-  Defines the top-level `SimulationConfig` and the typed config surface for system domains, global resolution, shapes, aligned boxes, particle generation, fluid bodies, continuum bodies, solid bodies, boundary conditions, observers, restart settings, body constraints, and extra state recording.
+  Defines the top-level `SimulationConfig` and the typed config surface for system domains, global resolution, shapes, oriented boxes, particle generation, fluid bodies, continuum bodies, solid bodies, boundary conditions, observers, restart settings, body constraints, and extra state recording.
 - `sphinxsim/llm/`:
   Provides LLM backends that translate natural-language prompts into schema-compliant configs and answer schema exploration questions. The default mock backend supports deterministic local testing, while the OpenAI backend can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
 - `sphinxsim/sph_simulation/` and native bindings:
@@ -67,7 +67,7 @@ SPHinXsim currently supports a broader config surface than a basic fluid-only de
 - Fluid dynamics configurations with typed fluid materials, inflow boundary conditions, observers, and solver controls.
 - Continuum dynamics configurations with continuum material models and dedicated continuum solver parameters.
 - Solid boundary/body definitions required by the current validation and simulation builders.
-- Config-driven geometry composition using domains, shapes, aligned boxes, transforms, and particle-generation settings.
+- Config-driven geometry composition using domains, shapes, oriented boxes, transforms, and particle-generation settings.
 - Incremental config editing through the CLI update command instead of regenerating cases from scratch.
 - Schema exploration through the CLI explore command for questions about supported bodies, materials, and simulator behavior.
 

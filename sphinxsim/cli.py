@@ -219,7 +219,7 @@ def cmd_validate(args: argparse.Namespace) -> int:
     print(f"✅ Generated configuration:")
     print(f"   Simulation type: {config.simulation_type.value}")
     print(f"   Shapes: {len(config.geometries.shapes)}")
-    print(f"   Aligned boxes: {len(config.geometries.oriented_boxes)}")
+    print(f"   oriented boxes: {len(config.geometries.oriented_boxes)}")
     if config.geometries.system_domain is not None:
         print(f"   Domain lower bound: {config.geometries.system_domain.lower_bound}")
         print(f"   Domain upper bound: {config.geometries.system_domain.upper_bound}")
