@@ -11,7 +11,7 @@ GeometryBuilder::GeometryBuilder(const fs::path &config_path)
 //=================================================================================================//
 GeometryBuilder::~GeometryBuilder() = default;
 //=================================================================================================//
-void GeometryBuilder::resetOutputRoot(const fs::path &output_root)
+void GeometryBuilder::resetInOutputRoot(const fs::path &output_root)
 {
     IOEnvironment &io_env = IO::getEnvironment();
     if (!fs::exists(output_root))
@@ -19,6 +19,7 @@ void GeometryBuilder::resetOutputRoot(const fs::path &output_root)
         fs::create_directories(output_root);
     }
     io_env.resetOutputFolder((output_root / "output").string(), true);
+    io_env.resetInputFolder((config_path_.parent_path()).string(), true);
 }
 //=================================================================================================//
 void GeometryBuilder::buildGeometries()
@@ -195,7 +196,7 @@ MultiPolygon GeometryBuilder::parseMultiPolygon(const ScalingConfig &scaling_con
     if (polygon_type == "data_file")
     {
         multi_polygon.addPolygonFromFile(
-            config.at("file_path").get<std::string>(), GeometricOps::add,
+            config.at("file_name").get<std::string>(), GeometricOps::add,
             Vecd::Zero(), 1.0 / scaling_config.getScalingRef("Length"));
         return multi_polygon;
     }
@@ -296,7 +297,7 @@ Shape *GeometryBuilder::addShape(
 
         scale /= scaling_factor;
         TriangleMeshShapeSTL *shape = config_manager.emplaceEntity<TriangleMeshShapeSTL>(
-            name, config.at("file_path").get<std::string>(), translation, scale, name);
+            name, config.at("file_name").get<std::string>(), translation, scale, name);
         shape->writTriangleMeshShapeToVtp(Transform(), scaling_factor);
         return shape;
     }
