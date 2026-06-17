@@ -83,29 +83,30 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
 {
     auto &continuum_solver_parameters = config_manager.getEntity<
         ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &continuum_shear_force =
-        method_container.addParticleDynamicsGroup()
-            .add(&method_container.template addInteractionDynamics<
-                  LinearGradient, Vecd>(inner_relation, "Velocity"));
+    auto &continuum_shear_force = method_container.addParticleDynamicsGroup();
 
     std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
     {
-        continuum_shear_force.add(
-            &method_container.template addInteractionDynamicsOneLevel<
-                continuum_dynamics::ShearIntegration, GeneralContinuum>(
-                inner_relation, continuum_solver_parameters.hourglass_factor_,
-                continuum_solver_parameters.shear_stress_damping_));
+        continuum_shear_force
+            .add(&method_container.template addInteractionDynamics<
+                  LinearGradient, Vecd>(inner_relation, "Velocity"))
+            .add(&method_container.template addInteractionDynamicsOneLevel<
+                 continuum_dynamics::ShearIntegration, GeneralContinuum>(
+                 inner_relation, continuum_solver_parameters.hourglass_factor_,
+                 continuum_solver_parameters.shear_stress_damping_));
         return continuum_shear_force;
     }
 
     if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
     {
-        continuum_shear_force.add(
-            &method_container.template addInteractionDynamicsOneLevel<
-                continuum_dynamics::ShearIntegration, J2Plasticity>(
-                inner_relation, continuum_solver_parameters.hourglass_factor_,
-                continuum_solver_parameters.shear_stress_damping_));
+        continuum_shear_force
+            .add(&method_container.template addInteractionDynamics<
+                  LinearGradient, Vecd>(inner_relation, "Velocity"))
+            .add(&method_container.template addInteractionDynamicsOneLevel<
+                 continuum_dynamics::ShearIntegration, J2Plasticity>(
+                 inner_relation, continuum_solver_parameters.hourglass_factor_,
+                 continuum_solver_parameters.shear_stress_damping_));
 
         return continuum_shear_force;
     }
@@ -117,6 +118,56 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
 
     throw std::runtime_error(
         "ContinuumSimulationBuilder::addShearForceIntegration: no supported material type found!");
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType>
+ParticleDynamicsGroup &ContinuumSimulationBuilder::addLinearCorrectionMatrixIfNotPlasticContinuum(
+    EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
+{
+    auto &linear_correction_matrix = method_container.addParticleDynamicsGroup();
+    std::string body_name = inner_relation.getSPHBody().Name();
+    if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        auto &continuum_solver_parameters = config_manager.getEntity<
+            ContinuumSolverParameters>("ContinuumSolverParameters");
+        linear_correction_matrix.add(
+            &method_container.template addInteractionDynamicsWithUpdate<
+                LinearCorrectionMatrix>(inner_relation, continuum_solver_parameters.linear_correction_matrix_coeff_));
+    }
+    return linear_correction_matrix;
+}
+//=================================================================================================//
+template <class MethodContainerType, class ContactRelationType>
+ParticleDynamicsGroup &ContinuumSimulationBuilder::addContactRepulsionFactorIfNotPlasticContinuum(
+    EntityManager &config_manager, MethodContainerType &method_container, ContactRelationType &contact_relation)
+{
+    auto &contact_repulsion_factor = method_container.addParticleDynamicsGroup();
+    std::string body_name = contact_relation.getSPHBody().Name();
+    if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        contact_repulsion_factor.add(
+            &method_container.template addInteractionDynamics<
+                solid_dynamics::RepulsionFactor>(contact_relation));
+    }
+    return contact_repulsion_factor;
+}
+//=================================================================================================//
+template <class MethodContainerType, class ContactRelationType>
+ParticleDynamicsGroup &ContinuumSimulationBuilder::addContactRepulsionForceIfNotPlasticContinuum(
+    EntityManager &config_manager, MethodContainerType &method_container, ContactRelationType &contact_relation)
+{
+    auto &contact_repulsion_force = method_container.addParticleDynamicsGroup();
+    std::string body_name = contact_relation.getSPHBody().Name();
+    if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        auto &continuum_solver_parameters = config_manager.getEntity<
+            ContinuumSolverParameters>("ContinuumSolverParameters");
+        contact_repulsion_force.add(
+            &method_container.template addInteractionDynamicsWithUpdate<
+                solid_dynamics::RepulsionForceCK, Wall>(
+                contact_relation, continuum_solver_parameters.contact_numerical_damping_));
+    }
+    return contact_repulsion_force;
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType>

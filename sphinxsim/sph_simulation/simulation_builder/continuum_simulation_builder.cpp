@@ -68,8 +68,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
         fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
 
-    auto &continuum_linear_correction_matrix = main_methods.addInteractionDynamicsWithUpdate<
-        LinearCorrectionMatrix>(continuum_inner, continuum_solver_parameters.linear_correction_matrix_coeff_);
+    auto &continuum_linear_correction_matrix =
+        addLinearCorrectionMatrixIfNotPlasticContinuum(config_manager, main_methods, continuum_inner);
 
     auto &continuum_shear_force = addShearForceIntegration(config_manager, main_methods, continuum_inner);
     auto &continuum_density_regularization =
@@ -77,11 +77,10 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_stress_diffusion =
         addStressDiffusionIfPlasticContinuum(config_manager, main_methods, continuum_inner);
 
-    auto &continuum_solid_contact_factor = main_methods.addInteractionDynamics<
-        solid_dynamics::RepulsionFactor>(continuum_solid_contact);
-    auto &continuum_solid_contact_force = main_methods.addInteractionDynamicsWithUpdate<
-        solid_dynamics::RepulsionForceCK, Wall>(
-        continuum_solid_contact, continuum_solver_parameters.contact_numerical_damping_);
+    auto &continuum_solid_contact_factor =
+        addContactRepulsionFactorIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
+    auto &continuum_solid_contact_force =
+        addContactRepulsionForceIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
     //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------
