@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, AliasChoices, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class SimulationType(str, Enum):
@@ -133,7 +133,7 @@ class MultiPolygonEntryConfig(BaseModel):
     inner_lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     inner_upper_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     thickness: Optional[float] = Field(default=None, gt=0)
-    file_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("file_name", "file_path"))
+    file_name: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_shape_payload(self) -> "MultiPolygonEntryConfig":
@@ -187,7 +187,7 @@ class ShapeConfig(BaseModel):
 
     polygons: Optional[List[MultiPolygonEntryConfig]] = None
 
-    file_name: Optional[str] = Field(default=None, validation_alias=AliasChoices("file_name", "file_path"))
+    file_name: Optional[str] = None
     translation: Optional[List[float]] = Field(default=None, min_length=3, max_length=3)
     scale: Optional[float] = Field(default=None, gt=0)
 
