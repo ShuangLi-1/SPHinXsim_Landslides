@@ -30,6 +30,13 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
             RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
     }
 
+    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        return method_container.template addInteractionDynamicsOneLevel<
+            continuum_dynamics::PlasticAcousticStep1stHalf,
+            AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation);
+    }
+
     throw std::runtime_error(
         "ContinuumSimulationBuilder::addAcousticStep1stHalf: no supported material type found!");
 }
@@ -53,6 +60,13 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
         return method_container.template addInteractionDynamics<
             fluid_dynamics::AcousticStep2ndHalf, OneLevel,
             RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
+    }
+
+    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        return method_container.template addInteractionDynamicsOneLevel<
+            continuum_dynamics::PlasticAcousticStep2ndHalf,
+            AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation);
     }
 
     throw std::runtime_error(
@@ -89,6 +103,14 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
                 inner_relation, continuum_solver_parameters.hourglass_factor_,
                 continuum_solver_parameters.shear_stress_damping_));
 
+        return continuum_shear_force;
+    }
+
+    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        continuum_shear_force.add(
+            &method_container.template addInteractionDynamics<
+                continuum_dynamics::StressDiffusionCK>(inner_relation));
         return continuum_shear_force;
     }
 
