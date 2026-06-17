@@ -75,7 +75,9 @@
         "sound_speed": 48.8428184591418,
         "youngs_modulus": 5840000.0,
         "poisson_ratio": 0.3,
-        "friction_angle": 0.382227106186758
+        "friction_angle": 0.382227106186758,
+        "cohesion": 0.0,
+        "dilatancy_angle": 0.0
       }
     }
   ],

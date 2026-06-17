@@ -37,6 +37,7 @@ class EntityManager;
 class ParticleDynamicsGroup;
 template <class T>
 class BaseDynamics;
+class BodyStatesRecording;
 class SPHBody;
 
 struct ContinuumSolverParameters
@@ -59,13 +60,15 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     ContinuumSolverParameters parseContinuumSolverParameters(
         const ScalingConfig &scaling_config, const json &config);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType, class InnerRelationType>
     ParticleDynamicsGroup &addShearForceIntegration(
@@ -74,6 +77,22 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     template <class MethodContainerType>
     void buildInitialConditionsIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+
+    template <class MethodContainerType, class InnerRelationType>
+    ParticleDynamicsGroup &addStressDiffusionIfPlasticContinuum(
+        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    ParticleDynamicsGroup &addDensityRegularizationIfPlasticContinuum(
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
+
+    template <class MethodContainerType>
+    void buildWallNormalDirectionIfPlasticContinuum(
+        SPHSimulation &sim, MethodContainerType &method_container, SPHBody &continuum_body);
+
+    void addDerivedVariablesToWriteIfPlasticContinuum(
+        EntityManager &config_manager, BodyStatesRecording &body_state_recorder, SPHBody &continuum_body);
 };
 } // namespace SPH
 #endif // CONTINUUM_SIMULATION_BUILDER_H
