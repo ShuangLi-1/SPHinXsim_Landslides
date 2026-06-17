@@ -3,7 +3,7 @@
     {
       "value": 0.5,
       "name": "Length",
-      "hint": "column collapse tank length"
+      "hint": "geometries.system_domain.upper_bound"
     },
     {
       "value": 9.8,
@@ -13,7 +13,7 @@
     {
       "value": 2040.0,
       "name": "Density",
-      "hint": "granular body material density"
+      "hint": "continuum_bodies[name=GranularBody].material.density"
     }
   ],
 
