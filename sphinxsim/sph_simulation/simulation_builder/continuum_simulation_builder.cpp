@@ -38,7 +38,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
     buildInitialConditionIfPresent(sim, host_methods, config);
-    buildWallNormalDirectionIfPlasticContinuum(sim, host_methods, continuum_body);
     //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
@@ -58,9 +57,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         fluid_dynamics::UpdateParticlePosition>(continuum_body);
 
     auto &continuum_acoustic_step_1st_half =
-        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
+        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner);
     auto &continuum_acoustic_step_2nd_half =
-        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
+        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner);
 
     auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
     auto &continuum_advection_time_step = main_methods.addReduceDynamics<
@@ -72,10 +71,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         addLinearCorrectionMatrixIfNotPlasticContinuum(config_manager, main_methods, continuum_inner);
 
     auto &continuum_shear_force = addShearForceIntegration(config_manager, main_methods, continuum_inner);
-    auto &continuum_density_regularization =
-        addDensityRegularizationIfPlasticContinuum(config_manager, main_methods, continuum_inner, continuum_solid_contact);
-    auto &continuum_stress_diffusion =
-        addStressDiffusionIfPlasticContinuum(config_manager, main_methods, continuum_inner);
 
     auto &continuum_solid_contact_factor =
         addContactRepulsionFactorIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
@@ -105,7 +100,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
-    addDerivedVariablesToWriteIfPlasticContinuum(config_manager, body_state_recorder, continuum_body);
+    buildPlasticContinuumDynamicsIfPresent(
+        sim, host_methods, main_methods, continuum_body, continuum_inner,
+        continuum_solid_contact, body_state_recorder);
     //----------------------------------------------------------------------
     //	Define Preparation or initialization step for the time integration loop.
     //----------------------------------------------------------------------
@@ -117,7 +114,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
             solid_cell_linked_list.exec();
             continuum_update_configuration.exec();
-            continuum_density_regularization.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             continuum_advection_step_setup.exec();
             continuum_solid_contact_factor.exec();
@@ -136,8 +133,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         [&]()
         {
             Real dt = time_stepper.incrementPhysicalTime(continuum_acoustic_time_step);
+            simulation_pipeline.run_hooks(SimulationHookPoint::BeforeAcousticStep1stHalf);
             continuum_shear_force.exec(dt);
-            continuum_stress_diffusion.exec(dt);
             continuum_solid_contact_force.exec();
             continuum_acoustic_step_1st_half.exec(dt);
             simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
@@ -172,7 +169,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
                 solid_cell_linked_list.exec();
                 continuum_update_configuration.exec();
-                continuum_density_regularization.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 continuum_advection_step_setup.exec();
                 continuum_solid_contact_factor.exec();
                 continuum_linear_correction_matrix.exec();

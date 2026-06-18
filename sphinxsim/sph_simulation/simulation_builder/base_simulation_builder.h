@@ -97,6 +97,7 @@ Rotation getRotationFromXAxis(const Vecd &direction);
 // Enum for hook points for fast O(1) access
 enum class SimulationHookPoint
 {
+    BeforeAcousticStep1stHalf,
     BoundaryCondition,
     CouplingSynchronization,
     PositionConstraint,
