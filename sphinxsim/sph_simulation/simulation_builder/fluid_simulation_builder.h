@@ -64,20 +64,6 @@ class FluidSimulationBuilder : public SimulationBuilder
     FluidSolverConfig parseFluidSolverConfig(const ScalingConfig &scaling_config, const json &config);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MethodContainerType &main_methods,
-        InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
-
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MethodContainerType &main_methods,
-        InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
-
-    template <class MethodContainerType>
-    BaseDynamics<Real> &addAcousticTimeStep(
-        EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body);
-
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     void addMainPhysicalTimeStep(
         SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
