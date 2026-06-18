@@ -69,7 +69,7 @@ PYBIND11_MODULE(MODULE_NAME, m)
     py::class_<GeometryBuilder>(m, "GeometryBuilder")
         .def(py::init<const std::filesystem::path &>(), py::arg("config_path"),
              "Initialize GeometryBuilder with path to JSON config file")
-        .def("resetOutputRoot", &GeometryBuilder::resetOutputRoot, py::arg("output_root"),
+        .def("resetInOutputRoot", &GeometryBuilder::resetInOutputRoot, py::arg("output_root"),
              "Override output/restart/reload root folder. Call before building geometries.")
         .def("buildGeometries", &GeometryBuilder::buildGeometries,
              "Build geometries from JSON configuration file");

@@ -133,7 +133,7 @@ class MultiPolygonEntryConfig(BaseModel):
     inner_lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     inner_upper_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     thickness: Optional[float] = Field(default=None, gt=0)
-    file_path: Optional[str] = None
+    file_name: Optional[str] = None
 
     @model_validator(mode="after")
     def _validate_shape_payload(self) -> "MultiPolygonEntryConfig":
@@ -164,8 +164,8 @@ class MultiPolygonEntryConfig(BaseModel):
             if self.points[0] != self.points[-1]:
                 raise ValueError("multipolygon clockwise_points must repeat the first point as the last point")
         elif self.type == MultiPolygonPrimitiveType.DATA_FILE:
-            if not self.file_path:
-                raise ValueError("multipolygon data_file requires file_path")
+            if not self.file_name:
+                raise ValueError("multipolygon data_file requires file_name")
         return self
 
 
@@ -187,7 +187,7 @@ class ShapeConfig(BaseModel):
 
     polygons: Optional[List[MultiPolygonEntryConfig]] = None
 
-    file_path: Optional[str] = None
+    file_name: Optional[str] = None
     translation: Optional[List[float]] = Field(default=None, min_length=3, max_length=3)
     scale: Optional[float] = Field(default=None, gt=0)
 
@@ -225,8 +225,8 @@ class ShapeConfig(BaseModel):
             return self
 
         if self.type == BodyShapeType.TRIANGLE_MESH:
-            if not self.file_path:
-                raise ValueError("triangle_mesh shape requires file_path")
+            if not self.file_name:
+                raise ValueError("triangle_mesh shape requires file_name")
             return self
 
         return self

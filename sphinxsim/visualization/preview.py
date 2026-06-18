@@ -372,10 +372,10 @@ class ConfigVisualizer:
         original_dir = os.getcwd()
         # Change to the config file's directory so that relative paths in the
         # JSON (e.g. STL file_path for 3-D triangle_mesh shapes) resolve correctly.
-        os.chdir(self.config_path.parent.parent)
+        os.chdir(self.config_path.parent)
         try:
             builder = sph.GeometryBuilder(str(self.config_path))
-            builder.resetOutputRoot(str(vtp_output_dir))
+            builder.resetInOutputRoot(str(vtp_output_dir))
             builder.buildGeometries()
             self._bounds_sim = None
             self._shape_bounds_cache = None

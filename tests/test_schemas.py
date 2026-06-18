@@ -318,6 +318,96 @@ class TestSimulationConfig:
             "clockwise_points",
         ]
 
+    def test_multipolygon_data_file_uses_file_name(self):
+        geometries = {
+            "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "WaterBody",
+                    "type": "multipolygon",
+                    "polygons": [
+                        {
+                            "operation": "union",
+                            "type": "data_file",
+                            "file_name": "water.dat",
+                        }
+                    ],
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                },
+            ],
+            "oriented_boxes": [
+                {
+                    "name": "Inlet",
+                    "type": "region",
+                    "half_size": [0.1, 0.05],
+                    "transform": {"translation": [0.05, 0.2], "rotation_angle": 0.0},
+                }
+            ],
+        }
+
+        cfg = _make_minimal_fluid_config(geometries=geometries)
+        data_file = cfg.geometries.shapes[0].polygons[0]
+        assert data_file.type.value == "data_file"
+        assert data_file.file_name == "water.dat"
+
+    def test_triangle_mesh_uses_file_name(self):
+        geometries = {
+            "system_domain": {"lower_bound": [0.0, 0.0, 0.0], "upper_bound": [1.0, 1.0, 1.0]},
+            "global_resolution": {"particle_spacing": 0.05},
+            "shapes": [
+                {
+                    "name": "TetraBody",
+                    "type": "triangle_mesh",
+                    "file_name": "tetra.stl",
+                },
+                {
+                    "name": "WallBoundary",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0, 0.0],
+                    "upper_bound": [1.0, 1.0, 1.0],
+                },
+            ],
+        }
+
+        continuum_bodies = [
+            {
+                "name": "TetraBody",
+                "material": {
+                    "type": "general_continuum",
+                    "density": 1000.0,
+                    "sound_speed": 20.0,
+                    "youngs_modulus": 1.0e6,
+                    "poisson_ratio": 0.3,
+                },
+            }
+        ]
+
+        particle_generation = {
+            "build_and_run": False,
+            "settings": {
+                "bodies": [
+                    {"name": "TetraBody"},
+                    {"name": "WallBoundary", "solid_body": {}},
+                ],
+                "relaxation_parameters": {"total_iterations": 1000},
+            },
+        }
+
+        cfg = _make_minimal_continuum_config(
+            geometries=geometries,
+            continuum_bodies=continuum_bodies,
+            particle_generation=particle_generation,
+        )
+        triangle_mesh = cfg.geometries.shapes[0]
+        assert triangle_mesh.type.value == "triangle_mesh"
+        assert triangle_mesh.file_name == "tetra.stl"
+
     def test_shape_duplicate_name_rejected(self):
         geometries = {
             "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
