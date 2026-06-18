@@ -33,10 +33,11 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
 
     if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
     {
+        using RiemannSolverType = RiemannSolver<PlasticContinuum, PlasticContinuum, TruncatedLinear>;
         return method_container.template addInteractionDynamicsOneLevel<
                         continuum_dynamics::PlasticAcousticStep1stHalf,
-                        AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(contact_relation);
+                        RiemannSolverType, NoKernelCorrectionCK>(inner_relation)
+            .template addPostContactInteraction<Wall, RiemannSolverType, NoKernelCorrectionCK>(contact_relation);
     }
 
     throw std::runtime_error(
@@ -67,13 +68,14 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
 
     if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
     {
+        using RiemannSolverType = RiemannSolver<PlasticContinuum, PlasticContinuum, TruncatedLinear>;
         auto &continuum_solver_parameters = config_manager.getEntity<
             ContinuumSolverParameters>("ContinuumSolverParameters");
         return method_container.template addInteractionDynamicsOneLevel<
                         continuum_dynamics::PlasticAcousticStep2ndHalf,
-                        AcousticRiemannSolverCK, NoKernelCorrectionCK>(
+                        RiemannSolverType, NoKernelCorrectionCK>(
             inner_relation, continuum_solver_parameters.plastic_riemann_dissipation_factor_)
-            .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(contact_relation);
+            .template addPostContactInteraction<Wall, RiemannSolverType, NoKernelCorrectionCK>(contact_relation);
     }
 
     throw std::runtime_error(
@@ -81,16 +83,26 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType>
-ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
-    EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
+void ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent(
+    SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation)
 {
-    auto &continuum_solver_parameters = config_manager.getEntity<
-        ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &continuum_shear_force = method_container.addParticleDynamicsGroup();
+    auto &config_manager = sim.getConfigManager();
+    auto add_shear_force_hook = [&](ParticleDynamicsGroup &continuum_shear_force)
+    {
+        auto *shear_force = &continuum_shear_force;
+        auto *time_stepper = &sim.getSPHSolver().getTimeStepper();
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BeforeAcousticStep1stHalf, [shear_force, time_stepper]()
+            { shear_force->exec(time_stepper->getGlobalTimeStepSize()); });
+    };
 
     std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
     {
+        auto &continuum_solver_parameters = config_manager.getEntity<
+            ContinuumSolverParameters>("ContinuumSolverParameters");
+        auto &continuum_shear_force = method_container.addParticleDynamicsGroup();
         continuum_shear_force
             .add(&method_container.template addInteractionDynamics<
                   LinearGradient, Vecd>(inner_relation, "Velocity"))
@@ -98,11 +110,16 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
                  continuum_dynamics::ShearIntegration, GeneralContinuum>(
                  inner_relation, continuum_solver_parameters.hourglass_factor_,
                  continuum_solver_parameters.shear_stress_damping_));
-        return continuum_shear_force;
+
+        add_shear_force_hook(continuum_shear_force);
+        return;
     }
 
     if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
     {
+        auto &continuum_solver_parameters = config_manager.getEntity<
+            ContinuumSolverParameters>("ContinuumSolverParameters");
+        auto &continuum_shear_force = method_container.addParticleDynamicsGroup();
         continuum_shear_force
             .add(&method_container.template addInteractionDynamics<
                   LinearGradient, Vecd>(inner_relation, "Velocity"))
@@ -111,20 +128,21 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addShearForceIntegration(
                  inner_relation, continuum_solver_parameters.hourglass_factor_,
                  continuum_solver_parameters.shear_stress_damping_));
 
-        return continuum_shear_force;
+        add_shear_force_hook(continuum_shear_force);
+        return;
     }
 
     if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
     {
-        return continuum_shear_force;
+        return;
     }
 
     throw std::runtime_error(
-        "ContinuumSimulationBuilder::addShearForceIntegration: no supported material type found!");
+        "ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent: no supported material type found!");
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType>
-ParticleDynamicsGroup &ContinuumSimulationBuilder::addLinearCorrectionMatrixIfNotPlasticContinuum(
+ParticleDynamicsGroup &ContinuumSimulationBuilder::addLinearCorrectionMatrix(
     EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
 {
     auto &linear_correction_matrix = method_container.addParticleDynamicsGroup();
@@ -141,36 +159,50 @@ ParticleDynamicsGroup &ContinuumSimulationBuilder::addLinearCorrectionMatrixIfNo
 }
 //=================================================================================================//
 template <class MethodContainerType, class ContactRelationType>
-ParticleDynamicsGroup &ContinuumSimulationBuilder::addContactRepulsionFactorIfNotPlasticContinuum(
-    EntityManager &config_manager, MethodContainerType &method_container, ContactRelationType &contact_relation)
+void ContinuumSimulationBuilder::buildContactRepulsionIfPresent(
+    SPHSimulation &sim, MethodContainerType &method_container, ContactRelationType &contact_relation)
 {
+    auto &config_manager = sim.getConfigManager();
+    std::string body_name = contact_relation.getSPHBody().Name();
+    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+    {
+        return;
+    }
+
+    if (!config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum") &&
+        !config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
+    {
+        throw std::runtime_error(
+            "ContinuumSimulationBuilder::buildContactRepulsionIfPresent: no supported material type found!");
+    }
+
+    auto &continuum_solver_parameters = config_manager.getEntity<
+        ContinuumSolverParameters>("ContinuumSolverParameters");
     auto &contact_repulsion_factor = method_container.addParticleDynamicsGroup();
-    std::string body_name = contact_relation.getSPHBody().Name();
-    if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
-    {
-        contact_repulsion_factor.add(
-            &method_container.template addInteractionDynamics<
-                solid_dynamics::RepulsionFactor>(contact_relation));
-    }
-    return contact_repulsion_factor;
-}
-//=================================================================================================//
-template <class MethodContainerType, class ContactRelationType>
-ParticleDynamicsGroup &ContinuumSimulationBuilder::addContactRepulsionForceIfNotPlasticContinuum(
-    EntityManager &config_manager, MethodContainerType &method_container, ContactRelationType &contact_relation)
-{
+    contact_repulsion_factor.add(
+        &method_container.template addInteractionDynamics<
+            solid_dynamics::RepulsionFactor>(contact_relation));
+
     auto &contact_repulsion_force = method_container.addParticleDynamicsGroup();
-    std::string body_name = contact_relation.getSPHBody().Name();
-    if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
-    {
-        auto &continuum_solver_parameters = config_manager.getEntity<
-            ContinuumSolverParameters>("ContinuumSolverParameters");
-        contact_repulsion_force.add(
-            &method_container.template addInteractionDynamicsWithUpdate<
-                solid_dynamics::RepulsionForceCK, Wall>(
-                contact_relation, continuum_solver_parameters.contact_numerical_damping_));
-    }
-    return contact_repulsion_force;
+    contact_repulsion_force.add(
+        &method_container.template addInteractionDynamicsWithUpdate<
+            solid_dynamics::RepulsionForceCK, Wall>(
+            contact_relation, continuum_solver_parameters.contact_numerical_damping_));
+
+    auto *repulsion_factor = &contact_repulsion_factor;
+    auto *repulsion_force = &contact_repulsion_force;
+    auto &initialization_pipeline = sim.getInitializationPipeline();
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [repulsion_factor]()
+        { repulsion_factor->exec(); });
+
+    auto &simulation_pipeline = sim.getSimulationPipeline();
+    simulation_pipeline.insert_hook(
+        SimulationHookPoint::BeforeAcousticStep1stHalf, [repulsion_force]()
+        { repulsion_force->exec(); });
+    simulation_pipeline.insert_hook(
+        SimulationHookPoint::AfterLinearCorrectionMatrix, [repulsion_factor]()
+        { repulsion_factor->exec(); });
 }
 //=================================================================================================//
 template <class HostMethodContainerType, class MethodContainerType,

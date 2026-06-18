@@ -72,20 +72,16 @@ class ContinuumSimulationBuilder : public SimulationBuilder
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType, class InnerRelationType>
-    ParticleDynamicsGroup &addShearForceIntegration(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+    void buildShearForceIntegrationIfPresent(
+        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation);
 
     template <class MethodContainerType, class InnerRelationType>
-    ParticleDynamicsGroup &addLinearCorrectionMatrixIfNotPlasticContinuum(
+    ParticleDynamicsGroup &addLinearCorrectionMatrix(
         EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
 
     template <class MethodContainerType, class ContactRelationType>
-    ParticleDynamicsGroup &addContactRepulsionFactorIfNotPlasticContinuum(
-        EntityManager &config_manager, MethodContainerType &method_container, ContactRelationType &contact_relation);
-
-    template <class MethodContainerType, class ContactRelationType>
-    ParticleDynamicsGroup &addContactRepulsionForceIfNotPlasticContinuum(
-        EntityManager &config_manager, MethodContainerType &method_container, ContactRelationType &contact_relation);
+    void buildContactRepulsionIfPresent(
+        SPHSimulation &sim, MethodContainerType &method_container, ContactRelationType &contact_relation);
 
     template <class MethodContainerType>
     void buildInitialConditionsIfPresent(

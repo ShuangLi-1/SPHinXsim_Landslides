@@ -62,14 +62,10 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
 
     auto &continuum_linear_correction_matrix =
-        addLinearCorrectionMatrixIfNotPlasticContinuum(config_manager, main_methods, continuum_inner);
+        addLinearCorrectionMatrix(config_manager, main_methods, continuum_inner);
 
-    auto &continuum_shear_force = addShearForceIntegration(config_manager, main_methods, continuum_inner);
-
-    auto &continuum_solid_contact_factor =
-        addContactRepulsionFactorIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
-    auto &continuum_solid_contact_force =
-        addContactRepulsionForceIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
+    buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
+    buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
@@ -116,8 +112,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             continuum_advection_step_setup.exec();
-            continuum_solid_contact_factor.exec();
             continuum_linear_correction_matrix.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
             body_state_recorder.writeToFile();
         });
@@ -133,8 +129,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         {
             Real dt = time_stepper.incrementPhysicalTime(continuum_acoustic_time_step);
             simulation_pipeline.run_hooks(SimulationHookPoint::BeforeAcousticStep1stHalf);
-            continuum_shear_force.exec(dt);
-            continuum_solid_contact_force.exec();
             continuum_acoustic_step_1st_half.exec(dt);
             simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
             continuum_acoustic_step_2nd_half.exec(dt);
@@ -170,8 +164,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
                 continuum_update_configuration.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 continuum_advection_step_setup.exec();
-                continuum_solid_contact_factor.exec();
                 continuum_linear_correction_matrix.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterLinearCorrectionMatrix);
             }
         });
 }
