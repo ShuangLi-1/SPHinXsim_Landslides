@@ -9,9 +9,10 @@
 namespace SPH
 {
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType>
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
-    EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
+    EntityManager &config_manager, MethodContainerType &method_container,
+    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
@@ -32,16 +33,20 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
 
     if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
     {
-        return method_container.addParticleDynamicsGroup();
+        return method_container.template addInteractionDynamicsOneLevel<
+                        continuum_dynamics::PlasticAcousticStep1stHalf,
+                        AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
+            .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(contact_relation);
     }
 
     throw std::runtime_error(
         "ContinuumSimulationBuilder::addAcousticStep1stHalf: no supported material type found!");
 }
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType>
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
-    EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation)
+    EntityManager &config_manager, MethodContainerType &method_container,
+    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     std::string body_name = inner_relation.getSPHBody().Name();
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
@@ -62,7 +67,13 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
 
     if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
     {
-        return method_container.addParticleDynamicsGroup();
+        auto &continuum_solver_parameters = config_manager.getEntity<
+            ContinuumSolverParameters>("ContinuumSolverParameters");
+        return method_container.template addInteractionDynamicsOneLevel<
+                        continuum_dynamics::PlasticAcousticStep2ndHalf,
+                        AcousticRiemannSolverCK, NoKernelCorrectionCK>(
+            inner_relation, continuum_solver_parameters.plastic_riemann_dissipation_factor_)
+            .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(contact_relation);
     }
 
     throw std::runtime_error(
@@ -193,18 +204,6 @@ void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
     auto &stress_diffusion = main_methods.template addInteractionDynamics<
         continuum_dynamics::StressDiffusionCK>(inner_relation);
 
-    auto &plastic_acoustic_step_1st_half =
-        main_methods.template addInteractionDynamicsOneLevel<
-                        continuum_dynamics::PlasticAcousticStep1stHalf,
-                        AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(contact_relation);
-
-    auto &plastic_acoustic_step_2nd_half =
-        main_methods.template addInteractionDynamicsOneLevel<
-                        continuum_dynamics::PlasticAcousticStep2ndHalf,
-                        AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(contact_relation);
-
     body_state_recorder.addDerivedVariableRecording<
         StateDynamics<execution::ParallelPolicy, continuum_dynamics::VerticalStressCK>>(continuum_body);
     body_state_recorder.addDerivedVariableRecording<
@@ -222,14 +221,7 @@ void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
         SimulationHookPoint::BeforeAcousticStep1stHalf, [&]()
-        {
-            Real dt = time_stepper.getGlobalTimeStepSize();
-            stress_diffusion.exec(dt);
-            plastic_acoustic_step_1st_half.exec(dt);
-        });
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::BoundaryCondition, [&]()
-        { plastic_acoustic_step_2nd_half.exec(time_stepper.getGlobalTimeStepSize()); });
+        { stress_diffusion.exec(time_stepper.getGlobalTimeStepSize()); });
     simulation_pipeline.insert_hook(
         SimulationHookPoint::ParticleIndicationTagging, [&]()
         { density_regularization.exec(); });

@@ -48,6 +48,7 @@ struct ContinuumSolverParameters
     Real contact_numerical_damping_{0.5};
     Real shear_stress_damping_{0.0};
     Real hourglass_factor_{2.0};
+    Real plastic_riemann_dissipation_factor_{20.0 * (Real)Dimensions};
 };
 
 class ContinuumSimulationBuilder : public SimulationBuilder
@@ -60,13 +61,15 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     ContinuumSolverParameters parseContinuumSolverParameters(
         const ScalingConfig &scaling_config, const json &config);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType, class InnerRelationType>
     ParticleDynamicsGroup &addShearForceIntegration(

@@ -57,15 +57,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         fluid_dynamics::UpdateParticlePosition>(continuum_body);
 
     auto &continuum_acoustic_step_1st_half =
-        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner);
+        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
     auto &continuum_acoustic_step_2nd_half =
-        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner);
-
-    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &continuum_advection_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
-    auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
+        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
 
     auto &continuum_linear_correction_matrix =
         addLinearCorrectionMatrixIfNotPlasticContinuum(config_manager, main_methods, continuum_inner);
@@ -76,14 +70,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         addContactRepulsionFactorIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
     auto &continuum_solid_contact_force =
         addContactRepulsionForceIfNotPlasticContinuum(config_manager, main_methods, continuum_solid_contact);
-    //----------------------------------------------------------------------
-    //	Define time-integration method, screen out uput and observation sample rate.
-    //----------------------------------------------------------------------
-    auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
-    auto &time_stepper = sph_solver.getTimeStepper();
-    auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
-    auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
-    time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
@@ -103,6 +89,19 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     buildPlasticContinuumDynamicsIfPresent(
         sim, host_methods, main_methods, continuum_body, continuum_inner,
         continuum_solid_contact, body_state_recorder);
+    //----------------------------------------------------------------------
+    //	Define time-integration method, screen out uput and observation sample rate.
+    //----------------------------------------------------------------------
+    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
+    auto &continuum_advection_time_step = main_methods.addReduceDynamics<
+        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
+    auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
+        fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
+    auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
+    auto &time_stepper = sph_solver.getTimeStepper();
+    auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
+    auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
+    time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
     //----------------------------------------------------------------------
     //	Define Preparation or initialization step for the time integration loop.
     //----------------------------------------------------------------------
@@ -211,6 +210,9 @@ ContinuumSolverParameters ContinuumSimulationBuilder::parseContinuumSolverParame
     if (config.contains("hourglass_factor"))
         parameters.hourglass_factor_ = scaling_config.jsonToReal(
             config.at("hourglass_factor"), "Dimensionless");
+    if (config.contains("plastic_riemann_dissipation_factor"))
+        parameters.plastic_riemann_dissipation_factor_ = scaling_config.jsonToReal(
+            config.at("plastic_riemann_dissipation_factor"), "Dimensionless");
 
     return parameters;
 }
