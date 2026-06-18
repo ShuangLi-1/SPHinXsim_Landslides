@@ -8,7 +8,7 @@ Install:
 - CMake
 - Ninja
 - Git
-- Python 3.11
+- Python 3
 
 Use x64 Native Tools Command Prompt for VS 2022 or Developer PowerShell.
 
@@ -17,12 +17,6 @@ Use x64 Native Tools Command Prompt for VS 2022 or Developer PowerShell.
 ```powershell
 git clone --recurse-submodules https://github.com/<your-org>/SPHinXsim.git
 cd SPHinXsim
-```
-
-If already cloned without submodules:
-
-```powershell
-git submodule update --init --recursive
 ```
 
 ## Install vcpkg

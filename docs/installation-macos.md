@@ -16,12 +16,6 @@ git clone --recurse-submodules https://github.com/<your-org>/SPHinXsim.git
 cd SPHinXsim
 ```
 
-If already cloned without submodules:
-
-```bash
-git submodule update --init --recursive
-```
-
 ## Install vcpkg
 
 ```bash

@@ -51,7 +51,7 @@ class GeometryBuilder
   public:
     GeometryBuilder(const fs::path &config_path);
     ~GeometryBuilder();
-    void resetOutputRoot(const fs::path &output_root);
+    void resetInOutputRoot(const fs::path &output_root);
     void buildGeometries();
     //----------------------------------------------------------------------
     // static functions for geometry construction used in simulation builder
