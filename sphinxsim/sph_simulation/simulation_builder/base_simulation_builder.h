@@ -98,6 +98,7 @@ Rotation getRotationFromXAxis(const Vecd &direction);
 enum class SimulationHookPoint
 {
     BoundaryCondition,
+    MainPhysicalTimeStep,
     CouplingSynchronization,
     PositionConstraint,
     ParticleCreation,
