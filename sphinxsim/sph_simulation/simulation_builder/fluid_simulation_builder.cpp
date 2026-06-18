@@ -66,19 +66,14 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_linear_correction_matrix = addLinearCorrectionMatrixWithScope(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
-    auto &fluid_acoustic_step_1st_half = addAcousticStep1stHalf(
-        config_manager, main_methods, fluid_inner, fluid_wall_contact);
-
-    auto &fluid_acoustic_step_2nd_half = addAcousticStep2ndHalf(
-        config_manager, main_methods, fluid_inner, fluid_wall_contact);
+    addMainPhysicalTimeStep(sim, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_density_regularization = addDensitySummationAndRegularization(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    auto &fluid_advection_time_step = main_methods.addReduceDynamics<fluid_dynamics::AdvectionTimeStepCK>(
-        fluid_body, Real(1), fluid_solver_config.advection_cfl_);
-    auto &fluid_acoustic_time_step = addAcousticTimeStep(config_manager, main_methods, fluid_body);
+    auto &fluid_advection_time_step = main_methods.addReduceDynamics<
+        fluid_dynamics::AdvectionTimeStepCK>(fluid_body, Real(1), fluid_solver_config.advection_cfl_);
     //----------------------------------------------------------------------
     //	Define time integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------
@@ -135,10 +130,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     simulation_pipeline.main_steps.push_back( // acoustic or integration step
         [&]()
         {
-            Real dt = time_stepper.incrementPhysicalTime(fluid_acoustic_time_step);
-            fluid_acoustic_step_1st_half.exec(dt);
-            simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
-            fluid_acoustic_step_2nd_half.exec(dt);
+            simulation_pipeline.run_hooks(SimulationHookPoint::MainPhysicalTimeStep);
             simulation_pipeline.run_hooks(SimulationHookPoint::CouplingSynchronization);
         });
 
