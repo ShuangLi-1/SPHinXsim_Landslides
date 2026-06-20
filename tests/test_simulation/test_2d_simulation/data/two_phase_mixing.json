@@ -1,0 +1,132 @@
+{
+  "characteristic_dimensions": [
+    {
+      "value": 1.0,
+      "name": "Length",
+      "hint": "geometries.shapes[name=WaterBody].polygons[type=bounding_box].upper_bound"
+    },
+    {
+      "value": 1.0,
+      "name": "Gravity",
+      "hint": "gravity"
+    },
+    {
+      "value": 0.5,
+      "name": "Velocity",
+      "hint": "fluid_boundary_conditions[body_name=WaterBody].inflow_speed"
+    }
+  ],
+
+  "simulation_type": "fluid_dynamics",
+
+  "geometries": {
+    "global_resolution": { "particle_spacing": 0.0125 },
+    "shapes": [
+      {
+        "name": "WaterBody",
+        "type": "multipolygon",
+        "polygons": [
+          {
+            "operation": "union",
+            "type": "box",
+            "half_size": [0.05, 0.025],
+            "transform": {
+              "translation": [0.5, 1.5],
+              "rotation_angle": 0.0
+            }
+          },
+          {
+            "operation": "union",
+            "type": "bounding_box",
+            "lower_bound": [0.0, 0.0],
+            "upper_bound": [2.0, 0.5]
+          }
+        ]
+      },
+      {
+        "name": "WallBoundary",
+        "type": "multipolygon",
+        "polygons": [
+          {
+            "operation": "union",
+            "type": "bounding_box",
+            "lower_bound": [-0.1, -0.1],
+            "upper_bound": [2.1, 2.1]
+          },
+          {
+            "operation": "subtraction",
+            "type": "bounding_box",
+            "lower_bound": [0.0, 0.0],
+            "upper_bound": [2.0, 2.2]
+          }
+        ]
+      }
+    ],
+    "oriented_boxes": [
+      {
+        "name": "Emitter",
+        "type": "region",
+        "half_size": [0.05, 0.025],
+        "transform": {
+          "translation": [0.5, 1.5],
+          "rotation_angle": 0.0
+        }
+      }
+    ]
+  },
+  "particle_generation": {
+    "build_and_run": true,
+    "settings": {
+      "bodies": [
+        {
+          "name": "WaterBody"
+        },
+        {
+          "name": "WallBoundary",
+          "solid_body": {}
+        }
+      ],
+      "relaxation_parameters": {
+        "total_iterations": 1000
+      }
+    }
+  },
+  "fluid_bodies": [
+    {
+      "name": "WaterBody",
+      "material": {
+        "type": "weakly_compressible_fluid",
+        "density": 1.0
+      },
+      "particle_reserve_factor": 2.0
+    }
+  ],
+  "solid_bodies": [
+    {
+      "name": "WallBoundary",
+      "material": {
+        "type": "rigid_body"
+      }
+    }
+  ],
+  "fluid_boundary_conditions": [
+    {
+      "body_name": "WaterBody",
+      "oriented_box": "Emitter",
+      "type": "emitter",
+      "inflow_speed": 0.5
+    }
+  ],
+  "gravity": [0.0, -1.0],
+  "solver_parameters": {
+    "end_time": 5.0,
+    "output_interval": 0.1,
+    "screen_interval": 100,
+    "fluid_dynamics": {
+      "acoustic_cfl": 0.6,
+      "advection_cfl": 0.25,
+      "surface_type": "free_surface",
+      "particle_sort_frequency": 100
+    }
+  }
+}
