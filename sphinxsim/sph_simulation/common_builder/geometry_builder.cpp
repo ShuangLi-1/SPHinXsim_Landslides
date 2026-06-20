@@ -114,10 +114,10 @@ TransformGeometryBox GeometryBuilder::parseBox(const ScalingConfig &scaling_conf
 TransformGeometryBox GeometryBuilder::fetch_or_parseBox(
     const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config)
 {
-    if (config.contains("primitive_name"))
+    if (config.contains("primitive"))
     {
         return TransformGeometryBox(config_manager.getEntity<TransformGeometryBox>(
-            config.at("primitive_name").get<std::string>()));
+            config.at("primitive").get<std::string>()));
     }
     else
     {
