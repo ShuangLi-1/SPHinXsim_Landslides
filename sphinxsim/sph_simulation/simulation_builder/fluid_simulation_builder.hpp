@@ -343,9 +343,8 @@ void FluidSimulationBuilder::addBoundaryCondition(
                     throw std::runtime_error(
                         "FluidSimulationBuilder::addBoundaryCondition: mass_fractions must sum to 1.0");
                 }
-                bi_directional_bd.template addSupplementaryCondition<
-                    typename MethodContainerType::ExPolicy, PrescribedReferenceDensity>(
-                    oriented_box_by_cell, mixture, mass_fractions);
+                bi_directional_bd.template addSupplementaryCondition<PrescribedReferenceDensity>(
+                    main_methods, oriented_box_by_cell, mixture, mass_fractions);
             }
         }
         return;
