@@ -27,7 +27,7 @@ void MaterialBuilder::addMatterMaterial(
         return;
     }
 
-    if (type == "weakly_compressible_mixture")
+    if (type == "weakly_compressible_multi_species")
     {
         StdVec<std::pair<std::string, Real>> species_data;
         for (const auto &species_config : config.at("species"))
@@ -37,8 +37,8 @@ void MaterialBuilder::addMatterMaterial(
             species_data.emplace_back(species_name, density);
         }
         Real sound_speed = getWeaklyCompressibleSoundSpeed(config_manager);
-        auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleMixture>(species_data, sound_speed);
-        config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleMixture", &material);
+        auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleMultiSpecies>(species_data, sound_speed);
+        config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleMultiSpecies", &material);
         return;
     }
 
