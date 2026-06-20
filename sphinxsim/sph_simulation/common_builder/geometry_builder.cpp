@@ -54,6 +54,15 @@ void GeometryBuilder::createGeometries(EntityManager &config_manager, const json
     Real scaling_factor = scaling_config.getScalingRef("Length");
     SystemDomainConfig *system_domain_config = config_manager.emplaceEntity<
         SystemDomainConfig>("SystemDomainConfig", parseSystemDomainConfig(scaling_config, config));
+
+    if (config.contains("primitives"))
+    {
+        for (const auto &primitive : config.at("primitives"))
+        {
+            addPrimitive(scaling_config, config_manager, primitive);
+        }
+    }
+
     for (const auto &geo : config.at("shapes"))
     {
         Shape *shape = addShape(scaling_config, config_manager, geo);
@@ -71,6 +80,23 @@ void GeometryBuilder::createGeometries(EntityManager &config_manager, const json
     }
 }
 //=================================================================================================//
+void GeometryBuilder::addPrimitive(
+    const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config)
+{
+    std::string name = config.at("name").get<std::string>();
+    std::string type = config.at("type").get<std::string>();
+
+    if (type == "box")
+    {
+        TransformGeometryBox box = parseBox(scaling_config, config);
+        config_manager.emplaceEntity<TransformGeometryBox>(name, box);
+        return;
+    }
+
+    throw std::runtime_error(
+        "GeometryBuilder::addPrimitive: unsupported primitive type: " + type);
+}
+//=================================================================================================//
 BoundingBoxd GeometryBuilder::parseBoundingBox(const ScalingConfig &scaling_config, const json &config)
 {
     Vecd lower_bound = scaling_config.jsonToVecd(config.at("lower_bound"), "Length");
@@ -83,6 +109,20 @@ TransformGeometryBox GeometryBuilder::parseBox(const ScalingConfig &scaling_conf
     Vecd half_size = scaling_config.jsonToVecd(config.at("half_size"), "Length");
     Transform transform = scaling_config.jsonToTransform(config.at("transform"));
     return TransformGeometryBox(transform, half_size);
+}
+//=================================================================================================//
+TransformGeometryBox GeometryBuilder::fetch_or_parseBox(
+    const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config)
+{
+    if (config.contains("primitive_name"))
+    {
+        return TransformGeometryBox(config_manager.getEntity<TransformGeometryBox>(
+            config.at("primitive_name").get<std::string>()));
+    }
+    else
+    {
+        return parseBox(scaling_config, config);
+    }
 }
 //=================================================================================================//
 SystemDomainConfig GeometryBuilder::parseSystemDomainConfig(
@@ -129,7 +169,8 @@ GeometricOps GeometryBuilder::parseGeometricOp(const std::string &op_str)
 }
 //=================================================================================================//
 #ifdef SPHINXSYS_2D
-MultiPolygon GeometryBuilder::parseMultiPolygon(const ScalingConfig &scaling_config, const json &config)
+MultiPolygon GeometryBuilder::parseMultiPolygon(
+    const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config)
 {
     MultiPolygon multi_polygon;
     const std::string polygon_type = config.at("type").get<std::string>();
@@ -143,9 +184,8 @@ MultiPolygon GeometryBuilder::parseMultiPolygon(const ScalingConfig &scaling_con
 
     if (polygon_type == "box")
     {
-        Transform transform = scaling_config.jsonToTransform(config.at("transform"));
-        Vecd half_size = scaling_config.jsonToVecd(config.at("half_size"), "Length");
-        multi_polygon.addBox(transform, half_size, GeometricOps::add);
+        TransformGeometryBox box = fetch_or_parseBox(scaling_config, config_manager, config);
+        multi_polygon.addBox(box.getTransform(), box.HalfSize(), GeometricOps::add);
         return multi_polygon;
     }
 
@@ -215,7 +255,7 @@ Shape *GeometryBuilder::addShape(
 
     if (type == "box")
     {
-        TransformGeometryBox box = parseBox(scaling_config, config);
+        TransformGeometryBox box = fetch_or_parseBox(scaling_config, config_manager, config);
         GeometricShapeBox *shape = config_manager.emplaceEntity<GeometricShapeBox>(name, box, name);
         shape->writeGeometricShapeBoxToVtp(scaling_factor);
         return shape;
@@ -274,7 +314,7 @@ Shape *GeometryBuilder::addShape(
         {
             const std::string operation_name = plg.at("operation").get<std::string>();
             GeometricOps op = parseGeometricOp(operation_name);
-            multi_polygon.addMultiPolygon(parseMultiPolygon(scaling_config, plg), op);
+            multi_polygon.addMultiPolygon(parseMultiPolygon(scaling_config, config_manager, plg), op);
         }
         MultiPolygonShape *shape = config_manager.emplaceEntity<MultiPolygonShape>(name, multi_polygon, name);
         shape->writeMultiPolygonShapeToVtp(scaling_factor);
@@ -334,7 +374,7 @@ GeometricShapeBox GeometryBuilder::addOrientedBox(
     if (type == "region")
     {
         OrientedBox *oriented_box = config_manager.emplaceEntity<OrientedBox>(
-            name, xAxis, GeometryBuilder::parseBox(scaling_config, config));
+            name, xAxis, fetch_or_parseBox(scaling_config, config_manager, config));
         return GeometricShapeBox(*oriented_box, name); // for visualization only
     }
 
