@@ -265,9 +265,16 @@ void FluidSimulationBuilder::addBoundaryCondition(
     if (type == "emitter")
     { // must be aligned box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
+
+        Real on_time = 0.0;
+        if (config.contains("on_time"))
+        {
+            on_time = scaling_config.jsonToReal(config.at("on_time"), "Time");
+        }
         auto &inflow_condition = main_methods.template addStateDynamics<
             EmitterInflowConditionCK, ConstantInflowSpeed>(
-            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
+            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"), on_time);
+
         auto &injection = main_methods.template addStateDynamics<
             EmitterInflowInjectionCK>(emitter);
 
