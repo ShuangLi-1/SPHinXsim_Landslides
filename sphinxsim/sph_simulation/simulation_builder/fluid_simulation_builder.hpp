@@ -265,26 +265,48 @@ void FluidSimulationBuilder::addBoundaryCondition(
     if (type == "emitter")
     { // must be aligned box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
-
-        Real on_time = 0.0;
-        if (config.contains("on_time"))
-        {
-            on_time = scaling_config.jsonToReal(config.at("on_time"), "Time");
-        }
         auto &inflow_condition = main_methods.template addStateDynamics<
             EmitterInflowConditionCK, ConstantInflowSpeed>(
-            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"), on_time);
-
+            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
         auto &injection = main_methods.template addStateDynamics<
             EmitterInflowInjectionCK>(emitter);
 
+        fluid_solver_config.emitter_on_ = true; // enable emitter
+        auto &fix_constraint = main_methods.template addStateDynamics<
+            FixConstraintCK>(emitter);
+        if (config.contains("switch_on_time"))
+        {
+            fluid_solver_config.emitter_on_ = false; // disable emitter until switch_on_time
+            Real switch_on_time = scaling_config.jsonToReal(config.at("switch_on_time"), "Time");
+            config_manager.emplaceEntity<Real>(body_name + "EmitterSwitchOnTime", switch_on_time);
+            time_stepper.getEventScheduler().schedule(
+                switch_on_time, [&]()
+                { fluid_solver_config.emitter_on_ = true; });
+        }
+
+        if (config.contains("duration"))
+        {
+            Real duration = scaling_config.jsonToReal(config.at("duration"), "Time");
+            Real switch_off_time = config_manager.getEntity<Real>(body_name + "EmitterSwitchOnTime") + duration;
+            time_stepper.getEventScheduler().schedule(
+                switch_off_time, [&]()
+                { fluid_solver_config.emitter_on_ = false; });
+        }
+
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
-            { inflow_condition.exec(); });
+            { if(fluid_solver_config.emitter_on_)
+                  inflow_condition.exec(); });
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleCreation, [&]()
-            { injection.exec(); });
+            { if(fluid_solver_config.emitter_on_)
+                injection.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::PositionConstraint, [&]()
+            { if(!fluid_solver_config.emitter_on_)
+                    fix_constraint.exec(); });
 
         return;
     }

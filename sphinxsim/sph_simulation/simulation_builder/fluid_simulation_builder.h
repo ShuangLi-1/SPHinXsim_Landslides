@@ -52,6 +52,7 @@ struct FluidSolverConfig
     bool particle_deletion_{false};
     bool particle_sorting_{false};
     UnsignedInt sort_frequency_{0};
+    bool emitter_on_{false};
 };
 
 class FluidSimulationBuilder : public SimulationBuilder
