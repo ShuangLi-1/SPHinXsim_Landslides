@@ -507,4 +507,26 @@ SolverCommonConfig SimulationBuilder::parseSolverCommonConfig(
     return solver_common_config;
 }
 //=================================================================================================//
+void SimulationBuilder::parseScheduledEvents(SPHSimulation &sim, const json &config, bool &on_flag)
+{
+    auto &config_manager = sim.getConfigManager();
+    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    auto &time_stepper = sim.getSPHSolver().getTimeStepper();
+
+    on_flag = false; // disable until switch_on_time
+    Real switch_on_time = scaling_config.jsonToReal(config.at("switch_on_time"), "Time");
+    time_stepper.getEventScheduler().schedule(
+        switch_on_time, [&]()
+        { on_flag = true; });
+
+    if (config.contains("duration"))
+    {
+        Real duration = scaling_config.jsonToReal(config.at("duration"), "Time");
+        Real switch_off_time = switch_on_time + duration;
+        time_stepper.getEventScheduler().schedule(
+            switch_off_time, [&]()
+            { on_flag = false; });
+    }
+}
+//=================================================================================================//
 } // namespace SPH

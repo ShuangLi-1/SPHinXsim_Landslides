@@ -20,6 +20,7 @@ The Python and LLM UI for the multi-physics library [SPHinXsys](https://github.c
 * Optional Python interface using pybind11
 * Optional Natural Language (CLI) interface based on Pydantic and Schema validations
 * [Pyvista](https://pyvista.org/) visualization (CLI interface) for simulation settings
+* Full support for heterogeneous computing with CPU and GPU support using [SYCL](https://www.khronos.org/sycl/)
 
 ## Installation, tutorial and documentation
 

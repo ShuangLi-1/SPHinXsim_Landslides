@@ -263,21 +263,37 @@ void FluidSimulationBuilder::addBoundaryCondition(
     const std::string type = config.at("type").get<std::string>();
 
     if (type == "emitter")
-    { // must be aligned box for emitter
+    { // must be oriented box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
         auto &inflow_condition = main_methods.template addStateDynamics<
             EmitterInflowConditionCK, ConstantInflowSpeed>(
             emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
+        auto &fix_constraint = main_methods.template addStateDynamics<
+            FixConstraintCK>(emitter);
         auto &injection = main_methods.template addStateDynamics<
             EmitterInflowInjectionCK>(emitter);
 
+        fluid_solver_config.emitter_on_ = true; // enable emitter
+        if (config.contains("on_schedule"))
+        {
+            parseScheduledEvents(
+                sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
+        }
+
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
-            { inflow_condition.exec(); });
+            { if(fluid_solver_config.emitter_on_)
+                  inflow_condition.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::PositionConstraint, [&]()
+            { if(!fluid_solver_config.emitter_on_)
+                    fix_constraint.exec(); });
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleCreation, [&]()
-            { injection.exec(); });
+            { if(fluid_solver_config.emitter_on_)
+                injection.exec(); });
 
         return;
     }

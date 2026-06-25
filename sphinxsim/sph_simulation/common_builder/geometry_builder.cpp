@@ -378,7 +378,7 @@ GeometricShapeBox GeometryBuilder::addOrientedBox(
         return GeometricShapeBox(*oriented_box, name); // for visualization only
     }
 
-    throw std::runtime_error("GeometryBuilder::addOrientedBox: unsupported aligned box type: " + type);
+    throw std::runtime_error("GeometryBuilder::addOrientedBox: unsupported oriented box type: " + type);
 }
 //=================================================================================================//
 } // namespace SPH
