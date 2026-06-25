@@ -186,6 +186,7 @@ class SimulationBuilder
     void buildContinuumBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     RestartConfig parseRestartConfig(const json &config);
+    void parseScheduledEvents(SPHSimulation &sim, const json &config, bool &on_flag);
 
     template <class MethodContainerType>
     void buildExternalForceIfPresent(

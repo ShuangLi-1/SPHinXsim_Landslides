@@ -87,8 +87,10 @@
       "oriented_box": "Emitter",
       "type": "emitter",
       "inflow_speed": 2.0,
-      "switch_on_time": 1.0,
-      "duration": 25.0
+      "on_schedule": {
+        "switch_on_time": 1.0,
+        "duration": 25.0
+      }
     }
   ],
   "gravity": [0.0, -1.0],

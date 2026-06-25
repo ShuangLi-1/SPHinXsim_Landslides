@@ -268,29 +268,16 @@ void FluidSimulationBuilder::addBoundaryCondition(
         auto &inflow_condition = main_methods.template addStateDynamics<
             EmitterInflowConditionCK, ConstantInflowSpeed>(
             emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
+        auto &fix_constraint = main_methods.template addStateDynamics<
+            FixConstraintCK>(emitter);
         auto &injection = main_methods.template addStateDynamics<
             EmitterInflowInjectionCK>(emitter);
 
         fluid_solver_config.emitter_on_ = true; // enable emitter
-        auto &fix_constraint = main_methods.template addStateDynamics<
-            FixConstraintCK>(emitter);
-        if (config.contains("switch_on_time"))
+        if (config.contains("on_schedule"))
         {
-            fluid_solver_config.emitter_on_ = false; // disable emitter until switch_on_time
-            Real switch_on_time = scaling_config.jsonToReal(config.at("switch_on_time"), "Time");
-            config_manager.emplaceEntity<Real>(body_name + "EmitterSwitchOnTime", switch_on_time);
-            time_stepper.getEventScheduler().schedule(
-                switch_on_time, [&]()
-                { fluid_solver_config.emitter_on_ = true; });
-        }
-
-        if (config.contains("duration"))
-        {
-            Real duration = scaling_config.jsonToReal(config.at("duration"), "Time");
-            Real switch_off_time = config_manager.getEntity<Real>(body_name + "EmitterSwitchOnTime") + duration;
-            time_stepper.getEventScheduler().schedule(
-                switch_off_time, [&]()
-                { fluid_solver_config.emitter_on_ = false; });
+            parseScheduledEvents(
+                sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
         }
 
         simulation_pipeline.insert_hook(
@@ -299,14 +286,14 @@ void FluidSimulationBuilder::addBoundaryCondition(
                   inflow_condition.exec(); });
 
         simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleCreation, [&]()
-            { if(fluid_solver_config.emitter_on_)
-                injection.exec(); });
-
-        simulation_pipeline.insert_hook(
             SimulationHookPoint::PositionConstraint, [&]()
             { if(!fluid_solver_config.emitter_on_)
                     fix_constraint.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ParticleCreation, [&]()
+            { if(fluid_solver_config.emitter_on_)
+                injection.exec(); });
 
         return;
     }
