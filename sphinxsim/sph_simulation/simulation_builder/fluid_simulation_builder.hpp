@@ -263,7 +263,7 @@ void FluidSimulationBuilder::addBoundaryCondition(
     const std::string type = config.at("type").get<std::string>();
 
     if (type == "emitter")
-    { // must be aligned box for emitter
+    { // must be oriented box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
         auto &inflow_condition = main_methods.template addStateDynamics<
             EmitterInflowConditionCK, ConstantInflowSpeed>(
