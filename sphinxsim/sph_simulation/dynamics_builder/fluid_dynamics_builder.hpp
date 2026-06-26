@@ -3,7 +3,7 @@
 
 #include "fluid_dynamics_builder.h"
 
-#include "all_shared_fluid_dynamics_ck.h"
+#include "density_regularization.hpp"
 
 namespace SPH
 {
