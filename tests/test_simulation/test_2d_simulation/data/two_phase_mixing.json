@@ -3,7 +3,7 @@
     {
       "value": 1.0,
       "name": "Length",
-      "hint": "geometries.shapes[name=WaterBody].polygons[type=bounding_box].upper_bound"
+      "hint": "geometries.shapes[name=MultiPhaseBody].polygons[type=bounding_box].upper_bound"
     },
     {
       "value": 1.0,
@@ -13,7 +13,7 @@
     {
       "value": 0.5,
       "name": "Velocity",
-      "hint": "fluid_boundary_conditions[body_name=WaterBody].inflow_speed"
+      "hint": "fluid_boundary_conditions[body_name=MultiPhaseBody].inflow_speed"
     }
   ],
 
@@ -34,7 +34,7 @@
     ],
     "shapes": [
       {
-        "name": "WaterBody",
+        "name": "MultiPhaseBody",
         "type": "multipolygon",
         "polygons": [
           {
@@ -82,7 +82,7 @@
     "settings": {
       "bodies": [
         {
-          "name": "WaterBody"
+          "name": "MultiPhaseBody"
         },
         {
           "name": "WallBoundary",
@@ -96,10 +96,34 @@
   },
   "fluid_bodies": [
     {
-      "name": "WaterBody",
+      "name": "MultiPhaseBody",
       "material": {
-        "type": "weakly_compressible_fluid",
-        "density": 1.0
+        "type": "weakly_compressible_multi_phase",
+        "pure_phases": [
+          {
+            "name": "Water",
+            "density": 1.0
+          },
+          {
+            "name": "Oil",
+            "density": 0.8
+          }
+        ],
+        "multi_species_phases": [
+          {
+            "name": "MixturePhase",
+            "species": [
+              {
+                "name": "SpeciesA",
+                "density": 2.0
+              },
+              {
+                "name": "SpeciesB",
+                "density": 0.5
+              }
+            ]
+          }
+        ]
       },
       "particle_reserve_factor": 2.0
     }
@@ -114,7 +138,7 @@
   ],
   "fluid_boundary_conditions": [
     {
-      "body_name": "WaterBody",
+      "body_name": "MultiPhaseBody",
       "oriented_box": "Emitter",
       "type": "emitter",
       "inflow_speed": 0.5

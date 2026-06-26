@@ -67,6 +67,42 @@ void MaterialBuilder::addMatterMaterial(
         return;
     }
 
+    if (type == "weakly_compressible_multi_phase")
+    {
+        Real sound_speed = getWeaklyCompressibleSoundSpeed(config_manager);
+        auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleMultiPhase>(sound_speed);
+        config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleMultiPhase", &material);
+
+        if (config.contains("pure_phases"))
+        {
+            NamesAndDensities pure_phases = parseNamesAndDensities(
+                scaling_config, config.at("pure_phases"));
+            material.addPurePhases(pure_phases);
+        }
+        else
+        {
+            std::runtime_error(
+                "MaterialBuilder::addMatterMaterial: multi-phase material must contain pure phases");
+        }
+
+        if (config.contains("multi_species_phases"))
+        {
+            StdVec<std::pair<std::string, NamesAndDensities>> multi_species_phases;
+            for (const auto &phase_config : config.at("multi_species_phases"))
+            {
+                std::string phase_name = phase_config.at("name").get<std::string>();
+                NamesAndDensities species_data = parseNamesAndDensities(
+                    scaling_config, phase_config.at("species"));
+                multi_species_phases.emplace_back(phase_name, species_data);
+            }
+            material.addMultiSpeciesPhases(multi_species_phases);
+        }
+
+        material.setPhases();
+
+        return;
+    }
+
     if (type == "rigid_body")
     {
         auto &material = sph_body.defineMatterMaterial<Solid>();
@@ -101,6 +137,19 @@ void MaterialBuilder::addMatterMaterial(
     }
 
     throw std::runtime_error("MaterialBuilder::addMatterMaterial: unsupported material: " + type);
+}
+//=================================================================================================//
+NamesAndDensities MaterialBuilder::parseNamesAndDensities(
+    const ScalingConfig &scaling_config, const json &config)
+{
+    StdVec<std::pair<std::string, Real>> names_and_densities;
+    for (const auto &species_config : config)
+    {
+        std::string name = species_config.at("name").get<std::string>();
+        Real density = scaling_config.jsonToReal(species_config.at("density"), "Density");
+        names_and_densities.emplace_back(name, density);
+    }
+    return names_and_densities;
 }
 //=================================================================================================//
 void MaterialBuilder::addOtherMaterialProperties(

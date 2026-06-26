@@ -35,6 +35,7 @@ namespace SPH
 {
 class EntityManager;
 class SPHBody;
+using NamesAndDensities = StdVec<std::pair<std::string, Real>>;
 
 struct ThermalBoundaryConfig
 {
@@ -49,6 +50,7 @@ class MaterialBuilder
 
   private:
     void addMatterMaterial(EntityManager &config_manager, SPHBody &sph_body, const json &config);
+    NamesAndDensities parseNamesAndDensities(const ScalingConfig &scaling_config, const json &config);
     void addOtherMaterialProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     void addViscosity(EntityManager &config_manager, SPHBody &sph_body, const json &config);
     void addThermalProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
