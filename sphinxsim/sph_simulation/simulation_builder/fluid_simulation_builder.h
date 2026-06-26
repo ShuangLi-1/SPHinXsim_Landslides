@@ -52,6 +52,7 @@ struct FluidSolverConfig
     bool particle_deletion_{false};
     bool particle_sorting_{false};
     UnsignedInt sort_frequency_{0};
+    bool emitter_on_{false};
 };
 
 class FluidSimulationBuilder : public SimulationBuilder
@@ -64,18 +65,9 @@ class FluidSimulationBuilder : public SimulationBuilder
     FluidSolverConfig parseFluidSolverConfig(const ScalingConfig &scaling_config, const json &config);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MethodContainerType &main_methods,
+    void addMainPhysicalTimeStep(
+        SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
-
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MethodContainerType &main_methods,
-        InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
-
-    template <class MethodContainerType>
-    BaseDynamics<Real> &addAcousticTimeStep(
-        EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addDensityRegularization(

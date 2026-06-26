@@ -16,75 +16,66 @@ namespace SPH
 using namespace fluid_dynamics;
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-BaseDynamics<void> &FluidSimulationBuilder::addAcousticStep1stHalf(
-    EntityManager &config_manager, MethodContainerType &main_methods,
+void FluidSimulationBuilder::addMainPhysicalTimeStep(
+    SPHSimulation &sim, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact)
 {
+    EntityManager &config_manager = sim.getConfigManager();
+    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
+
+    auto &acoustic_step_1st_half = main_methods.addParticleDynamicsGroup();
+    auto &acoustic_step_2nd_half = main_methods.addParticleDynamicsGroup();
+    auto &acoustic_time_step = main_methods.template addReduceDynamicsGroup<ReduceMin>();
+
     std::string body_name = inner_relation.getSPHBody().Name();
-    if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
-    {
-        using RiemannSolverType = RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
-        return main_methods.template addInteractionDynamicsOneLevel<
-                               AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
-    }
-
-    if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
-    {
-        using RiemannSolverType = RiemannSolver<WeaklyCompressibleMixture, WeaklyCompressibleMixture, TruncatedLinear>;
-        return main_methods.template addInteractionDynamicsOneLevel<
-                               AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
-    }
-
-    throw std::runtime_error(
-        "FluidSimulationBuilder::addAcousticStep1stHalf: no supported fluid type found!");
-}
-//=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-BaseDynamics<void> &FluidSimulationBuilder::addAcousticStep2ndHalf(
-    EntityManager &config_manager, MethodContainerType &main_methods,
-    InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact)
-{
-    std::string body_name = inner_relation.getSPHBody().Name();
-    if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
-    {
-        using RiemannSolverType = RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
-        return main_methods.template addInteractionDynamicsOneLevel<
-                               AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
-    }
-
-    if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
-    {
-        using RiemannSolverType = RiemannSolver<WeaklyCompressibleMixture, WeaklyCompressibleMixture, TruncatedLinear>;
-        return main_methods.template addInteractionDynamicsOneLevel<
-                               AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact);
-    }
-
-    throw std::runtime_error(
-        "FluidSimulationBuilder::addAcousticStep2ndHalf: no supported fluid type found!");
-}
-//=================================================================================================//
-template <class MethodContainerType>
-BaseDynamics<Real> &FluidSimulationBuilder::addAcousticTimeStep(
-    EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body)
-{
-    std::string body_name = real_body.Name();
+    SPHBody &sph_body = inner_relation.getSPHBody();
     Real cfl = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig").acoustic_cfl_;
     if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
     {
-        return main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleFluid>>(real_body, cfl);
+        using RiemannSolverType = RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
+        acoustic_step_1st_half.add(
+            &main_methods.template addInteractionDynamicsOneLevel<
+                             AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                 .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+        acoustic_step_2nd_half.add(
+            &main_methods.template addInteractionDynamicsOneLevel<
+                             AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                 .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+        acoustic_time_step.add(
+            &main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleFluid>>(sph_body, cfl));
     }
 
     if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
     {
-        return main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleMixture>>(real_body, cfl);
+        using RiemannSolverType = RiemannSolver<WeaklyCompressibleMixture, WeaklyCompressibleMixture, TruncatedLinear>;
+        acoustic_step_1st_half.add(
+            &main_methods.template addInteractionDynamicsOneLevel<
+                             AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                 .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+        acoustic_step_2nd_half.add(
+            &main_methods.template addInteractionDynamicsOneLevel<
+                             AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                 .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+        acoustic_time_step.add(
+            &main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleMixture>>(sph_body, cfl));
     }
 
-    throw std::runtime_error(
-        "FluidSimulationBuilder::addAcousticTimeStep: no supported fluid type found!");
+    if (acoustic_time_step.hasDynamics() && acoustic_step_1st_half.hasDynamics() && acoustic_step_2nd_half.hasDynamics())
+    {
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::MainPhysicalTimeStep, [&]()
+            {
+                Real dt = time_stepper.incrementPhysicalTime(acoustic_time_step);
+                acoustic_step_1st_half.exec(dt);
+                simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
+                acoustic_step_2nd_half.exec(dt); });
+    }
+    else
+    {
+        throw std::runtime_error(
+            "FluidSimulationBuilder::addMainPhysicalTimeStep: no supported fluid type found!");
+    }
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
@@ -242,21 +233,37 @@ void FluidSimulationBuilder::addBoundaryCondition(
     const std::string type = config.at("type").get<std::string>();
 
     if (type == "emitter")
-    { // must be aligned box for emitter
+    { // must be oriented box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
         auto &inflow_condition = main_methods.template addStateDynamics<
             EmitterInflowConditionCK, ConstantInflowSpeed>(
             emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
+        auto &fix_constraint = main_methods.template addStateDynamics<
+            FixConstraintCK>(emitter);
         auto &injection = main_methods.template addStateDynamics<
             EmitterInflowInjectionCK>(emitter);
 
+        fluid_solver_config.emitter_on_ = true; // enable emitter
+        if (config.contains("on_schedule"))
+        {
+            parseScheduledEvents(
+                sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
+        }
+
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
-            { inflow_condition.exec(); });
+            { if(fluid_solver_config.emitter_on_)
+                  inflow_condition.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::PositionConstraint, [&]()
+            { if(!fluid_solver_config.emitter_on_)
+                    fix_constraint.exec(); });
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleCreation, [&]()
-            { injection.exec(); });
+            { if(fluid_solver_config.emitter_on_)
+                injection.exec(); });
 
         return;
     }

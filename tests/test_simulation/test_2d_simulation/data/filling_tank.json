@@ -86,13 +86,17 @@
       "body_name": "WaterBody",
       "oriented_box": "Emitter",
       "type": "emitter",
-      "inflow_speed": 2.0
+      "inflow_speed": 2.0,
+      "on_schedule": {
+        "switch_on_time": 1.0,
+        "duration": 25.0
+      }
     }
   ],
   "gravity": [0.0, -1.0],
   "solver_parameters": {
     "end_time": 30.0,
-    "output_interval": 0.01,
+    "output_interval": 0.1,
     "screen_interval": 100,
     "fluid_dynamics": {
       "acoustic_cfl": 0.6,
