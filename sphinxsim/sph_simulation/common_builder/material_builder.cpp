@@ -12,6 +12,31 @@ void MaterialBuilder::addMaterial(EntityManager &config_manager, SPHBody &sph_bo
     addOtherMaterialProperties(config_manager, sph_body, config);
 }
 //=================================================================================================//
+StdVec<Real> MaterialBuilder::parseMixtureFractions(
+    const ScalingConfig &scaling_config, const json &config)
+{
+    StdVec<Real> fractions;
+    Real fraction_sum = Real(0);
+    for (const auto &mf : config)
+    {
+        Real fraction = scaling_config.jsonToReal(mf, "Dimensionless");
+        if (fraction < Real(0) || fraction > Real(1))
+        {
+            throw std::runtime_error(
+                "MaterialBuilder::parseMixtureFractions: fractions values must be in [0, 1]");
+        }
+        fractions.push_back(fraction);
+        fraction_sum += fraction;
+    }
+
+    if (ABS(fraction_sum - Real(1)) > Eps)
+    {
+        throw std::runtime_error(
+            "MaterialBuilder::parseMixtureFractions: fractions must sum to 1");
+    }
+    return fractions;
+}
+//=================================================================================================//
 void MaterialBuilder::addMatterMaterial(
     EntityManager &config_manager, SPHBody &sph_body, const json &config)
 {

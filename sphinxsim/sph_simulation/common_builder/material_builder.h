@@ -45,6 +45,7 @@ class MaterialBuilder
 {
   public:
     void addMaterial(EntityManager &config_manager, SPHBody &sph_body, const json &config);
+    static StdVec<Real> parseMixtureFractions(const ScalingConfig &scaling_config, const json &config);
 
   private:
     void addMatterMaterial(EntityManager &config_manager, SPHBody &sph_body, const json &config);
