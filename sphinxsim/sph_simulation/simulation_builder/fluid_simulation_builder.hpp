@@ -5,6 +5,7 @@
 
 #include <cmath>
 
+#include "fluid_dynamics_builder.hpp"
 #include "geometry_builder.h"
 #include "sph_simulation.h"
 #include "thermal_dynamics_builder.hpp"
@@ -91,10 +92,6 @@ BaseDynamics<void> &FluidSimulationBuilder::addDensitySummationAndRegularization
     EntityManager &config_manager, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
-    auto &compression_summation =
-        main_methods.template addInteractionDynamics<CompressionSummation>(inner_relation)
-            .addPostContactInteraction(contact_relation);
-
     SPHBody &sph_body = inner_relation.getSPHBody();
     std::string body_name = sph_body.Name();
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
@@ -102,44 +99,18 @@ BaseDynamics<void> &FluidSimulationBuilder::addDensitySummationAndRegularization
 
     if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
     {
-        return addDensityRegularization<WeaklyCompressibleFluid>(
-            compression_summation, sph_body, surface_type);
+        return FluidDynamicsBuilder::addDensitySummationAndRegularization<WeaklyCompressibleFluid>(
+            main_methods, inner_relation, contact_relation, sph_body, surface_type);
     }
 
     if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
     {
-        return addDensityRegularization<WeaklyCompressibleMixture>(
-            compression_summation, sph_body, surface_type);
+        return FluidDynamicsBuilder::addDensitySummationAndRegularization<WeaklyCompressibleMixture>(
+            main_methods, inner_relation, contact_relation, sph_body, surface_type);
     }
 
     throw std::runtime_error(
         "FluidSimulationBuilder::addDensitySummationAndRegularization: no supported fluid type found!");
-}
-//=================================================================================================//
-template <class FluidType, class CompressionSummationType>
-BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
-    CompressionSummationType &compression_summation, SPHBody &sph_body, std::string &surface_type)
-{
-    if (surface_type == "confined")
-    {
-        return compression_summation.template addPostStateDynamics<
-            DensityRegularization, FluidType, Internal>(sph_body);
-    }
-
-    if (surface_type == "free_surface")
-    {
-        return compression_summation.template addPostStateDynamics<
-            DensityRegularization, FluidType, FreeSurface>(sph_body);
-    }
-
-    if (surface_type == "open_boundary")
-    {
-        return compression_summation.template addPostStateDynamics<
-            DensityRegularization, FluidType, Internal, ExcludeBufferParticles>(sph_body);
-    }
-
-    throw std::runtime_error(
-        "FluidSimulationBuilder::addDensityRegularization: no supported surface type found!");
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>

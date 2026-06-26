@@ -4,6 +4,7 @@
 #include "continuum_simulation_builder.h"
 
 #include "all_continuum_dynamics_ck.h"
+#include "fluid_dynamics_builder.hpp"
 #include "sph_simulation.h"
 
 namespace SPH
@@ -226,12 +227,8 @@ void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
     }
 
     auto &density_regularization =
-        main_methods.template addInteractionDynamics<
-                        fluid_dynamics::CompressionSummation>(inner_relation)
-            .addPostContactInteraction(contact_relation)
-            .template addPostStateDynamics<
-                fluid_dynamics::DensityRegularization,
-                WeaklyCompressibleFluid, FreeSurface>(continuum_body);
+        FluidDynamicsBuilder::addDensitySummationAndRegularization<WeaklyCompressibleFluid>(
+            main_methods, inner_relation, contact_relation, continuum_body, "free_surface");
 
     auto &stress_diffusion = main_methods.template addInteractionDynamics<
         continuum_dynamics::StressDiffusionCK>(inner_relation);
