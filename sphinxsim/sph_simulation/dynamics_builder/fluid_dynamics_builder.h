@@ -37,15 +37,19 @@ class FluidDynamicsBuilder
 {
   public:
     template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    static BaseDynamics<void> &addDensitySummationAndRegularization(
+    static BaseDynamics<void> &buildDensityRegularization(
         MethodContainerType &method_container, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation, SPHBody &sph_body,
-        const std::string &surface_type);
+        ContactRelationType &contact_relation, const std::string &surface_type);
 
-    template <class FluidType, class CompressionSummationType>
+  private:
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    static decltype(auto) addDensitySummation(
+        MethodContainerType &method_container, InnerRelationType &inner_relation,
+        ContactRelationType &contact_relation);
+
+    template <class FluidType, class FlowType, class... ParticleScopes, class CompressionSummationType>
     static BaseDynamics<void> &addDensityRegularization(
-        CompressionSummationType &compression_summation, SPHBody &sph_body,
-        const std::string &surface_type);
+        CompressionSummationType &compression_summation, SPHBody &sph_body);
 };
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_H

@@ -88,29 +88,28 @@ BaseDynamics<Real> &FluidSimulationBuilder::addAcousticTimeStep(
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-BaseDynamics<void> &FluidSimulationBuilder::addDensitySummationAndRegularization(
+BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
     EntityManager &config_manager, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     SPHBody &sph_body = inner_relation.getSPHBody();
     std::string body_name = sph_body.Name();
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    std::string surface_type = fluid_solver_config.surface_type_;
 
     if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
     {
-        return FluidDynamicsBuilder::addDensitySummationAndRegularization<WeaklyCompressibleFluid>(
-            main_methods, inner_relation, contact_relation, sph_body, surface_type);
+        return FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleFluid>(
+            main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
     }
 
     if (config_manager.hasEntity<WeaklyCompressibleMixture>(body_name + "WeaklyCompressibleMixture"))
     {
-        return FluidDynamicsBuilder::addDensitySummationAndRegularization<WeaklyCompressibleMixture>(
-            main_methods, inner_relation, contact_relation, sph_body, surface_type);
+        return FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleMixture>(
+            main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
     }
 
     throw std::runtime_error(
-        "FluidSimulationBuilder::addDensitySummationAndRegularization: no supported fluid type found!");
+        "FluidSimulationBuilder::addDensityRegularization: no supported fluid type found!");
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>

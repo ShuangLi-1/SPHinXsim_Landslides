@@ -72,7 +72,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_acoustic_step_2nd_half = addAcousticStep2ndHalf(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
-    auto &fluid_density_regularization = addDensitySummationAndRegularization(
+    auto &fluid_density_regularization = addDensityRegularization(
         config_manager, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");

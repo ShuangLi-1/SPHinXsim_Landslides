@@ -9,44 +9,50 @@ namespace SPH
 {
 //=================================================================================================//
 template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
-BaseDynamics<void> &FluidDynamicsBuilder::addDensitySummationAndRegularization(
+BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
     MethodContainerType &method_container, InnerRelationType &inner_relation,
-    ContactRelationType &contact_relation, SPHBody &sph_body,
-    const std::string &surface_type)
+    ContactRelationType &contact_relation, const std::string &surface_type)
 {
-    auto &compression_summation =
-        method_container.template addInteractionDynamics<fluid_dynamics::CompressionSummation>(inner_relation)
-            .addPostContactInteraction(contact_relation);
+    auto &compression_summation = addDensitySummation(
+        method_container, inner_relation, contact_relation);
 
-    return addDensityRegularization<FluidType>(
-        compression_summation, sph_body, surface_type);
-}
-//=================================================================================================//
-template <class FluidType, class CompressionSummationType>
-BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
-    CompressionSummationType &compression_summation, SPHBody &sph_body,
-    const std::string &surface_type)
-{
     if (surface_type == "confined")
     {
-        return compression_summation.template addPostStateDynamics<
-            fluid_dynamics::DensityRegularization, FluidType, Internal>(sph_body);
+        return addDensityRegularization<FluidType, Internal>(
+            compression_summation, inner_relation.getSPHBody());
     }
 
     if (surface_type == "free_surface")
     {
-        return compression_summation.template addPostStateDynamics<
-            fluid_dynamics::DensityRegularization, FluidType, FreeSurface>(sph_body);
+        return addDensityRegularization<FluidType, FreeSurface>(
+            compression_summation, inner_relation.getSPHBody());
     }
 
     if (surface_type == "open_boundary")
     {
-        return compression_summation.template addPostStateDynamics<
-            fluid_dynamics::DensityRegularization, FluidType, Internal, ExcludeBufferParticles>(sph_body);
+        return addDensityRegularization<FluidType, Internal, ExcludeBufferParticles>(
+            compression_summation, inner_relation.getSPHBody());
     }
 
     throw std::runtime_error(
-        "FluidDynamicsBuilder::addDensityRegularization: no supported surface type found!");
+        "FluidDynamicsBuilder::buildDensityRegularization: no supported surface type found!");
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+decltype(auto) FluidDynamicsBuilder::addDensitySummation(
+    MethodContainerType &method_container, InnerRelationType &inner_relation,
+    ContactRelationType &contact_relation)
+{
+    return method_container.template addInteractionDynamics<fluid_dynamics::CompressionSummation>(inner_relation)
+        .addPostContactInteraction(contact_relation);
+}
+//=================================================================================================//
+template <class FluidType, class FlowType, class... ParticleScopes, class CompressionSummationType>
+BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
+    CompressionSummationType &compression_summation, SPHBody &sph_body)
+{
+    return compression_summation.template addPostStateDynamics<
+        fluid_dynamics::DensityRegularization, FluidType, FlowType, ParticleScopes...>(sph_body);
 }
 //=================================================================================================//
 } // namespace SPH

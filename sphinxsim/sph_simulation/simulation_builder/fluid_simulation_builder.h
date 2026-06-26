@@ -78,7 +78,7 @@ class FluidSimulationBuilder : public SimulationBuilder
         EntityManager &config_manager, MethodContainerType &main_methods, RealBody &real_body);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addDensitySummationAndRegularization(
+    BaseDynamics<void> &addDensityRegularization(
         EntityManager &config_manager, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 

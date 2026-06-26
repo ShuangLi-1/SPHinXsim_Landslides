@@ -226,9 +226,12 @@ void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
             &host_methods.template addStateDynamics<NormalFromBodyShapeCK>(*solid_body));
     }
 
+    auto &continuum_solver_parameters = config_manager.getEntity<
+        ContinuumSolverParameters>("ContinuumSolverParameters");
     auto &density_regularization =
-        FluidDynamicsBuilder::addDensitySummationAndRegularization<WeaklyCompressibleFluid>(
-            main_methods, inner_relation, contact_relation, continuum_body, "free_surface");
+        FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleFluid>(
+            main_methods, inner_relation, contact_relation,
+            continuum_solver_parameters.surface_type_);
 
     auto &stress_diffusion = main_methods.template addInteractionDynamics<
         continuum_dynamics::StressDiffusionCK>(inner_relation);
