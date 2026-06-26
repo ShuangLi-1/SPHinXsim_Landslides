@@ -206,24 +206,16 @@ void ContinuumSimulationBuilder::buildContactRepulsionIfPresent(
         { repulsion_factor->exec(); });
 }
 //=================================================================================================//
-template <class HostMethodContainerType, class MethodContainerType,
-          class InnerRelationType, class ContactRelationType>
-void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
-    SPHSimulation &sim, HostMethodContainerType &host_methods, MethodContainerType &main_methods,
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+void ContinuumSimulationBuilder::buildDensityRegularizationIfPresent(
+    SPHSimulation &sim, MethodContainerType &main_methods,
     SPHBody &continuum_body, InnerRelationType &inner_relation,
-    ContactRelationType &contact_relation, BodyStatesRecording &body_state_recorder)
+    ContactRelationType &contact_relation)
 {
     EntityManager &config_manager = sim.getConfigManager();
     if (!config_manager.hasEntity<PlasticContinuum>(continuum_body.Name() + "PlasticContinuum"))
     {
         return;
-    }
-
-    auto &wall_normal_direction = host_methods.addParticleDynamicsGroup();
-    for (auto *solid_body : sim.getSPHSystem().collectBodies<SolidBody>())
-    {
-        wall_normal_direction.add(
-            &host_methods.template addStateDynamics<NormalFromBodyShapeCK>(*solid_body));
     }
 
     auto &continuum_solver_parameters = config_manager.getEntity<
@@ -233,6 +225,30 @@ void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
             main_methods, inner_relation, contact_relation,
             continuum_solver_parameters.surface_type_);
 
+    auto *density_regularization_ptr = &density_regularization;
+    auto &initialization_pipeline = sim.getInitializationPipeline();
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::InitialParticleIndicationTagging, [density_regularization_ptr]()
+        { density_regularization_ptr->exec(); });
+
+    auto &simulation_pipeline = sim.getSimulationPipeline();
+    simulation_pipeline.insert_hook(
+        SimulationHookPoint::ParticleIndicationTagging, [density_regularization_ptr]()
+        { density_regularization_ptr->exec(); });
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType>
+void ContinuumSimulationBuilder::buildStressDiffusionIfPresent(
+    SPHSimulation &sim, MethodContainerType &main_methods,
+    SPHBody &continuum_body, InnerRelationType &inner_relation,
+    BodyStatesRecording &body_state_recorder)
+{
+    EntityManager &config_manager = sim.getConfigManager();
+    if (!config_manager.hasEntity<PlasticContinuum>(continuum_body.Name() + "PlasticContinuum"))
+    {
+        return;
+    }
+
     auto &stress_diffusion = main_methods.template addInteractionDynamics<
         continuum_dynamics::StressDiffusionCK>(inner_relation);
 
@@ -241,22 +257,12 @@ void ContinuumSimulationBuilder::buildPlasticContinuumDynamicsIfPresent(
     body_state_recorder.addDerivedVariableRecording<
         StateDynamics<execution::ParallelPolicy, continuum_dynamics::AccDeviatoricPlasticStrainCK>>(continuum_body);
 
-    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
-    auto &initialization_pipeline = sim.getInitializationPipeline();
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialCondition, [&]()
-        { wall_normal_direction.exec(); });
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialParticleIndicationTagging, [&]()
-        { density_regularization.exec(); });
-
+    auto *stress_diffusion_ptr = &stress_diffusion;
+    auto *time_stepper = &sim.getSPHSolver().getTimeStepper();
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
-        SimulationHookPoint::BeforeAcousticStep1stHalf, [&]()
-        { stress_diffusion.exec(time_stepper.getGlobalTimeStepSize()); });
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::ParticleIndicationTagging, [&]()
-        { density_regularization.exec(); });
+        SimulationHookPoint::BeforeAcousticStep1stHalf, [stress_diffusion_ptr, time_stepper]()
+        { stress_diffusion_ptr->exec(time_stepper->getGlobalTimeStepSize()); });
 }
 //=================================================================================================//
 template <class MethodContainerType>

@@ -88,12 +88,17 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     void buildInitialConditionsIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
 
-    template <class HostMethodContainerType, class MethodContainerType,
-              class InnerRelationType, class ContactRelationType>
-    void buildPlasticContinuumDynamicsIfPresent(
-        SPHSimulation &sim, HostMethodContainerType &host_methods, MethodContainerType &main_methods,
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    void buildDensityRegularizationIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods,
         SPHBody &continuum_body, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation, BodyStatesRecording &body_state_recorder);
+        ContactRelationType &contact_relation);
+
+    template <class MethodContainerType, class InnerRelationType>
+    void buildStressDiffusionIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHBody &continuum_body, InnerRelationType &inner_relation,
+        BodyStatesRecording &body_state_recorder);
 };
 } // namespace SPH
 #endif // CONTINUUM_SIMULATION_BUILDER_H
