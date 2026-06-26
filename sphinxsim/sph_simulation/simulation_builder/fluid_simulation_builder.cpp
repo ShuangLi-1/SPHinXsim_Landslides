@@ -140,6 +140,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             if (advection_step(fluid_advection_time_step))
             {
                 fluid_particle_position.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::PositionConstraint);
                 time_stepper.incrementIterationStep();
 
                 if (time_stepper.isFirstComputingStep() || time_stepper.isScreeningStep())
