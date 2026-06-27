@@ -129,7 +129,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         [&]()
         {
             Real dt = time_stepper.incrementPhysicalTime(continuum_acoustic_time_step);
-            simulation_pipeline.run_hooks(SimulationHookPoint::BeforeAcousticStep1stHalf);
+            simulation_pipeline.run_hooks(SimulationHookPoint::BeforeMainPhysicalTimeStep);
             continuum_acoustic_step_1st_half.exec(dt);
             simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
             continuum_acoustic_step_2nd_half.exec(dt);
