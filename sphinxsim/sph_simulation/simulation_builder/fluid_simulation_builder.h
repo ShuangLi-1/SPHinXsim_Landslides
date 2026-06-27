@@ -70,13 +70,9 @@ class FluidSimulationBuilder : public SimulationBuilder
         InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addDensitySummationAndRegularization(
+    BaseDynamics<void> &addDensityRegularization(
         EntityManager &config_manager, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
-
-    template <class FluidType, class CompressionSummationType>
-    BaseDynamics<void> &addDensityRegularization(
-        CompressionSummationType &compression_summation, SPHBody &sph_body, std::string &flow_type);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     void buildTransportVelocityFormulationIfNotFreeSurface(

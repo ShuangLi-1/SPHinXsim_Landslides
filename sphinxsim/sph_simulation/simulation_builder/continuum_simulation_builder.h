@@ -37,6 +37,7 @@ class EntityManager;
 class ParticleDynamicsGroup;
 template <class T>
 class BaseDynamics;
+class BodyStatesRecording;
 class SPHBody;
 
 struct ContinuumSolverParameters
@@ -47,6 +48,8 @@ struct ContinuumSolverParameters
     Real contact_numerical_damping_{0.5};
     Real shear_stress_damping_{0.0};
     Real hourglass_factor_{2.0};
+    Real plastic_riemann_dissipation_factor_{20.0 * (Real)Dimensions};
+    std::string surface_type_ = "free_surface";
 };
 
 class ContinuumSimulationBuilder : public SimulationBuilder
@@ -59,21 +62,43 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     ContinuumSolverParameters parseContinuumSolverParameters(
         const ScalingConfig &scaling_config, const json &config);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MethodContainerType &method_container,
+        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType, class InnerRelationType>
-    ParticleDynamicsGroup &addShearForceIntegration(
+    void buildShearForceIntegrationIfPresent(
+        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation);
+
+    template <class MethodContainerType, class InnerRelationType>
+    ParticleDynamicsGroup &addLinearCorrectionMatrix(
         EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+
+    template <class MethodContainerType, class ContactRelationType>
+    void buildContactRepulsionIfPresent(
+        SPHSimulation &sim, MethodContainerType &method_container, ContactRelationType &contact_relation);
 
     template <class MethodContainerType>
     void buildInitialConditionsIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+
+    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    void buildDensityRegularizationIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHBody &continuum_body, InnerRelationType &inner_relation,
+        ContactRelationType &contact_relation);
+
+    template <class MethodContainerType, class InnerRelationType>
+    void buildStressDiffusionIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHBody &continuum_body, InnerRelationType &inner_relation,
+        BodyStatesRecording &body_state_recorder);
 };
 } // namespace SPH
 #endif // CONTINUUM_SIMULATION_BUILDER_H

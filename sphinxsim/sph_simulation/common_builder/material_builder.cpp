@@ -75,6 +75,26 @@ void MaterialBuilder::addMatterMaterial(
         return;
     }
 
+    if (type == "plastic_continuum")
+    {
+        Real density = scaling_config.jsonToReal(config.at("density"), "Density");
+        Real sound_speed = scaling_config.jsonToReal(config.at("sound_speed"), "Speed");
+        Real youngs_modulus = scaling_config.jsonToReal(config.at("youngs_modulus"), "Stress");
+        Real poisson_ratio = scaling_config.jsonToReal(config.at("poisson_ratio"), "Dimensionless");
+        Real friction_angle = scaling_config.jsonToReal(config.at("friction_angle"), "Dimensionless");
+        Real cohesion = config.contains("cohesion")
+                            ? scaling_config.jsonToReal(config.at("cohesion"), "Stress")
+                            : Real(0);
+        Real dilatancy_angle = config.contains("dilatancy_angle")
+                                   ? scaling_config.jsonToReal(config.at("dilatancy_angle"), "Dimensionless")
+                                   : Real(0);
+        auto &material = sph_body.defineMatterMaterial<PlasticContinuum>(
+            density, sound_speed, youngs_modulus, poisson_ratio,
+            friction_angle, cohesion, dilatancy_angle);
+        config_manager.addEntity(sph_body.Name() + "PlasticContinuum", &material);
+        return;
+    }
+
     throw std::runtime_error("MaterialBuilder::addMatterMaterial: unsupported material: " + type);
 }
 //=================================================================================================//

@@ -56,33 +56,16 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_update_particle_position = main_methods.addStateDynamics<
         fluid_dynamics::UpdateParticlePosition>(continuum_body);
 
-    auto &continuum_acoustic_step_1st_half = addAcousticStep1stHalf(config_manager, main_methods, continuum_inner);
-    auto &continuum_acoustic_step_2nd_half = addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner);
+    auto &continuum_acoustic_step_1st_half =
+        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
+    auto &continuum_acoustic_step_2nd_half =
+        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
 
-    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &continuum_advection_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
-    auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
+    auto &continuum_linear_correction_matrix =
+        addLinearCorrectionMatrix(config_manager, main_methods, continuum_inner);
 
-    auto &continuum_linear_correction_matrix = main_methods.addInteractionDynamicsWithUpdate<
-        LinearCorrectionMatrix>(continuum_inner, continuum_solver_parameters.linear_correction_matrix_coeff_);
-
-    auto &continuum_shear_force = addShearForceIntegration(config_manager, main_methods, continuum_inner);
-
-    auto &continuum_solid_contact_factor = main_methods.addInteractionDynamics<
-        solid_dynamics::RepulsionFactor>(continuum_solid_contact);
-    auto &continuum_solid_contact_force = main_methods.addInteractionDynamicsWithUpdate<
-        solid_dynamics::RepulsionForceCK, Wall>(
-        continuum_solid_contact, continuum_solver_parameters.contact_numerical_damping_);
-    //----------------------------------------------------------------------
-    //	Define time-integration method, screen out uput and observation sample rate.
-    //----------------------------------------------------------------------
-    auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
-    auto &time_stepper = sph_solver.getTimeStepper();
-    auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
-    auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
-    time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
+    buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
+    buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
@@ -92,11 +75,30 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
             *config_manager.emplaceEntity<ConstraintBuilder>("ConstraintBuilder");
         constraint_builder.addConstraints(sim, main_methods, config);
     }
+    buildExternalForceIfPresent(sim, main_methods, continuum_body, config);
+    recording_builder.buildObservationIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
+    buildDensityRegularizationIfPresent(
+        sim, main_methods, continuum_body, continuum_inner, continuum_solid_contact);
+    buildStressDiffusionIfPresent(
+        sim, main_methods, continuum_body, continuum_inner, body_state_recorder);
+    //----------------------------------------------------------------------
+    //	Define time-integration method, screen out uput and observation sample rate.
+    //----------------------------------------------------------------------
+    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
+    auto &continuum_advection_time_step = main_methods.addReduceDynamics<
+        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
+    auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
+        fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
+    auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
+    auto &time_stepper = sph_solver.getTimeStepper();
+    auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
+    auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
+    time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
     //----------------------------------------------------------------------
     //	Define Preparation or initialization step for the time integration loop.
     //----------------------------------------------------------------------
@@ -108,10 +110,11 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
             solid_cell_linked_list.exec();
             continuum_update_configuration.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             continuum_advection_step_setup.exec();
-            continuum_solid_contact_factor.exec();
             continuum_linear_correction_matrix.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
             body_state_recorder.writeToFile();
         });
@@ -126,8 +129,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         [&]()
         {
             Real dt = time_stepper.incrementPhysicalTime(continuum_acoustic_time_step);
-            continuum_shear_force.exec(dt);
-            continuum_solid_contact_force.exec();
+            simulation_pipeline.run_hooks(SimulationHookPoint::BeforeAcousticStep1stHalf);
             continuum_acoustic_step_1st_half.exec(dt);
             simulation_pipeline.run_hooks(SimulationHookPoint::BoundaryCondition);
             continuum_acoustic_step_2nd_half.exec(dt);
@@ -161,9 +163,10 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
                 solid_cell_linked_list.exec();
                 continuum_update_configuration.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 continuum_advection_step_setup.exec();
-                continuum_solid_contact_factor.exec();
                 continuum_linear_correction_matrix.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterLinearCorrectionMatrix);
             }
         });
 }
@@ -202,6 +205,11 @@ ContinuumSolverParameters ContinuumSimulationBuilder::parseContinuumSolverParame
     if (config.contains("hourglass_factor"))
         parameters.hourglass_factor_ = scaling_config.jsonToReal(
             config.at("hourglass_factor"), "Dimensionless");
+    if (config.contains("plastic_riemann_dissipation_factor"))
+        parameters.plastic_riemann_dissipation_factor_ = scaling_config.jsonToReal(
+            config.at("plastic_riemann_dissipation_factor"), "Dimensionless");
+    if (config.contains("surface_type"))
+        parameters.surface_type_ = config.at("surface_type").get<std::string>();
 
     return parameters;
 }
