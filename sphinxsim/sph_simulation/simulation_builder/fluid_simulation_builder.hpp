@@ -235,9 +235,11 @@ void FluidSimulationBuilder::addBoundaryCondition(
     if (type == "emitter")
     { // must be oriented box for emitter
         auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
-        auto &inflow_condition = main_methods.template addStateDynamics<
-            EmitterInflowConditionCK, ConstantInflowSpeed>(
-            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed"));
+        auto &inflow_condition = main_methods.addParticleDynamicsGroup();
+        inflow_condition.add(&main_methods.template addStateDynamics<
+                              EmitterInflowConditionCK, ConstantInflowSpeed>(
+            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed")));
+
         auto &fix_constraint = main_methods.template addStateDynamics<
             FixConstraintCK>(emitter);
         auto &injection = main_methods.template addStateDynamics<
@@ -248,6 +250,22 @@ void FluidSimulationBuilder::addBoundaryCondition(
         {
             parseScheduledEvents(
                 sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
+        }
+
+        if (config_manager.hasEntity<WeaklyCompressibleMultiPhases>(
+                body_name + "WeaklyCompressibleMultiPhases"))
+        {
+            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhases>(
+                body_name + "WeaklyCompressibleMultiPhases");
+            if (config.contains("volume_fractions"))
+            {
+                StdVec<Real> volume_fractions = MaterialBuilder::parseMixtureFractions(
+                    scaling_config, config.at("volume_fractions"));
+                inflow_condition.add(
+                    &main_methods.template addStateDynamics<
+                        VariableAssignment, PrescribedReferenceDensity>(
+                        emitter, mixture, volume_fractions));
+            }
         }
 
         simulation_pipeline.insert_hook(
