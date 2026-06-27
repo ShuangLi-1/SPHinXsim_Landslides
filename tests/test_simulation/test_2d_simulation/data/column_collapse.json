@@ -1,0 +1,125 @@
+{
+  "characteristic_dimensions": [
+    {
+      "value": 0.5,
+      "name": "Length",
+      "hint": "geometries.system_domain.upper_bound"
+    },
+    {
+      "value": 9.8,
+      "name": "Gravity",
+      "hint": "gravity"
+    },
+    {
+      "value": 2040.0,
+      "name": "Density",
+      "hint": "continuum_bodies[name=GranularBody].material.density"
+    }
+  ],
+
+  "simulation_type": "continuum_dynamics",
+
+  "geometries": {
+    "system_domain": {
+      "lower_bound": [-0.008, -0.008],
+      "upper_bound": [0.508, 0.158]
+    },
+    "global_resolution": { "particle_spacing": 0.002 },
+    "shapes": [
+      {
+        "name": "GranularBody",
+        "type": "bounding_box",
+        "lower_bound": [0.0, 0.0],
+        "upper_bound": [0.2, 0.1]
+      },
+      {
+        "name": "WallBoundary",
+        "type": "multipolygon",
+        "polygons": [
+          {
+            "operation": "union",
+            "type": "container_box",
+            "inner_lower_bound": [0.0, 0.0],
+            "inner_upper_bound": [0.5, 0.15],
+            "thickness": 0.008
+          }
+        ]
+      }
+    ]
+  },
+
+  "particle_generation": {
+    "build_and_run": true,
+    "settings": {
+      "bodies": [
+        {
+          "name": "GranularBody"
+        },
+        {
+          "name": "WallBoundary",
+          "solid_body": {}
+        }
+      ],
+      "relaxation_parameters": {
+        "total_iterations": 1000
+      }
+    }
+  },
+
+  "continuum_bodies": [
+    {
+      "name": "GranularBody",
+      "material": {
+        "type": "plastic_continuum",
+        "density": 2040.0,
+        "sound_speed": 48.8428184591418,
+        "youngs_modulus": 5840000.0,
+        "poisson_ratio": 0.3,
+        "friction_angle": 0.382227106186758,
+        "cohesion": 0.0,
+        "dilatancy_angle": 0.0
+      }
+    }
+  ],
+
+  "solid_bodies": [
+    {
+      "name": "WallBoundary",
+      "material": {
+        "type": "rigid_body"
+      }
+    }
+  ],
+
+  "gravity": [0.0, -9.8],
+
+  "observers": [
+    {
+      "name": "SoilObserver",
+      "observed_body": "GranularBody",
+      "variable": { "real_type": "Pressure" },
+      "positions": [[0.5, 0.2]]
+    }
+  ],
+
+  "extra_state_recording": [
+    {
+      "name": "GranularBody",
+      "variables": [{ "real_type": ["Density", "Pressure"] }]
+    },
+    {
+      "name": "WallBoundary",
+      "variables": [{ "vector_type": ["NormalDirection"] }]
+    }
+  ],
+
+  "solver_parameters": {
+    "end_time": 0.8,
+    "output_interval": 0.02,
+    "screen_interval": 500,
+    "continuum_dynamics": {
+      "acoustic_cfl": 0.4,
+      "advection_cfl": 0.2
+    }
+  }
+}
