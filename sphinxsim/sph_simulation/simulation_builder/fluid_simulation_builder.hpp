@@ -252,21 +252,22 @@ void FluidSimulationBuilder::addBoundaryCondition(
                 sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
         }
 
-        /* if (config_manager.hasEntity<WeaklyCompressibleMultiPhase>(
-               body_name + "WeaklyCompressibleMultiPhases"))
-       {
-           auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
-               body_name + "WeaklyCompressibleMultiPhases");
-           if (config.contains("volume_fractions"))
-           {
-              StdVec<Real> volume_fractions = MaterialBuilder::parseMixtureFractions(
-                   scaling_config, config.at("volume_fractions"));
-              inflow_condition.add(
-                   &main_methods.template addStateDynamics<
-                       VariableAssignment, PrescribedReferenceDensity>(
-                       emitter, mixture, volume_fractions));
+        if (config_manager.hasEntity<WeaklyCompressibleMultiPhase>(
+                body_name + "WeaklyCompressibleMultiPhase"))
+        {
+            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
+                body_name + "WeaklyCompressibleMultiPhase");
+            if (config.contains("volume_fractions"))
+            {
+                StdVec<Real> volume_fractions = MaterialBuilder::parseMixtureFractions(
+                    scaling_config, config.at("volume_fractions"));
+                inflow_condition.add(
+                    &main_methods.template addStateDynamics<
+                        SupplementaryEmitterCondition,
+                        PrescribedReferenceDensity<WeaklyCompressibleMultiPhase>>(
+                        emitter, mixture, volume_fractions));
             }
-        } */
+        }
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
