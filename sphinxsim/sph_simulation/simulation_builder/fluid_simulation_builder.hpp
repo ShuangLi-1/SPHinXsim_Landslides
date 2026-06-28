@@ -324,7 +324,8 @@ void FluidSimulationBuilder::addBoundaryCondition(
             {
                 StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
                     scaling_config, config.at("mass_fractions"));
-                bi_directional_bd.template addSupplementaryCondition<PrescribedReferenceDensity>(
+                bi_directional_bd.template addSupplementaryCondition<
+                    PrescribedReferenceDensity<WeaklyCompressibleMultiSpecies>>(
                     main_methods, oriented_box_by_cell, mixture, mass_fractions);
             }
         }
