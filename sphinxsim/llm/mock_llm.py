@@ -22,6 +22,7 @@ class PhysicsType(str, Enum):
 
     FLUID = "fluid"
     SOLID = "solid"
+    SOIL = "soil"
     FSI = "fsi"
 
 
@@ -231,6 +232,7 @@ _FSI_TEMPLATE: Dict[str, Any] = {
 _TEMPLATES = {
     PhysicsType.FLUID: _FLUID_TEMPLATE,
     PhysicsType.SOLID: _SOLID_TEMPLATE,
+    PhysicsType.SOIL: _SOLID_TEMPLATE,
     PhysicsType.FSI: _FSI_TEMPLATE,
 }
 
@@ -246,6 +248,10 @@ _SOLID_KEYWORDS = re.compile(
     r"\b(solid|elastic|deform|beam|plate|shell|impact|fracture|structure(?!s?\s+interact))\b",
     re.IGNORECASE,
 )
+_SOIL_KEYWORDS = re.compile(
+    r"\b(soil|granular|landslide|slope|column[- ]collapse|plastic[- ]continuum|drucker[- ]prager)\b",
+    re.IGNORECASE,
+)
 _FSI_KEYWORDS = re.compile(
     r"\b(fsi|fluid[- ]structure|coupled|interaction|flexible|hydroelastic)\b",
     re.IGNORECASE,
@@ -257,7 +263,10 @@ def _detect_physics(description: str) -> PhysicsType:
     has_fsi = bool(_FSI_KEYWORDS.search(description))
     has_fluid = bool(_FLUID_KEYWORDS.search(description))
     has_solid = bool(_SOLID_KEYWORDS.search(description))
+    has_soil = bool(_SOIL_KEYWORDS.search(description))
 
+    if has_soil:
+        return PhysicsType.SOIL
     if has_fsi or (has_fluid and has_solid):
         return PhysicsType.FSI
     if has_fluid:
@@ -467,6 +476,7 @@ def _fixture_template_for_physics(physics: PhysicsType) -> Dict[str, Any] | None
     fixture_rel = {
         PhysicsType.FLUID: Path("tests/test_simulation/test_2d_simulation/data/dambreak.json"),
         PhysicsType.SOLID: Path("tests/test_simulation/test_2d_simulation/data/milling.json"),
+        PhysicsType.SOIL: Path("tests/test_simulation/test_2d_simulation/data/column_collapse.json"),
     }.get(physics)
 
     if fixture_rel is None:

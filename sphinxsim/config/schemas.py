@@ -70,6 +70,7 @@ class MaterialType(str, Enum):
     RIGID_BODY = "rigid_body"
     J2_PLASTICITY = "j2_plasticity"
     GENERAL_CONTINUUM = "general_continuum"
+    PLASTIC_CONTINUUM = "plastic_continuum"
 
 
 class FluidBoundaryConditionType(str, Enum):
@@ -411,6 +412,9 @@ class MaterialConfig(BaseModel):
     poisson_ratio: Optional[float] = None
     yield_stress: Optional[float] = Field(default=None, gt=0)
     hardening_modulus: Optional[float] = Field(default=None, gt=0)
+    friction_angle: Optional[float] = None
+    cohesion: Optional[float] = Field(default=None, ge=0)
+    dilatancy_angle: Optional[float] = None
 
     @model_validator(mode="after")
     def _validate_material_by_type(self) -> "MaterialConfig":
@@ -453,6 +457,19 @@ class MaterialConfig(BaseModel):
                 raise ValueError(
                     "general_continuum requires density, sound_speed, youngs_modulus and poisson_ratio"
                 )
+        elif self.type == MaterialType.PLASTIC_CONTINUUM:
+            required = (
+                self.density,
+                self.sound_speed,
+                self.youngs_modulus,
+                self.poisson_ratio,
+                self.friction_angle,
+            )
+            if any(v is None for v in required):
+                raise ValueError(
+                    "plastic_continuum requires density, sound_speed, youngs_modulus, "
+                    "poisson_ratio and friction_angle"
+                )
         return self
 
 
@@ -490,8 +507,14 @@ class ContinuumBodyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _material_type(self) -> "ContinuumBodyConfig":
-        if self.material.type not in (MaterialType.J2_PLASTICITY, MaterialType.GENERAL_CONTINUUM):
-            raise ValueError("continuum body material type must be j2_plasticity or general_continuum")
+        if self.material.type not in (
+            MaterialType.J2_PLASTICITY,
+            MaterialType.GENERAL_CONTINUUM,
+            MaterialType.PLASTIC_CONTINUUM,
+        ):
+            raise ValueError(
+                "continuum body material type must be j2_plasticity, general_continuum or plastic_continuum"
+            )
         return self
 
 
@@ -555,6 +578,8 @@ class ContinuumDynamicsSolverConfig(BaseModel):
     contact_numerical_damping: float = 0.5
     shear_stress_damping: float = 0.0
     hourglass_factor: float = 2.0
+    plastic_riemann_dissipation_factor: Optional[float] = Field(default=None, gt=0)
+    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
 
 
 class SolverParametersConfig(BaseModel):

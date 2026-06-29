@@ -111,16 +111,42 @@ class OllamaLLM:
             / "data"
             / "milling.json"
         )
+        soil_fixture = (
+            project_root
+            / "tests"
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "column_collapse.json"
+        )
 
         desc = (description or "").lower()
+        is_soil_like = any(
+            token in desc
+            for token in (
+                "soil",
+                "granular",
+                "landslide",
+                "slope",
+                "column collapse",
+                "column-collapse",
+                "plastic continuum",
+                "plastic_continuum",
+                "drucker-prager",
+            )
+        )
         is_solid_like = any(
             token in desc for token in ("solid", "elastic", "beam", "continuum", "milling")
         )
 
-        preferred = solid_fixture if is_solid_like else fluid_fixture
-        fallback = fluid_fixture if preferred == solid_fixture else solid_fixture
+        if is_soil_like:
+            fixtures = (soil_fixture, solid_fixture, fluid_fixture)
+        elif is_solid_like:
+            fixtures = (solid_fixture, soil_fixture, fluid_fixture)
+        else:
+            fixtures = (fluid_fixture, solid_fixture, soil_fixture)
 
-        for fixture in (preferred, fallback):
+        for fixture in fixtures:
             try:
                 payload = json.loads(fixture.read_text())
                 validated = SimulationConfig.model_validate(payload)
@@ -374,8 +400,10 @@ class OllamaLLM:
         "STRICT RULES — you must follow these exactly: "
         "(1) fluid_bodies may ONLY contain entries whose material.type is 'weakly_compressible_fluid'. "
         "(2) solid_bodies may ONLY contain entries whose material.type is 'rigid_body'. "
-        "(3) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
-        "(4) Return ONLY the JSON object — no markdown fences, no comments, no extra keys."
+        "(3) continuum_bodies may use 'general_continuum', 'j2_plasticity', or 'plastic_continuum'. "
+        "(4) For soil, landslide, granular, or column-collapse cases, use 'plastic_continuum' with friction_angle. "
+        "(5) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
+        "(6) Return ONLY the JSON object — no markdown fences, no comments, no extra keys."
     )
 
     def generate(self, description: str) -> SimulationConfig:
