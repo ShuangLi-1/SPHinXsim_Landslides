@@ -145,7 +145,16 @@
       "volume_fractions": [0.5, 0.3, 0.2]
     }
   ],
+
   "gravity": [0.0, -1.0],
+
+  "extra_state_recording": [
+    {
+      "name": "MultiPhaseBody",
+      "variables": [{ "real_type": ["Density"] }]
+    }
+  ],
+
   "solver_parameters": {
     "end_time": 5.0,
     "output_interval": 0.1,
