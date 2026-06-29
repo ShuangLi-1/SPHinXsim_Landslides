@@ -124,15 +124,9 @@ class OllamaLLM:
         is_soil_like = any(
             token in desc
             for token in (
-                "soil",
-                "granular",
-                "landslide",
-                "slope",
-                "column collapse",
-                "column-collapse",
-                "plastic continuum",
-                "plastic_continuum",
-                "drucker-prager",
+                "soil", "granular", "landslide", "slope",
+                "column collapse", "column-collapse",
+                "plastic continuum", "plastic_continuum", "drucker-prager"
             )
         )
         is_solid_like = any(
