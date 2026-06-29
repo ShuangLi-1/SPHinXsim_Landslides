@@ -111,7 +111,7 @@
         ],
         "multi_species_phases": [
           {
-            "name": "MixturePhase",
+            "name": "MultiSpeciesPhase",
             "species": [
               {
                 "name": "SpeciesA",
