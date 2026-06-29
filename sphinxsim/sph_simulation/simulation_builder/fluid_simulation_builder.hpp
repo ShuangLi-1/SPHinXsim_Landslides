@@ -257,6 +257,24 @@ void FluidSimulationBuilder::addBoundaryCondition(
         {
             auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
                 body_name + "WeaklyCompressibleMultiPhase");
+
+            if (config.contains("multi_species_phases"))
+            {
+                for (const auto &phase : config.at("multi_species_phases"))
+                {
+                    std::string phase_name = phase.at("phase_name").get<std::string>();
+                    auto &multi_species_phase = mixture.getMultiSpeciesPhaseByName(phase_name);
+                    StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
+                        scaling_config, phase.at("mass_fractions"));
+
+                    inflow_condition.add(
+                        &main_methods.template addStateDynamics<
+                            SupplementaryEmitterCondition,
+                            PrescribedReferenceDensity<WeaklyCompressibleMultiSpecies>>(
+                            emitter, multi_species_phase, mass_fractions));
+                }
+            }
+
             if (config.contains("volume_fractions"))
             {
                 StdVec<Real> volume_fractions = MaterialBuilder::parseMixtureFractions(

@@ -142,6 +142,7 @@
       "oriented_box": "Emitter",
       "type": "emitter",
       "inflow_speed": 0.5,
+      "multi_species_phases": [{ "phase_name": "MultiSpeciesPhase", "mass_fractions": [0.4, 0.6] }],
       "volume_fractions": [0.5, 0.3, 0.2]
     }
   ],
