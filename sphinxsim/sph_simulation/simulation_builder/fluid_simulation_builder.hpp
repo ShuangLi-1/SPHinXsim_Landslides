@@ -269,7 +269,7 @@ void FluidSimulationBuilder::addBoundaryCondition(
 
                     inflow_condition.add(
                         &main_methods.template addStateDynamics<
-                            SupplementaryEmitterCondition,
+                            VariableAssignment,
                             PrescribedReferenceDensity<WeaklyCompressibleMultiSpecies>>(
                             emitter, multi_species_phase, mass_fractions));
                 }
@@ -281,7 +281,7 @@ void FluidSimulationBuilder::addBoundaryCondition(
                     scaling_config, config.at("volume_fractions"));
                 inflow_condition.add(
                     &main_methods.template addStateDynamics<
-                        SupplementaryEmitterCondition,
+                        VariableAssignment,
                         PrescribedReferenceDensity<WeaklyCompressibleMultiPhase>>(
                         emitter, mixture, volume_fractions));
             }
