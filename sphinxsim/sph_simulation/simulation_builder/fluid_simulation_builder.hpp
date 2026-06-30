@@ -270,7 +270,7 @@ void FluidSimulationBuilder::addBoundaryCondition(
                     inflow_condition.add(
                         &main_methods.template addStateDynamics<
                             VariableAssignment,
-                            PrescribedReferenceDensity<WeaklyCompressibleMultiSpecies>>(
+                            ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
                             emitter, multi_species_phase, mass_fractions));
                 }
             }
@@ -282,8 +282,13 @@ void FluidSimulationBuilder::addBoundaryCondition(
                 inflow_condition.add(
                     &main_methods.template addStateDynamics<
                         VariableAssignment,
-                        PrescribedReferenceDensity<WeaklyCompressibleMultiPhase>>(
+                        ConstantMixtureFraction<WeaklyCompressibleMultiPhase>>(
                         emitter, mixture, volume_fractions));
+                inflow_condition.add(
+                    &main_methods.template addStateDynamics<
+                        VariableAssignment,
+                        UpdateReferenceDensity<WeaklyCompressibleMultiPhase>>(
+                        emitter, mixture));
             }
         }
 
@@ -344,8 +349,12 @@ void FluidSimulationBuilder::addBoundaryCondition(
                 StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
                     scaling_config, config.at("mass_fractions"));
                 bi_directional_bd.template addSupplementaryCondition<
-                    PrescribedReferenceDensity<WeaklyCompressibleMultiSpecies>>(
+                    ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
                     main_methods, oriented_box_by_cell, mixture, mass_fractions);
+
+                bi_directional_bd.template addSupplementaryCondition<
+                    UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
+                    main_methods, oriented_box_by_cell, mixture);
             }
         }
         return;
