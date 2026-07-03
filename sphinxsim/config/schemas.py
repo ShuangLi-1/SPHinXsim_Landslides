@@ -69,6 +69,7 @@ class MaterialType(str, Enum):
     WEAKLY_COMPRESSIBLE_MIXTURE = "weakly_compressible_mixture"
     RIGID_BODY = "rigid_body"
     J2_PLASTICITY = "j2_plasticity"
+    PLASTIC_CONTINUUM = "plastic_continuum"
     GENERAL_CONTINUUM = "general_continuum"
 
 
@@ -411,6 +412,9 @@ class MaterialConfig(BaseModel):
     poisson_ratio: Optional[float] = None
     yield_stress: Optional[float] = Field(default=None, gt=0)
     hardening_modulus: Optional[float] = Field(default=None, gt=0)
+    friction_angle: Optional[float] = Field(default=None, ge=0)
+    cohesion: Optional[float] = Field(default=None, ge=0)
+    dilatancy_angle: Optional[float] = Field(default=None, ge=0)
 
     @model_validator(mode="after")
     def _validate_material_by_type(self) -> "MaterialConfig":
@@ -446,6 +450,21 @@ class MaterialConfig(BaseModel):
                 raise ValueError(
                     "j2_plasticity requires density, sound_speed, youngs_modulus, "
                     "poisson_ratio, yield_stress and hardening_modulus"
+                )
+        elif self.type == MaterialType.PLASTIC_CONTINUUM:
+            required = (
+                self.density,
+                self.sound_speed,
+                self.youngs_modulus,
+                self.poisson_ratio,
+                self.friction_angle,
+                self.cohesion,
+                self.dilatancy_angle,
+            )
+            if any(v is None for v in required):
+                raise ValueError(
+                    "plastic_continuum requires density, sound_speed, youngs_modulus, "
+                    "poisson_ratio, friction_angle, cohesion and dilatancy_angle"
                 )
         elif self.type == MaterialType.GENERAL_CONTINUUM:
             required = (self.density, self.sound_speed, self.youngs_modulus, self.poisson_ratio)
@@ -490,9 +509,20 @@ class ContinuumBodyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _material_type(self) -> "ContinuumBodyConfig":
-        if self.material.type not in (MaterialType.J2_PLASTICITY, MaterialType.GENERAL_CONTINUUM):
-            raise ValueError("continuum body material type must be j2_plasticity or general_continuum")
+        if self.material.type not in (
+            MaterialType.J2_PLASTICITY,
+            MaterialType.PLASTIC_CONTINUUM,
+            MaterialType.GENERAL_CONTINUUM,
+        ):
+            raise ValueError(
+                "continuum body material type must be j2_plasticity, plastic_continuum or general_continuum"
+            )
         return self
+
+
+class FluidBoundaryConditionScheduleConfig(BaseModel):
+    switch_on_time: float = Field(..., ge=0)
+    duration: float = Field(..., gt=0)
 
 
 class FluidBoundaryConditionConfig(BaseModel):
@@ -502,6 +532,7 @@ class FluidBoundaryConditionConfig(BaseModel):
     inflow_speed: Optional[float] = Field(default=None, gt=0)
     pressure: Optional[float] = None
     mass_fractions: Optional[List[float]] = None
+    on_schedule: Optional[FluidBoundaryConditionScheduleConfig] = None
 
     @model_validator(mode="after")
     def _type_specific_requirements(self) -> "FluidBoundaryConditionConfig":
