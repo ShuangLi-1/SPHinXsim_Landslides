@@ -256,6 +256,81 @@ class TestConfigVisualizerNoPyvista:
                 viz.preview()
 
 
+class TestSpatialDimensionInference:
+    def test_planar_simbody_constraint_is_inferred_as_2d(self, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = _minimal_fluid_config()
+        data["geometries"].pop("system_domain", None)
+        data.pop("gravity", None)
+        data["body_constraints"] = [
+            {
+                "body_name": "WallBoundary",
+                "type": "simbody",
+                "mobilized_body": "planar",
+                "velocity": [0.0, -0.03],
+                "angular_velocity": 2.0,
+            }
+        ]
+        data["solver_parameters"]["restart"] = {
+            "restore_step": 0,
+            "save_interval": 1000,
+            "summary_enabled": True,
+        }
+
+        config = SimulationConfig(**data)
+        viz = ConfigVisualizer(config, tmp_path, off_screen=True)
+
+        assert viz._spatial_dim() == 2
+
+
+class TestPreviewViewMode:
+    def test_2d_default_view_uses_orthographic_xy(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
+        calls: list[str] = []
+
+        class FakePlotter:
+            def enable_2d_style(self):
+                calls.append("enable_2d_style")
+
+            def enable_parallel_projection(self):
+                calls.append("enable_parallel_projection")
+
+            def view_xy(self, negative=False):
+                calls.append(f"view_xy:{negative}")
+
+        viz._configure_default_view(FakePlotter(), ndim=2)
+
+        assert "enable_2d_style" in calls
+        assert "enable_parallel_projection" in calls
+        assert "view_xy:False" in calls
+
+    def test_2d_widgets_only_offer_z_views(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
+
+        class FakePlotter:
+            window_size = (1200, 800)
+
+            def __init__(self):
+                self.titles: list[str] = []
+
+            def add_text(self, *args, **kwargs):
+                return None
+
+            def add_radio_button_widget(self, callback, group, value, title, **kwargs):
+                self.titles.append(title)
+                return None
+
+        fake_plotter = FakePlotter()
+        viz._add_view_direction_widgets(fake_plotter, ndim=2)
+
+        assert fake_plotter.titles == ["+z", "-z"]
+
+
 # ---------------------------------------------------------------------------
 # CLI preview command tests (no PyVista / no C++ required)
 # ---------------------------------------------------------------------------

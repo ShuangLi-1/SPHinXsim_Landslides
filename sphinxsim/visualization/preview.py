@@ -182,6 +182,14 @@ class ConfigVisualizer:
         if self.config.gravity is not None:
             return len(self.config.gravity)
 
+        # Simbody planar constraints are an explicit 2-D signal.
+        for constraint in self.config.body_constraints:
+            if constraint.type.value == "simbody":
+                if (constraint.mobilized_body or "").lower() == "planar":
+                    return 2
+                if constraint.velocity is not None:
+                    return len(constraint.velocity)
+
         # Walk shapes: bounding_box / box / expanded_box carry explicit vectors.
         for shape in geo.shapes:
             for vec in (shape.lower_bound, shape.upper_bound, shape.half_size):
@@ -241,9 +249,10 @@ class ConfigVisualizer:
                 "Install it with:  pip install sphinxsim[visualization]"
             ) from None
 
+        ndim = self._spatial_dim()
         vtp_dir: Path | None = None
         if use_cpp:
-            vtp_dir = self._try_build_geometries()
+            vtp_dir = self._try_build_geometries(ndim)
         else:
             self._bounds_sim = None
             self._shape_bounds_cache = None
@@ -251,9 +260,10 @@ class ConfigVisualizer:
 
         plotter = pv.Plotter(title=title, off_screen=self.off_screen)
         self._populate_plotter(plotter, vtp_dir)
+        self._configure_default_view(plotter, ndim)
         plotter.add_axes()
         plotter.show_grid(font_size=10)
-        self._add_view_direction_widgets(plotter)
+        self._add_view_direction_widgets(plotter, ndim)
 
         if vtp_dir:
             mode_label = "VTP geometry"
@@ -261,8 +271,9 @@ class ConfigVisualizer:
             mode_label = "C++ bounds fallback"
         else:
             mode_label = "No C++ geometry"
+        dim_label = "2-D" if ndim == 2 else "3-D"
         plotter.add_text(
-            f"{title}\n[{mode_label}]",
+            f"{title}\n[{dim_label} | {mode_label}]",
             position="upper_right",
             font_size=8,
             color="white",
@@ -274,7 +285,26 @@ class ConfigVisualizer:
     # Internal helpers
     # ------------------------------------------------------------------
 
-    def _add_view_direction_widgets(self, plotter: Any) -> None:
+    def _configure_default_view(self, plotter: Any, ndim: int) -> None:
+        """Set a sensible initial camera and interaction style."""
+        if ndim != 2:
+            return
+
+        # Keep 2-D previews in an orthographic XY view to avoid 3-D feel.
+        try:
+            plotter.enable_2d_style()
+        except Exception:
+            pass
+        try:
+            plotter.enable_parallel_projection()
+        except Exception:
+            pass
+        try:
+            plotter.view_xy(negative=False)
+        except Exception:
+            pass
+
+    def _add_view_direction_widgets(self, plotter: Any, ndim: int) -> None:
         """Add on-screen camera view-direction buttons."""
 
         def set_plus_x() -> None:
@@ -299,15 +329,21 @@ class ConfigVisualizer:
             plotter.view_isometric()
 
         # Radio buttons are mutually exclusive, so they behave like view presets.
-        buttons = [
-            ("+x", set_plus_x, False),
-            ("-x", set_minus_x, False),
-            ("-y", set_minus_y, False),
-            ("+y", set_plus_y, False),
-            ("+z", set_plus_z, False),
-            ("-z", set_minus_z, False),
-            ("isometric", set_isometric, True),
-        ]
+        if ndim == 2:
+            buttons = [
+                ("+z", set_plus_z, True),
+                ("-z", set_minus_z, False),
+            ]
+        else:
+            buttons = [
+                ("+x", set_plus_x, False),
+                ("-x", set_minus_x, False),
+                ("-y", set_minus_y, False),
+                ("+y", set_plus_y, False),
+                ("+z", set_plus_z, False),
+                ("-z", set_minus_z, False),
+                ("isometric", set_isometric, True),
+            ]
 
         group = "camera_view_direction"
         _, height = plotter.window_size
@@ -338,7 +374,7 @@ class ConfigVisualizer:
                 color_off="gray",
             )
 
-    def _try_build_geometries(self) -> Path | None:
+    def _try_build_geometries(self, ndim: int) -> Path | None:
         """Run buildGeometries() and return the VTP output directory, or None.
 
         Uses ``self.config_path`` directly as the C++ config input so the
@@ -351,7 +387,6 @@ class ConfigVisualizer:
             self._bounds_sim = None
             return None
 
-        ndim = self._spatial_dim()
         try:
             sph = load_sphinxsys_core_nd(ndim)
         except ImportError as exc:
