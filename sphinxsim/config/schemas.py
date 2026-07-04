@@ -458,13 +458,11 @@ class MaterialConfig(BaseModel):
                 self.youngs_modulus,
                 self.poisson_ratio,
                 self.friction_angle,
-                self.cohesion,
-                self.dilatancy_angle,
             )
             if any(v is None for v in required):
                 raise ValueError(
                     "plastic_continuum requires density, sound_speed, youngs_modulus, "
-                    "poisson_ratio, friction_angle, cohesion and dilatancy_angle"
+                    "poisson_ratio and friction_angle"
                 )
         elif self.type == MaterialType.GENERAL_CONTINUUM:
             required = (self.density, self.sound_speed, self.youngs_modulus, self.poisson_ratio)
@@ -586,6 +584,8 @@ class ContinuumDynamicsSolverConfig(BaseModel):
     contact_numerical_damping: float = 0.5
     shear_stress_damping: float = 0.0
     hourglass_factor: float = 2.0
+    plastic_riemann_dissipation_factor: Optional[float] = Field(default=None, gt=0)
+    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
 
 
 class SolverParametersConfig(BaseModel):

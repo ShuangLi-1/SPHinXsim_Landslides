@@ -225,6 +225,22 @@ class TestOllamaLLMUpdate:
             with pytest.raises(RuntimeError, match="Failed to contact Ollama server"):
                 self.llm.update(_FLUID_CONFIG, "change model")
 
+    def test_update_recovers_from_malformed_shapes_entries(self):
+        malformed = _FLUID_CONFIG.model_dump(exclude_none=True)
+        malformed["simulation_type"] = "continuum_dynamics"
+        malformed["geometries"]["shapes"] = [
+            malformed["geometries"]["shapes"][0],
+            malformed["geometries"]["shapes"][1],
+            "oriented_boxes",
+        ]
+        resp = _make_response({"message": {"role": "assistant", "content": json.dumps(malformed)}})
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.update(_FLUID_CONFIG, "simulate for 3 s")
+
+        assert isinstance(cfg, SimulationConfig)
+        assert cfg.simulation_type.value == "fluid_dynamics"
+        assert all(isinstance(shape, type(cfg.geometries.shapes[0])) for shape in cfg.geometries.shapes)
+
 
 class TestOllamaLLMUpdatePatch:
     def setup_method(self):
