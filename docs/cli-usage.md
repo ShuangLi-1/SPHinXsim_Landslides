@@ -280,6 +280,23 @@ sphinxsim shell
 > run
 ```
 
+### Example 7: Soil column-collapse workflow (continuum dynamics)
+
+```bash
+# Validate and run the soil benchmark config
+sphinxsim validate tests/test_simulation/test_2d_simulation/data/column_collapse.json
+sphinxsim run tests/test_simulation/test_2d_simulation/data/column_collapse.json
+
+# Optional: iterate in shell
+sphinxsim shell
+> load tests/test_simulation/test_2d_simulation/data/column_collapse.json
+> explore what material fields are required for plastic_continuum?
+> validate
+> run
+```
+
+This case uses continuum dynamics with a `plastic_continuum` material model for granular/soil behavior.
+
 ## LLM provider selection
 
 By default, `sphinxsim` uses a local mock LLM that works offline. To use a different provider:

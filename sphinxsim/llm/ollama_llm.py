@@ -200,6 +200,36 @@ class OllamaLLM:
     def _sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         updated = json.loads(json.dumps(cfg))
 
+        geometries = updated.get("geometries")
+        if not isinstance(geometries, dict):
+            geometries = {}
+            updated["geometries"] = geometries
+
+        # LLM outputs may occasionally inject stray strings/keys into arrays.
+        # Keep only object entries in schema-defined object arrays.
+        for key in ("shapes", "oriented_boxes"):
+            items = geometries.get(key, [])
+            if not isinstance(items, list):
+                geometries[key] = []
+                continue
+            geometries[key] = [item for item in items if isinstance(item, dict)]
+
+        for key in (
+            "fluid_bodies",
+            "solid_bodies",
+            "continuum_bodies",
+            "observers",
+            "fluid_boundary_conditions",
+            "body_constraints",
+            "extra_state_recording",
+            "initial_conditions",
+        ):
+            items = updated.get(key, [])
+            if not isinstance(items, list):
+                updated[key] = []
+                continue
+            updated[key] = [item for item in items if isinstance(item, dict)]
+
         # Keep generated/output configs robust for runtime by omitting optional
         # scaling hints that small models frequently corrupt.
         updated.pop("characteristic_dimensions", None)

@@ -65,7 +65,7 @@ For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 SPHinXsim currently supports a broader config surface than a basic fluid-only demo workflow:
 
 - Fluid dynamics configurations with typed fluid materials, inflow boundary conditions, observers, and solver controls.
-- Continuum dynamics configurations with continuum material models and dedicated continuum solver parameters.
+- Continuum dynamics configurations with continuum material models (including `plastic_continuum` for soil/granular cases) and dedicated continuum solver parameters.
 - Solid boundary/body definitions required by the current validation and simulation builders.
 - Config-driven geometry composition using domains, shapes, oriented boxes, transforms, and particle-generation settings.
 - Incremental config editing through the CLI update command instead of regenerating cases from scratch.
