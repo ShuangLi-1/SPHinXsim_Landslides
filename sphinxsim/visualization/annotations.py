@@ -11,6 +11,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
         FluidBoundaryConditionConfig,
+        ObserverConfig,
         OrientedBoxConfig,
         SimulationConfig,
     )
@@ -83,3 +84,14 @@ def gravity_label(config: "SimulationConfig") -> str | None:
     if len(g) == 2:
         return f"g = ({g[0]}, {g[1]})"
     return f"g = ({g[0]}, {g[1]}, {g[2]})"
+
+
+def observer_label(observer: "ObserverConfig") -> str:
+    """Return an annotation label for an observer definition."""
+    variable = observer.variable
+    variable_name = variable.real_type if variable.real_type is not None else variable.vector_type
+    return (
+        f"Observer: {observer.name}\n"
+        f"body={observer.observed_body}\n"
+        f"var={variable_name}"
+    )

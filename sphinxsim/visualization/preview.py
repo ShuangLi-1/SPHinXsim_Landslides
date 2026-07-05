@@ -47,6 +47,7 @@ _CONTINUUM_COLOUR = (0.90, 0.60, 0.10)   # amber
 _UNKNOWN_COLOUR = (0.60, 0.80, 0.40)     # green (shapes not in any body list)
 _INLET_OUTLET_COLOUR = (0.85, 0.20, 0.20)  # red
 _REGION_COLOUR = (0.85, 0.70, 0.10)        # yellow
+_OBSERVER_COLOUR = (0.93, 0.13, 0.93)      # magenta — observer positions
 
 
 def _body_colour(body_name: str, config: "SimulationConfig") -> tuple[float, float, float]:
@@ -447,6 +448,7 @@ class ConfigVisualizer:
         from sphinxsim.visualization.annotations import (
             body_label,
             gravity_label,
+            observer_label,
             oriented_box_label,
         )
 
@@ -537,6 +539,38 @@ class ConfigVisualizer:
         if g_label:
             plotter.add_text(g_label, position="lower_left", font_size=9, color="cyan")
 
+        # --- Observer positions ---
+        for observer in config.observers:
+            if not observer.positions:
+                continue
+
+            points: list[tuple[float, float, float]] = []
+            for position in observer.positions:
+                if len(position) == 2:
+                    points.append((float(position[0]), float(position[1]), 0.0))
+                elif len(position) == 3:
+                    points.append((float(position[0]), float(position[1]), float(position[2])))
+
+            if not points:
+                continue
+
+            observer_points = pv.PolyData(points)
+            plotter.add_mesh(
+                observer_points,
+                color=_OBSERVER_COLOUR,
+                point_size=10,
+                render_points_as_spheres=True,
+                label=f"Observer: {observer.name}",
+            )
+            plotter.add_point_labels(
+                [points[0]],
+                [observer_label(observer)],
+                point_size=0,
+                font_size=7,
+                text_color="magenta",
+                always_visible=True,
+            )
+
         # --- Legend ---
         legend_entries = [
             ["Fluid body", _FLUID_COLOUR],
@@ -545,6 +579,7 @@ class ConfigVisualizer:
             ["Other shape", _UNKNOWN_COLOUR],
             ["Inlet/Outlet", _INLET_OUTLET_COLOUR],
             ["Region", _REGION_COLOUR],
+            ["Observer", _OBSERVER_COLOUR],
         ]
         plotter.add_legend(
             [

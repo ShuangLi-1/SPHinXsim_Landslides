@@ -242,6 +242,27 @@ class TestGravityLabel:
         assert label is None
 
 
+class TestObserverLabel:
+    def test_observer_label_includes_name_body_and_variable(self, fluid_config):
+        from sphinxsim.visualization.annotations import observer_label
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["observers"] = [
+            {
+                "name": "ProbeA",
+                "observed_body": "WaterBody",
+                "variable": {"real_type": "Pressure"},
+                "positions": [[0.1, 0.1]],
+            }
+        ]
+        cfg = SimulationConfig(**data)
+
+        label = observer_label(cfg.observers[0])
+        assert "Observer: ProbeA" in label
+        assert "body=WaterBody" in label
+        assert "var=Pressure" in label
+
+
 # ---------------------------------------------------------------------------
 # ConfigVisualizer.preview — no-pyvista guard test
 # ---------------------------------------------------------------------------
@@ -329,6 +350,66 @@ class TestPreviewViewMode:
         viz._add_view_direction_widgets(fake_plotter, ndim=2)
 
         assert fake_plotter.titles == ["+z", "-z"]
+
+
+class TestPreviewObservers:
+    def test_populate_plotter_renders_observer_points(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["geometries"].pop("system_domain", None)
+        data["observers"] = [
+            {
+                "name": "ProbeA",
+                "observed_body": "WaterBody",
+                "variable": {"real_type": "Pressure"},
+                "positions": [[0.1, 0.1], [0.2, 0.1]],
+            }
+        ]
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        class FakePlotter:
+            def __init__(self):
+                self.mesh_calls: list[dict[str, Any]] = []
+                self.point_label_calls: list[dict[str, Any]] = []
+
+            def add_mesh(self, mesh, **kwargs):
+                self.mesh_calls.append({"mesh": mesh, **kwargs})
+
+            def add_point_labels(self, points, labels, **kwargs):
+                self.point_label_calls.append(
+                    {"points": points, "labels": labels, **kwargs}
+                )
+
+            def add_text(self, *args, **kwargs):
+                return None
+
+            def add_legend(self, *args, **kwargs):
+                return None
+
+        class FakePyVista:
+            @staticmethod
+            def PolyData(points):
+                return {"points": points}
+
+        fake_plotter = FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        observer_mesh_calls = [
+            call for call in fake_plotter.mesh_calls if call.get("label") == "Observer: ProbeA"
+        ]
+        assert len(observer_mesh_calls) == 1
+        assert observer_mesh_calls[0]["color"] == (0.93, 0.13, 0.93)
+        assert observer_mesh_calls[0]["point_size"] == 10
+
+        observer_label_calls = [
+            call
+            for call in fake_plotter.point_label_calls
+            if call["labels"] and "Observer: ProbeA" in call["labels"][0]
+        ]
+        assert len(observer_label_calls) == 1
 
 
 # ---------------------------------------------------------------------------
