@@ -399,6 +399,11 @@ def cmd_preview(args: argparse.Namespace) -> int:
 
     use_cpp = not getattr(args, "no_cpp", False)
     off_screen = getattr(args, "off_screen", False)
+    screenshot_path = getattr(args, "screenshot", None)
+
+    # Screenshot mode implies off-screen rendering.
+    if screenshot_path:
+        off_screen = True
 
     print(f"🖼  Building configuration preview for: {resolved_config_path}")
     if use_cpp:
@@ -413,7 +418,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
         off_screen=off_screen,
     )
     try:
-        visualizer.preview(use_cpp=use_cpp)
+        visualizer.preview(use_cpp=use_cpp, screenshot_path=screenshot_path)
         if use_cpp:
             if visualizer.used_cpp_geometry:
                 print("✅ Preview used C++ geometry (VTP meshes).")
@@ -421,6 +426,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
                 print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
         else:
             print("ℹ️ Preview rendered without C++ geometry (--no-cpp).")
+        if screenshot_path:
+            print(f"📸 Screenshot saved to: {screenshot_path}")
     except ImportError as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 1
@@ -512,7 +519,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print(
         "Commands: load FILE, generate DESCRIPTION FILE, "
         "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, preview [--no-cpp], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+        "validate, run, preview [--no-cpp] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
     print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
@@ -552,6 +559,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  validate                        - Reload and validate config from disk")
             print("  preview                         - Render geometry/BC preview (requires pyvista)")
             print("  preview --no-cpp                - Preview without C++ geometry build")
+            print("  preview --screenshot FILE        - Save a screenshot to FILE instead of interactive window")
             print("  run                             - Run simulation from loaded config")
             print("  lock-geometry                   - Manually lock geometry updates")
             print("  unlock-geometry                 - Unlock geometry updates")
@@ -698,11 +706,22 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
             no_cpp = "--no-cpp" in parts
+            # Extract --screenshot / -s value from shell input
+            screenshot_path = None
+            if "--screenshot" in parts:
+                idx = parts.index("--screenshot")
+                if idx + 1 < len(parts):
+                    screenshot_path = parts[idx + 1]
+            elif "-s" in parts:
+                idx = parts.index("-s")
+                if idx + 1 < len(parts):
+                    screenshot_path = parts[idx + 1]
             _ = cmd_preview(
                 argparse.Namespace(
                     config_file=str(config_path),
                     no_cpp=no_cpp,
                     off_screen=False,
+                    screenshot=screenshot_path,
                 )
             )
             continue
@@ -872,6 +891,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--off-screen",
         action="store_true",
         help="Render off-screen (no window). Useful for automated testing.",
+    )
+    prev.add_argument(
+        "--screenshot",
+        "-s",
+        default=None,
+        help="Save a screenshot to this file path instead of opening an interactive window.",
     )
     prev.set_defaults(func=cmd_preview)
 

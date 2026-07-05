@@ -644,7 +644,7 @@ class TestCLIPreviewCommand:
 
         assert rc == 0
         MockViz.assert_called_once()
-        fake_visualizer.preview.assert_called_once_with(use_cpp=True)
+        fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path=None)
 
     def test_preview_no_cpp_flag(self, build_temp_path):
         cfg = self._write_config(build_temp_path)
@@ -659,7 +659,7 @@ class TestCLIPreviewCommand:
                 rc = main(["preview", str(cfg), "--no-cpp"])
 
         assert rc == 0
-        fake_visualizer.preview.assert_called_once_with(use_cpp=False)
+        fake_visualizer.preview.assert_called_once_with(use_cpp=False, screenshot_path=None)
 
     def test_preview_invalid_config_returns_nonzero(self, build_temp_path, capsys):
         bad = _minimal_fluid_config()
@@ -732,7 +732,7 @@ class TestShellPreview:
 
         assert rc == 0
         MockViz.assert_called_once()
-        fake_visualizer.preview.assert_called_once_with(use_cpp=True)
+        fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path=None)
 
     def test_shell_preview_no_cpp_flag(self, build_temp_path):
         _, rel = self._write_config(build_temp_path)
@@ -748,7 +748,7 @@ class TestShellPreview:
                     rc = main(["shell"])
 
         assert rc == 0
-        fake_visualizer.preview.assert_called_once_with(use_cpp=False)
+        fake_visualizer.preview.assert_called_once_with(use_cpp=False, screenshot_path=None)
 
     def test_shell_help_mentions_preview(self, build_temp_path, capsys):
         inputs = ["help", "exit"]
@@ -756,3 +756,260 @@ class TestShellPreview:
             rc = main(["shell"])
         assert rc == 0
         assert "preview" in capsys.readouterr().out
+
+
+# ---------------------------------------------------------------------------
+# Screenshot tests
+# ---------------------------------------------------------------------------
+
+class TestScreenshot:
+    """Tests for the screenshot output feature."""
+
+    def test_preview_screenshot_calls_plotter_screenshot(self, tmp_path, monkeypatch):
+        """preview() with screenshot_path should call plotter.screenshot() instead of plotter.show()."""
+        import sphinxsim.visualization.preview as pv_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+
+        screenshot_calls: list[str] = []
+        show_calls: list[int] = []
+
+        class ScreenshotMockPlotter:
+            window_size = (800, 600)
+
+            def add_mesh(self, mesh, **kwargs):
+                pass
+
+            def add_point_labels(self, points, labels, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+            def screenshot(self, path):
+                screenshot_calls.append(path)
+
+            def show(self):
+                show_calls.append(1)
+
+            def __getattr__(self, name):
+                def _noop(*args, **kwargs):
+                    pass
+                return _noop
+
+        class ScreenshotMockPyVista:
+            def Plotter(self, **kwargs):
+                return ScreenshotMockPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                class MockPolyData:
+                    def __init__(self, pts):
+                        self.points = pts
+                        self.center = [0.5, 0.5, 0.0] if len(pts) > 0 else [0.0, 0.0, 0.0]
+                        self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+                return MockPolyData(points)
+
+            @staticmethod
+            def Box(bounds):
+                class MockBox:
+                    def __init__(self):
+                        self.bounds = bounds
+                return MockBox()
+
+        monkeypatch.setitem(sys.modules, "pyvista", ScreenshotMockPyVista())
+
+        viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
+        out_file = str(tmp_path / "screenshot.png")
+        viz.preview(use_cpp=False, screenshot_path=out_file)
+
+        assert len(screenshot_calls) == 1
+        assert screenshot_calls[0] == out_file
+        assert len(show_calls) == 0  # show() should NOT be called when screenshot_path is set
+
+    def test_preview_without_screenshot_calls_show(self, tmp_path, monkeypatch):
+        """preview() without screenshot_path should call plotter.show() and NOT plotter.screenshot()."""
+        import sphinxsim.visualization.preview as pv_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+
+        screenshot_calls: list[str] = []
+        show_calls: list[int] = []
+
+        class ShowMockPlotter:
+            window_size = (800, 600)
+
+            def add_mesh(self, mesh, **kwargs):
+                pass
+
+            def add_point_labels(self, points, labels, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+            def screenshot(self, path):
+                screenshot_calls.append(path)
+
+            def show(self):
+                show_calls.append(1)
+
+            def __getattr__(self, name):
+                def _noop(*args, **kwargs):
+                    pass
+                return _noop
+
+        class ShowMockPyVista:
+            def Plotter(self, **kwargs):
+                return ShowMockPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                class MockPolyData:
+                    def __init__(self, pts):
+                        self.points = pts
+                        self.center = [0.5, 0.5, 0.0] if len(pts) > 0 else [0.0, 0.0, 0.0]
+                        self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+                return MockPolyData(points)
+
+            @staticmethod
+            def Box(bounds):
+                class MockBox:
+                    def __init__(self):
+                        self.bounds = bounds
+                return MockBox()
+
+        monkeypatch.setitem(sys.modules, "pyvista", ShowMockPyVista())
+
+        viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
+        viz.preview(use_cpp=False)
+
+        assert len(show_calls) == 1
+        assert len(screenshot_calls) == 0
+
+
+class TestCLIScreenshotCommand:
+    """CLI tests for the --screenshot flag."""
+
+    def _write_config(self, path: Path) -> Path:
+        p = path / "config.json"
+        p.write_text(json.dumps(_minimal_fluid_config()))
+        return p
+
+    def test_screenshot_flag_passes_screenshot_path(self, build_temp_path):
+        """--screenshot FILE should pass screenshot_path to visualizer.preview()."""
+        cfg = self._write_config(build_temp_path)
+        mock_pv = MagicMock()
+        fake_visualizer = MagicMock()
+
+        with patch.dict(sys.modules, {"pyvista": mock_pv}):
+            with patch(
+                "sphinxsim.visualization.preview.ConfigVisualizer",
+                return_value=fake_visualizer,
+            ) as MockViz:
+                rc = main(["preview", str(cfg), "--screenshot", "output.png"])
+
+        assert rc == 0
+        fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path="output.png")
+
+    def test_screenshot_short_flag_passes_screenshot_path(self, build_temp_path):
+        """-s FILE should pass screenshot_path to visualizer.preview()."""
+        cfg = self._write_config(build_temp_path)
+        mock_pv = MagicMock()
+        fake_visualizer = MagicMock()
+
+        with patch.dict(sys.modules, {"pyvista": mock_pv}):
+            with patch(
+                "sphinxsim.visualization.preview.ConfigVisualizer",
+                return_value=fake_visualizer,
+            ):
+                rc = main(["preview", str(cfg), "-s", "out.png"])
+
+        assert rc == 0
+        fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path="out.png")
+
+    def test_screenshot_implies_off_screen(self, build_temp_path):
+        """--screenshot should cause ConfigVisualizer to be constructed with off_screen=True."""
+        cfg = self._write_config(build_temp_path)
+        mock_pv = MagicMock()
+        fake_visualizer = MagicMock()
+
+        with patch.dict(sys.modules, {"pyvista": mock_pv}):
+            with patch(
+                "sphinxsim.visualization.preview.ConfigVisualizer",
+                return_value=fake_visualizer,
+            ) as MockViz:
+                rc = main(["preview", str(cfg), "--screenshot", "shot.png"])
+
+        assert rc == 0
+        _, kwargs = MockViz.call_args
+        assert kwargs.get("off_screen") is True
+
+    def test_no_screenshot_does_not_force_off_screen(self, build_temp_path):
+        """Without --screenshot, off_screen should remain False (unless --off-screen is given)."""
+        cfg = self._write_config(build_temp_path)
+        mock_pv = MagicMock()
+        fake_visualizer = MagicMock()
+
+        with patch.dict(sys.modules, {"pyvista": mock_pv}):
+            with patch(
+                "sphinxsim.visualization.preview.ConfigVisualizer",
+                return_value=fake_visualizer,
+            ) as MockViz:
+                rc = main(["preview", str(cfg)])
+
+        assert rc == 0
+        _, kwargs = MockViz.call_args
+        assert kwargs.get("off_screen") is False
+
+
+class TestShellScreenshot:
+    """Shell mode tests for the --screenshot flag."""
+
+    def _write_config(self, path: Path) -> tuple[Path, str]:
+        p = path / "config.json"
+        p.write_text(json.dumps(_minimal_fluid_config()))
+        rel = f"pytest-temp/{path.name}/config.json"
+        return p, rel
+
+    def test_shell_screenshot_passes_screenshot_path(self, build_temp_path):
+        """Shell mode: 'preview --screenshot FILE' should pass screenshot_path to preview()."""
+        _, rel = self._write_config(build_temp_path)
+        fake_visualizer = MagicMock()
+
+        inputs = [f"load {rel}", "preview --screenshot shell_out.png", "exit"]
+        with patch.dict(sys.modules, {"pyvista": MagicMock()}):
+            with patch(
+                "sphinxsim.visualization.preview.ConfigVisualizer",
+                return_value=fake_visualizer,
+            ):
+                with patch("builtins.input", side_effect=inputs):
+                    rc = main(["shell"])
+
+        assert rc == 0
+        fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path="shell_out.png")
+
+    def test_shell_screenshot_short_flag(self, build_temp_path):
+        """Shell mode: 'preview -s FILE' should pass screenshot_path to preview()."""
+        _, rel = self._write_config(build_temp_path)
+        fake_visualizer = MagicMock()
+
+        inputs = [f"load {rel}", "preview -s short.png", "exit"]
+        with patch.dict(sys.modules, {"pyvista": MagicMock()}):
+            with patch(
+                "sphinxsim.visualization.preview.ConfigVisualizer",
+                return_value=fake_visualizer,
+            ):
+                with patch("builtins.input", side_effect=inputs):
+                    rc = main(["shell"])
+
+        assert rc == 0
+        fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path="short.png")

@@ -233,6 +233,7 @@ class ConfigVisualizer:
         *,
         title: str = "SPHinXsim - Configuration Preview",
         use_cpp: bool = True,
+        screenshot_path: str | Path | None = None,
     ) -> None:
         """Render the configuration preview.
 
@@ -243,6 +244,10 @@ class ConfigVisualizer:
         use_cpp:
             When *True*, call ``buildGeometries()`` from the C++ extension.
             Raises :class:`ImportError` if the extension is not installed.
+        screenshot_path:
+            When provided, save a screenshot of the render to this file path
+            instead of opening an interactive window.  Forces off-screen
+            rendering so the screenshot can be produced headlessly.
         """
         try:
             import pyvista as pv  # type: ignore[import]
@@ -261,7 +266,9 @@ class ConfigVisualizer:
             self._shape_bounds_cache = None
         self._vtp_dir = vtp_dir
 
-        plotter = pv.Plotter(title=title, off_screen=self.off_screen)
+        # Screenshot mode implies off-screen rendering.
+        off_screen = self.off_screen or screenshot_path is not None
+        plotter = pv.Plotter(title=title, off_screen=off_screen)
         self._populate_plotter(plotter, vtp_dir)
         self._configure_default_view(plotter, ndim)
         plotter.add_axes()
@@ -282,7 +289,10 @@ class ConfigVisualizer:
             color="white",
         )
 
-        plotter.show()
+        if screenshot_path is not None:
+            plotter.screenshot(str(screenshot_path))
+        else:
+            plotter.show()
 
     # ------------------------------------------------------------------
     # Internal helpers
