@@ -57,6 +57,7 @@ Design rule:
 - Resolve spatial dimension / view mode.
 - Populate plotter with shapes, oriented boxes, constraints, observers, and annotations.
 - Keep rendering robust when PyVista or mesh assets are unavailable.
+- Support screenshot output via `screenshot_path` parameter on `preview()`.
 
 ### Annotation functions
 Keep annotation formatting centralized in `annotations.py`:
@@ -88,6 +89,15 @@ For each `config.body_constraints` item:
 - Keep controls and camera defaults consistent with dimension inference.
 - Ensure labels and overlays remain legible in planar mode.
 
+## Screenshot output
+`preview()` accepts an optional `screenshot_path` parameter:
+- When provided, forces off-screen rendering (`off_screen = True`).
+- Calls `plotter.screenshot(str(screenshot_path))` instead of `plotter.show()`.
+- No interactive window is opened.
+- CLI exposes this via `--screenshot FILE` / `-s FILE` on both direct and shell `preview` commands.
+- Shell mode parses `--screenshot`/`-s` from the input line and passes it through `argparse.Namespace` to `cmd_preview`.
+- On success, CLI prints `📸 Screenshot saved to: {path}`.
+
 ## Testing playbook
 Use `tests/test_visualization.py`.
 
@@ -100,7 +110,15 @@ Use `tests/test_visualization.py`.
 - Assert rendering flow does not raise.
 - Assert expected plotting calls when behavior is deterministic.
 
-3. Config validation-aware fixtures
+3. Screenshot tests
+- Mock plotter must expose `screenshot()` method and `window_size` attribute.
+- Use `__getattr__` fallback on mock plotter to absorb arbitrary method calls (e.g. `add_axes`, `show_grid`, `add_radio_button_widget`).
+- Assert `plotter.screenshot()` is called when `screenshot_path` is set, and `plotter.show()` is called otherwise.
+- Assert `off_screen` is forced on when `screenshot_path` is provided.
+- CLI tests should verify `--screenshot`/`-s` flag passes the path through `argparse.Namespace`.
+- Shell tests should verify `--screenshot`/`-s` parsing from the input line.
+
+4. Config validation-aware fixtures
 - Build test config via `SimulationConfig(**data)`.
 - Respect schema requirements:
   - region oriented box requires `half_size` and `transform`.
@@ -111,6 +129,8 @@ Use `tests/test_visualization.py`.
 - Invalid oriented box schema in tests (`center/normal/radius` used for region type).
 - Simbody test configs missing restart section.
 - Mismatch between expected label text and annotation formatter.
+- Mock plotter missing methods called by `preview()` (e.g. `add_axes`, `show_grid`, `add_radio_button_widget`). Use `__getattr__` fallback returning a no-op lambda to avoid whack-a-mole.
+- Mock plotter missing `window_size` attribute — this is a property access, not a method call, so `__getattr__` won't catch it. Set it as a class attribute.
 
 ## Implementation checklist
 When adding a new visualization element:
@@ -120,6 +140,15 @@ When adding a new visualization element:
 4. Update legend entries.
 5. Add label tests and preview tests.
 6. Run visualization test file.
+
+When adding output modes (e.g. screenshot, animation):
+1. Add parameter to `preview()` method.
+2. Wire CLI flag in `cmd_preview()` (direct command subparser).
+3. Wire shell-mode parsing in the shell `preview` handler.
+4. Update mock plotter classes in tests with `__getattr__` fallback and any needed class attributes.
+5. Add tests for the new output path.
+6. Update `docs/visualization.md` and `docs/cli-usage.md`.
+7. Run visualization test file.
 
 ## Verification command
 From repo root:
