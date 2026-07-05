@@ -78,6 +78,7 @@ Inside the shell, you can use the following commands:
 | `validate` | Reload the loaded file from disk and validate it |
 | `preview` | Render an interactive geometry/BC preview of the loaded config |
 | `preview --no-cpp` | Preview using schema bounding-box fallback only (no C++ build) |
+| `preview --screenshot FILE` | Save a screenshot to FILE instead of opening an interactive window |
 | `run` | Build and execute the loaded config |
 | `lock-geometry` | Lock geometry updates for the active shell session |
 | `unlock-geometry` | Unlock geometry updates (and reset downstream simulator state when attached) |
@@ -197,6 +198,7 @@ Options:
 | --- | --- |
 | `--no-cpp` | Skip C++ geometry build; render only the system domain bounding box and annotations |
 | `--off-screen` | Render off-screen (no window) — useful for automated testing |
+| `--screenshot FILE` / `-s FILE` | Save a screenshot to FILE instead of opening a window. Implies `--off-screen`. |
 
 Requires the optional `[visualization]` extra:
 
@@ -262,6 +264,7 @@ sphinxsim shell
 > validate
 > preview                   # inspect geometry and BCs interactively
 > preview --no-cpp          # quick bounding-box fallback if C++ not built
+> preview --screenshot preview.png   # save a screenshot for a report
 > run
 > exit
 ```
