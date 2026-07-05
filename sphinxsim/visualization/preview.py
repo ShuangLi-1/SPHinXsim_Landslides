@@ -30,6 +30,7 @@ from sphinxsim.bindings.loader import load_sphinxsys_core, load_sphinxsys_core_n
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
+        BodyConstraintConfig,
         OrientedBoxConfig,
         ShapeConfig,
         SimulationConfig,
@@ -48,6 +49,7 @@ _UNKNOWN_COLOUR = (0.60, 0.80, 0.40)     # green (shapes not in any body list)
 _INLET_OUTLET_COLOUR = (0.85, 0.20, 0.20)  # red
 _REGION_COLOUR = (0.85, 0.70, 0.10)        # yellow
 _OBSERVER_COLOUR = (0.93, 0.13, 0.93)      # magenta — observer positions
+_CONSTRAINT_COLOUR = (0.93, 0.55, 0.13)     # orange — body constraint regions
 
 
 def _body_colour(body_name: str, config: "SimulationConfig") -> tuple[float, float, float]:
@@ -446,6 +448,7 @@ class ConfigVisualizer:
         import pyvista as pv  # type: ignore[import]
 
         from sphinxsim.visualization.annotations import (
+            body_constraint_label,
             body_label,
             gravity_label,
             observer_label,
@@ -461,6 +464,11 @@ class ConfigVisualizer:
         body_names.update(b.name for b in config.continuum_bodies)
 
         rendered_shapes: set[str] = set()
+
+        # Build a name → shape lookup for later use (constraint labels, etc.)
+        shape_lookup: dict[str, "ShapeConfig"] = {
+            shape.name: shape for shape in config.geometries.shapes
+        }
 
         # --- Render each shape ---
         for shape in config.geometries.shapes:
@@ -522,6 +530,52 @@ class ConfigVisualizer:
                 always_visible=True,
             )
 
+        # --- Body constraints ---
+        # For constraints with a *region* (oriented box reference) we overlay
+        # the referenced box mesh with the constraint colour.  For constraints
+        # without a region the label is placed at the centroid of the
+        # constrained body's shape mesh (if available).
+        oriented_box_lookup = {
+            ob.name: ob for ob in config.geometries.oriented_boxes
+        }
+        for constraint in config.body_constraints:
+            label_text = body_constraint_label(constraint)
+
+            if constraint.region is not None and constraint.region in oriented_box_lookup:
+                ob = oriented_box_lookup[constraint.region]
+                mesh = self._load_oriented_box_mesh(ob, vtp_dir)
+                if mesh is not None:
+                    plotter.add_mesh(
+                        mesh,
+                        color=_CONSTRAINT_COLOUR,
+                        opacity=0.30,
+                        style="wireframe",
+                        line_width=3,
+                        label=f"Constraint: {constraint.body_name}",
+                    )
+                    plotter.add_point_labels(
+                        [mesh.center],
+                        [label_text],
+                        point_size=0,
+                        font_size=7,
+                        text_color="orange",
+                        always_visible=True,
+                    )
+            else:
+                # No region — try to label at the body shape centroid.
+                shape = shape_lookup.get(constraint.body_name)
+                if shape is not None:
+                    mesh = self._load_shape_mesh(shape, vtp_dir, config)
+                    if mesh is not None:
+                        plotter.add_point_labels(
+                            [mesh.center],
+                            [label_text],
+                            point_size=0,
+                            font_size=7,
+                            text_color="orange",
+                            always_visible=True,
+                        )
+
         # --- Domain bounding box ---
         if config.geometries.system_domain is not None:
             domain = config.geometries.system_domain
@@ -580,6 +634,7 @@ class ConfigVisualizer:
             ["Inlet/Outlet", _INLET_OUTLET_COLOUR],
             ["Region", _REGION_COLOUR],
             ["Observer", _OBSERVER_COLOUR],
+            ["Constraint", _CONSTRAINT_COLOUR],
         ]
         plotter.add_legend(
             [

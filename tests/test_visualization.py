@@ -413,6 +413,201 @@ class TestPreviewObservers:
 
 
 # ---------------------------------------------------------------------------
+# Body constraint label tests
+# ---------------------------------------------------------------------------
+
+class TestConstraintLabel:
+    def test_fixed_constraint_label(self, fluid_config):
+        from sphinxsim.visualization.annotations import body_constraint_label
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["body_constraints"] = [
+            {"body_name": "WallBoundary", "type": "fixed"}
+        ]
+        cfg = SimulationConfig(**data)
+
+        label = body_constraint_label(cfg.body_constraints[0])
+        assert "Constraint → WallBoundary" in label
+        assert "type=fixed" in label
+
+    def test_fixed_constraint_with_region_label(self, fluid_config):
+        from sphinxsim.visualization.annotations import body_constraint_label
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["geometries"]["oriented_boxes"].append(
+            {
+                "name": "ClampRegion",
+                "type": "region",
+                "half_size": [0.1, 0.1],
+                "transform": {
+                    "translation": [0.5, 0.5],
+                    "rotation_angle": 0.0,
+                    "rotation_axis": [0.0, 0.0, 1.0],
+                },
+            }
+        )
+        data["body_constraints"] = [
+            {"body_name": "WallBoundary", "type": "fixed", "region": "ClampRegion"}
+        ]
+        cfg = SimulationConfig(**data)
+
+        label = body_constraint_label(cfg.body_constraints[0])
+        assert "Constraint → WallBoundary" in label
+        assert "type=fixed" in label
+        assert "region=ClampRegion" in label
+
+    def test_simbody_constraint_label(self, fluid_config):
+        from sphinxsim.visualization.annotations import body_constraint_label
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        # Simbody constraints require solver_parameters.restart
+        data["solver_parameters"]["restart"] = {
+            "restore_step": 0,
+            "save_interval": 1000,
+            "summary_enabled": False,
+        }
+        data["body_constraints"] = [
+            {
+                "body_name": "WallBoundary",
+                "type": "simbody",
+                "mobilized_body": "planar",
+                "velocity": [0.0, -0.03],
+                "angular_velocity": 2.0,
+            }
+        ]
+        cfg = SimulationConfig(**data)
+
+        label = body_constraint_label(cfg.body_constraints[0])
+        assert "Constraint → WallBoundary" in label
+        assert "type=simbody" in label
+        assert "mob=planar" in label
+        assert "v=(0.0, -0.03)" in label
+        assert "ω=2.0" in label
+
+
+# ---------------------------------------------------------------------------
+# Body constraint preview tests
+# ---------------------------------------------------------------------------
+
+class TestPreviewConstraints:
+    def test_preview_renders_constraint_with_region(self, fluid_config, tmp_path, monkeypatch):
+        """A constraint with a region should not raise an error during visualization."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["geometries"].pop("system_domain", None)
+        data["geometries"]["oriented_boxes"].append(
+            {
+                "name": "ClampRegion",
+                "type": "region",
+                "half_size": [0.1, 0.1],
+                "transform": {
+                    "translation": [0.5, 0.5],
+                    "rotation_angle": 0.0,
+                    "rotation_axis": [0.0, 0.0, 1.0],
+                },
+            }
+        )
+        data["body_constraints"] = [
+            {"body_name": "WallBoundary", "type": "fixed", "region": "ClampRegion"}
+        ]
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        # Mock PyVista to avoid requiring a display or actual rendering
+        class MockPolyData:
+            def __init__(self, points):
+                self.points = points
+                self.center = [0.5, 0.5, 0.0] if len(points) > 0 else [0.0, 0.0, 0.0]
+                self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+        class MockPlotter:
+            def add_mesh(self, mesh, **kwargs):
+                pass
+
+            def add_point_labels(self, points, labels, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+        class MockPyVista:
+            def Plotter(self, **kwargs):
+                return MockPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                return MockPolyData(points)
+
+        # Mock pyvista import
+        import sys
+
+        monkeypatch.setitem(sys.modules, "pyvista", MockPyVista())
+
+        # Should not raise an error
+        try:
+            plotter = MockPlotter()
+            viz._populate_plotter(plotter, vtp_dir=None)
+        except Exception as e:
+            pytest.fail(f"_populate_plotter raised {type(e).__name__}: {e}")
+
+    def test_preview_renders_constraint_without_region(self, fluid_config, tmp_path, monkeypatch):
+        """A constraint without a region should not raise an error during visualization."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["geometries"].pop("system_domain", None)
+        data["body_constraints"] = [
+            {"body_name": "WallBoundary", "type": "fixed"}
+        ]
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        # Mock PyVista to avoid requiring a display or actual rendering
+        class MockPolyData:
+            def __init__(self, points):
+                self.points = points
+                self.center = [0.5, 0.5, 0.0] if len(points) > 0 else [0.0, 0.0, 0.0]
+                self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+        class MockPlotter:
+            def add_mesh(self, mesh, **kwargs):
+                pass
+
+            def add_point_labels(self, points, labels, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+        class MockPyVista:
+            def Plotter(self, **kwargs):
+                return MockPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                return MockPolyData(points)
+
+        # Mock pyvista import
+        import sys
+
+        monkeypatch.setitem(sys.modules, "pyvista", MockPyVista())
+
+        # Should not raise an error
+        try:
+            plotter = MockPlotter()
+            viz._populate_plotter(plotter, vtp_dir=None)
+        except Exception as e:
+            pytest.fail(f"_populate_plotter raised {type(e).__name__}: {e}")
+
+
+# ---------------------------------------------------------------------------
 # CLI preview command tests (no PyVista / no C++ required)
 # ---------------------------------------------------------------------------
 

@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
+        BodyConstraintConfig,
         FluidBoundaryConditionConfig,
         ObserverConfig,
         OrientedBoxConfig,
@@ -95,3 +96,30 @@ def observer_label(observer: "ObserverConfig") -> str:
         f"body={observer.observed_body}\n"
         f"var={variable_name}"
     )
+
+
+def body_constraint_label(constraint: "BodyConstraintConfig") -> str:
+    """Return an annotation label for a body constraint definition.
+
+    Covers both ``fixed`` and ``simbody`` constraint types.  When a
+    ``region`` (oriented box name) is specified the label notes it; otherwise
+    the constraint applies to the entire body.
+    """
+    parts = [f"Constraint → {constraint.body_name}", f"type={constraint.type.value}"]
+
+    if constraint.region is not None:
+        parts.append(f"region={constraint.region}")
+
+    if constraint.type.value == "simbody":
+        if constraint.mobilized_body is not None:
+            parts.append(f"mob={constraint.mobilized_body}")
+        if constraint.velocity is not None:
+            v = constraint.velocity
+            if len(v) == 2:
+                parts.append(f"v=({v[0]}, {v[1]})")
+            else:
+                parts.append(f"v=({v[0]}, {v[1]}, {v[2]})")
+        if constraint.angular_velocity is not None:
+            parts.append(f"ω={constraint.angular_velocity}")
+
+    return "\n".join(parts)
