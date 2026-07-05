@@ -5,7 +5,10 @@ on:
     branches:
       - main
     paths:
-       - 'docs/**'
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/docs.yml'
+  workflow_dispatch:
 permissions:
   contents: write
 
@@ -27,3 +30,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - run: mkdocs gh-deploy --force --remote-branch gh-pages --remote-name origin
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
