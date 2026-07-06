@@ -481,6 +481,27 @@ class ConfigVisualizer:
             shape.name: shape for shape in config.geometries.shapes
         }
 
+        occupied_points: list[tuple[float, float, float]] = []
+        scene_bounds: list[float] | None = None
+
+        def _update_scene_bounds(mesh: Any) -> None:
+            nonlocal scene_bounds
+            try:
+                bx = [float(v) for v in mesh.bounds]
+            except Exception:
+                return
+            if len(bx) != 6:
+                return
+            if scene_bounds is None:
+                scene_bounds = bx[:]
+                return
+            scene_bounds[0] = min(scene_bounds[0], bx[0])
+            scene_bounds[1] = max(scene_bounds[1], bx[1])
+            scene_bounds[2] = min(scene_bounds[2], bx[2])
+            scene_bounds[3] = max(scene_bounds[3], bx[3])
+            scene_bounds[4] = min(scene_bounds[4], bx[4])
+            scene_bounds[5] = max(scene_bounds[5], bx[5])
+
         # --- Render each shape ---
         for shape in config.geometries.shapes:
             if shape.type.value == "complex_shape":
@@ -503,6 +524,7 @@ class ConfigVisualizer:
                 style=style,
                 label=shape.name,
             )
+            _update_scene_bounds(mesh)
 
             label_anchor = _label_anchor_point(mesh)
             label_text = body_label(shape.name, config) if is_body else shape.name
@@ -513,6 +535,13 @@ class ConfigVisualizer:
                 font_size=8,
                 text_color="white",
                 always_visible=True,
+            )
+            occupied_points.append(
+                (
+                    float(mesh.center[0]),
+                    float(mesh.center[1]),
+                    float(mesh.center[2]) if len(mesh.center) > 2 else 0.0,
+                )
             )
             rendered_shapes.add(shape.name)
 
@@ -531,6 +560,7 @@ class ConfigVisualizer:
                 line_width=2,
                 label=ob.name,
             )
+            _update_scene_bounds(mesh)
             label_text = oriented_box_label(ob, config)
             plotter.add_point_labels(
                 [mesh.center],
@@ -539,6 +569,13 @@ class ConfigVisualizer:
                 font_size=7,
                 text_color="yellow",
                 always_visible=True,
+            )
+            occupied_points.append(
+                (
+                    float(mesh.center[0]),
+                    float(mesh.center[1]),
+                    float(mesh.center[2]) if len(mesh.center) > 2 else 0.0,
+                )
             )
 
         # --- Body constraints ---
@@ -598,9 +635,16 @@ class ConfigVisualizer:
                 style="wireframe",
                 line_width=1,
             )
+            _update_scene_bounds(domain_mesh)
 
         # --- Gravity annotation ---
-        self._add_gravity_arrow(plotter, config, pv)
+        self._add_gravity_arrow(
+            plotter,
+            config,
+            pv,
+            occupied_points,
+            scene_bounds=tuple(scene_bounds) if scene_bounds is not None else None,
+        )
 
         # --- Observer positions ---
         for observer in config.observers:
@@ -656,13 +700,21 @@ class ConfigVisualizer:
             border=True,
         )
 
-    def _add_gravity_arrow(self, plotter: Any, config: "SimulationConfig", pv: Any) -> None:
+    def _add_gravity_arrow(
+        self,
+        plotter: Any,
+        config: "SimulationConfig",
+        pv: Any,
+        occupied_points: list[tuple[float, float, float]] | None = None,
+        scene_bounds: tuple[float, ...] | None = None,
+    ) -> None:
         """Render gravity as a directional arrow with a text label.
 
-        The arrow originates near the upper-left of the domain bounding box and
-        points in the gravity direction.  Its length is scaled to a fraction of
-        the domain size so it remains visible regardless of scene scale.  When
-        gravity is unset, nothing is rendered.
+        In 2-D, the arrow is anchored near the lower-left of the scene so it is
+        easier to spot and appears close to the on-screen axes widget. In 3-D,
+        it originates near the upper-left/front of the domain bounding box. Its
+        length is scaled to a fraction of the domain size so it remains visible
+        regardless of scene scale. When gravity is unset, nothing is rendered.
         """
         from sphinxsim.visualization.annotations import gravity_label
 
@@ -678,6 +730,12 @@ class ConfigVisualizer:
         if domain is not None:
             lower = list(domain.lower_bound)
             upper = list(domain.upper_bound)
+        elif scene_bounds is not None and len(scene_bounds) == 6:
+            lower = [float(scene_bounds[0]), float(scene_bounds[2])]
+            upper = [float(scene_bounds[1]), float(scene_bounds[3])]
+            if ndim == 3:
+                lower.append(float(scene_bounds[4]))
+                upper.append(float(scene_bounds[5]))
         else:
             # Fall back to the extent of all shape bounds if available.
             lower, upper = self._scene_extent(ndim)
@@ -697,10 +755,41 @@ class ConfigVisualizer:
         if ndim == 2:
             direction = direction + (0.0,)
 
-        # Arrow start point: near the upper-left corner of the domain so it
-        # doesn't overlap body shapes in the centre.
+        # Arrow start point:
+        # - 2-D: choose from corner candidates and prefer visually empty space.
+        # - 3-D: keep upper-left/front to avoid clutter in perspective view.
         if ndim == 2:
-            start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], 0.0)
+            candidates = [
+                (lower[0] + 0.10 * extent[0], lower[1] + 0.18 * extent[1], 0.0),
+                (lower[0] + 0.10 * extent[0], upper[1] - 0.18 * extent[1], 0.0),
+                (upper[0] - 0.10 * extent[0], lower[1] + 0.18 * extent[1], 0.0),
+                (upper[0] - 0.10 * extent[0], upper[1] - 0.18 * extent[1], 0.0),
+            ]
+
+            points = occupied_points or []
+
+            def _score(candidate: tuple[float, float, float]) -> float:
+                # Prefer larger distance from rendered geometry centers.
+                if points:
+                    nearest = min(
+                        (candidate[0] - p[0]) ** 2 + (candidate[1] - p[1]) ** 2
+                        for p in points
+                    )
+                else:
+                    nearest = 0.0
+
+                # Prefer starts whose arrow end remains within scene bounds.
+                end_x = candidate[0] + direction[0] * arrow_length
+                end_y = candidate[1] + direction[1] * arrow_length
+                margin_x = 0.03 * extent[0]
+                margin_y = 0.03 * extent[1]
+                inside = (
+                    lower[0] + margin_x <= end_x <= upper[0] - margin_x
+                    and lower[1] + margin_y <= end_y <= upper[1] - margin_y
+                )
+                return nearest + (1e6 if inside else 0.0)
+
+            start = max(candidates, key=_score)
         else:
             start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], upper[2] - 0.05 * extent[2])
 
@@ -736,7 +825,7 @@ class ConfigVisualizer:
         """Return coarse lower/upper bounds for the scene.
 
         Used when ``system_domain`` is absent so the gravity arrow can still be
-        scaled to the scene.  Falls back to a unit box if no bounds are
+        scaled to the scene.  Falls back to a unit box if no bounds arepreview
         available.
         """
         lower = [0.0] * ndim
