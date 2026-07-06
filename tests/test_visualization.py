@@ -393,6 +393,15 @@ class TestPreviewObservers:
             def PolyData(points):
                 return {"points": points}
 
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
         fake_plotter = FakePlotter()
         with patch.dict(sys.modules, {"pyvista": FakePyVista}):
             viz._populate_plotter(fake_plotter, vtp_dir=None)
@@ -542,6 +551,15 @@ class TestPreviewConstraints:
             def PolyData(points):
                 return MockPolyData(points)
 
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
         # Mock pyvista import
         import sys
 
@@ -593,6 +611,15 @@ class TestPreviewConstraints:
             @staticmethod
             def PolyData(points):
                 return MockPolyData(points)
+
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
 
         # Mock pyvista import
         import sys
@@ -815,6 +842,15 @@ class TestScreenshot:
                 return MockPolyData(points)
 
             @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
+            @staticmethod
             def Box(bounds):
                 class MockBox:
                     def __init__(self):
@@ -879,6 +915,15 @@ class TestScreenshot:
                         self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
 
                 return MockPolyData(points)
+
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
 
             @staticmethod
             def Box(bounds):
@@ -1059,6 +1104,9 @@ class _FakePyVista:
 
     @staticmethod
     def Arrow(start, direction, scale):
+        # Match PyVista's requirement: both vectors must be 3-D.
+        if len(start) != 3 or len(direction) != 3:
+            raise ValueError("Arrow start and direction must be 3-D vectors")
         return {"type": "arrow", "start": start, "direction": direction, "scale": scale}
 
     @staticmethod
@@ -1090,7 +1138,7 @@ class TestPreviewGravityArrow:
 
         # The arrow direction should match the gravity direction (normalised).
         arrow = arrow_calls[0]["mesh"]
-        assert arrow["direction"] == (0.0, -1.0)
+        assert arrow["direction"] == (0.0, -1.0, 0.0)
 
         # The gravity text label should have been rendered.
         assert len(fake_plotter.label_calls) > 0 or len(fake_plotter.text_calls) > 0

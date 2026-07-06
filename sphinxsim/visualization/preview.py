@@ -688,36 +688,29 @@ class ConfigVisualizer:
             max_extent = 1.0
         arrow_length = 0.25 * max_extent
 
-        # Gravity direction (unit vector).
+        # Gravity direction (unit vector).  PyVista's Arrow always requires a
+        # 3-D direction vector, so pad 2-D gravity with a zero z-component.
         magnitude = sum(c * c for c in g) ** 0.5
         if magnitude == 0:
             return
         direction = tuple(c / magnitude for c in g)
+        if ndim == 2:
+            direction = direction + (0.0,)
 
         # Arrow start point: near the upper-left corner of the domain so it
         # doesn't overlap body shapes in the centre.
         if ndim == 2:
             start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], 0.0)
-            end = (
-                start[0] + direction[0] * arrow_length,
-                start[1] + direction[1] * arrow_length,
-                0.0,
-            )
         else:
             start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], upper[2] - 0.05 * extent[2])
-            end = tuple(start[i] + direction[i] * arrow_length for i in range(3))
 
-        try:
-            arrow = pv.Arrow(start=start, direction=direction, scale=arrow_length)
-            plotter.add_mesh(
-                arrow,
-                color=_GRAVITY_COLOUR,
-                line_width=4,
-                label="Gravity",
-            )
-        except Exception:
-            # If PyVista arrow construction fails, still show the text label.
-            pass
+        arrow = pv.Arrow(start=start, direction=direction, scale=arrow_length)
+        plotter.add_mesh(
+            arrow,
+            color=_GRAVITY_COLOUR,
+            line_width=4,
+            label="Gravity",
+        )
 
         # Place the gravity text label just above the arrow start.
         label_offset = 0.03 * max_extent
