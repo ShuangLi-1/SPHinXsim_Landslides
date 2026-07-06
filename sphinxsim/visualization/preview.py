@@ -50,6 +50,7 @@ _INLET_OUTLET_COLOUR = (0.85, 0.20, 0.20)  # red
 _REGION_COLOUR = (0.85, 0.70, 0.10)        # yellow
 _OBSERVER_COLOUR = (0.93, 0.13, 0.93)      # magenta — observer positions
 _CONSTRAINT_COLOUR = (0.93, 0.55, 0.13)     # orange — body constraint regions
+_GRAVITY_COLOUR = (0.10, 0.90, 0.90)        # cyan — gravity direction arrow
 
 
 def _body_colour(body_name: str, config: "SimulationConfig") -> tuple[float, float, float]:
@@ -599,9 +600,7 @@ class ConfigVisualizer:
             )
 
         # --- Gravity annotation ---
-        g_label = gravity_label(config)
-        if g_label:
-            plotter.add_text(g_label, position="lower_left", font_size=9, color="cyan")
+        self._add_gravity_arrow(plotter, config, pv)
 
         # --- Observer positions ---
         for observer in config.observers:
@@ -645,6 +644,7 @@ class ConfigVisualizer:
             ["Region", _REGION_COLOUR],
             ["Observer", _OBSERVER_COLOUR],
             ["Constraint", _CONSTRAINT_COLOUR],
+            ["Gravity", _GRAVITY_COLOUR],
         ]
         plotter.add_legend(
             [
@@ -655,6 +655,114 @@ class ConfigVisualizer:
             bcolor="black",
             border=True,
         )
+
+    def _add_gravity_arrow(self, plotter: Any, config: "SimulationConfig", pv: Any) -> None:
+        """Render gravity as a directional arrow with a text label.
+
+        The arrow originates near the upper-left of the domain bounding box and
+        points in the gravity direction.  Its length is scaled to a fraction of
+        the domain size so it remains visible regardless of scene scale.  When
+        gravity is unset, nothing is rendered.
+        """
+        from sphinxsim.visualization.annotations import gravity_label
+
+        g_label = gravity_label(config)
+        if g_label is None:
+            return
+
+        g = config.gravity
+        ndim = len(g)
+
+        # Determine a scene-appropriate arrow length from the domain bounds.
+        domain = config.geometries.system_domain
+        if domain is not None:
+            lower = list(domain.lower_bound)
+            upper = list(domain.upper_bound)
+        else:
+            # Fall back to the extent of all shape bounds if available.
+            lower, upper = self._scene_extent(ndim)
+
+        extent = [upper[i] - lower[i] for i in range(ndim)]
+        max_extent = max(extent) if extent else 1.0
+        if max_extent <= 0:
+            max_extent = 1.0
+        arrow_length = 0.25 * max_extent
+
+        # Gravity direction (unit vector).
+        magnitude = sum(c * c for c in g) ** 0.5
+        if magnitude == 0:
+            return
+        direction = tuple(c / magnitude for c in g)
+
+        # Arrow start point: near the upper-left corner of the domain so it
+        # doesn't overlap body shapes in the centre.
+        if ndim == 2:
+            start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], 0.0)
+            end = (
+                start[0] + direction[0] * arrow_length,
+                start[1] + direction[1] * arrow_length,
+                0.0,
+            )
+        else:
+            start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], upper[2] - 0.05 * extent[2])
+            end = tuple(start[i] + direction[i] * arrow_length for i in range(3))
+
+        try:
+            arrow = pv.Arrow(start=start, direction=direction, scale=arrow_length)
+            plotter.add_mesh(
+                arrow,
+                color=_GRAVITY_COLOUR,
+                line_width=4,
+                label="Gravity",
+            )
+        except Exception:
+            # If PyVista arrow construction fails, still show the text label.
+            pass
+
+        # Place the gravity text label just above the arrow start.
+        label_offset = 0.03 * max_extent
+        if ndim == 2:
+            label_pos = (start[0], start[1] + label_offset, 0.0)
+        else:
+            label_pos = (start[0], start[1] + label_offset, start[2])
+
+        try:
+            plotter.add_point_labels(
+                [label_pos],
+                [g_label],
+                point_size=0,
+                font_size=9,
+                text_color="cyan",
+                always_visible=True,
+            )
+        except Exception:
+            # Fall back to corner text if point labels are unavailable.
+            plotter.add_text(g_label, position="lower_left", font_size=9, color="cyan")
+
+    def _scene_extent(self, ndim: int) -> tuple[list[float], list[float]]:
+        """Return coarse lower/upper bounds for the scene.
+
+        Used when ``system_domain`` is absent so the gravity arrow can still be
+        scaled to the scene.  Falls back to a unit box if no bounds are
+        available.
+        """
+        lower = [0.0] * ndim
+        upper = [1.0] * ndim
+
+        if self._shape_bounds_cache is not None:
+            for bounds in self._shape_bounds_cache.values():
+                lo, hi = list(bounds[0]), list(bounds[1])
+                for i in range(min(ndim, len(lo))):
+                    lower[i] = min(lower[i], lo[i])
+                    upper[i] = max(upper[i], hi[i])
+
+        # Pad slightly so the arrow sits just inside the scene.
+        for i in range(ndim):
+            pad = 0.05 * max(upper[i] - lower[i], 1.0)
+            lower[i] -= pad
+            upper[i] += pad
+
+        return lower, upper
 
     def _load_shape_mesh(
         self,

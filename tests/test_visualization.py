@@ -1013,3 +1013,137 @@ class TestShellScreenshot:
 
         assert rc == 0
         fake_visualizer.preview.assert_called_once_with(use_cpp=True, screenshot_path="short.png")
+
+
+# ---------------------------------------------------------------------------
+# Gravity arrow preview tests
+# ---------------------------------------------------------------------------
+
+class _FakeMesh:
+    """Lightweight stand-in for a PyVista mesh with bounds/center."""
+
+    def __init__(self, bounds: tuple[float, ...]):
+        # bounds is a flat tuple (x0, x1, y0, y1, z0, z1)
+        self.bounds = bounds
+        x0, x1, y0, y1, z0, z1 = bounds
+        self.center = ((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2)
+
+
+class _FakePlotter:
+    """Records all add_* calls for later assertions."""
+
+    def __init__(self):
+        self.mesh_calls: list[dict[str, Any]] = []
+        self.label_calls: list[dict[str, Any]] = []
+        self.text_calls: list[dict[str, Any]] = []
+
+    def add_mesh(self, mesh, **kwargs):
+        self.mesh_calls.append({"mesh": mesh, **kwargs})
+
+    def add_point_labels(self, points, labels, **kwargs):
+        self.label_calls.append({"points": points, "labels": labels, **kwargs})
+
+    def add_text(self, *args, **kwargs):
+        self.text_calls.append({"args": args, **kwargs})
+
+    def add_legend(self, *args, **kwargs):
+        return None
+
+
+class _FakePyVista:
+    """Mock pyvista module providing Box, Arrow, PolyData, read."""
+
+    @staticmethod
+    def Box(bounds):
+        return _FakeMesh(bounds=bounds)
+
+    @staticmethod
+    def Arrow(start, direction, scale):
+        return {"type": "arrow", "start": start, "direction": direction, "scale": scale}
+
+    @staticmethod
+    def PolyData(points):
+        return _FakeMesh(bounds=(0.0, 1.0, 0.0, 1.0, 0.0, 0.0))
+
+    @staticmethod
+    def read(path):
+        return _FakeMesh(bounds=(0.0, 1.0, 0.0, 1.0, 0.0, 0.0))
+
+
+class TestPreviewGravityArrow:
+    """Tests that the gravity arrow is rendered in the preview plotter."""
+
+    def test_gravity_arrow_added_when_gravity_set(self, fluid_config, tmp_path):
+        """When gravity is set, _populate_plotter should add an arrow mesh."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
+
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        # An arrow mesh should have been added with the gravity colour and label.
+        arrow_calls = [c for c in fake_plotter.mesh_calls if c.get("label") == "Gravity"]
+        assert len(arrow_calls) == 1
+        assert arrow_calls[0]["color"] == (0.10, 0.90, 0.90)
+
+        # The arrow direction should match the gravity direction (normalised).
+        arrow = arrow_calls[0]["mesh"]
+        assert arrow["direction"] == (0.0, -1.0)
+
+        # The gravity text label should have been rendered.
+        assert len(fake_plotter.label_calls) > 0 or len(fake_plotter.text_calls) > 0
+
+    def test_no_gravity_arrow_when_gravity_unset(self, fluid_config, tmp_path):
+        """When gravity is None, no arrow mesh should be added."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["gravity"] = None
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        # No arrow mesh should have been added.
+        arrow_calls = [c for c in fake_plotter.mesh_calls if c.get("label") == "Gravity"]
+        assert len(arrow_calls) == 0
+
+    def test_gravity_arrow_3d(self, tmp_path):
+        """A 3-D gravity vector should produce an arrow with 3-D direction."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = _minimal_fluid_config()
+        data["geometries"]["system_domain"] = {
+            "lower_bound": [0.0, 0.0, 0.0],
+            "upper_bound": [1.0, 1.0, 1.0],
+        }
+        data["geometries"]["shapes"] = [
+            {
+                "name": "WaterBody",
+                "type": "bounding_box",
+                "lower_bound": [0.0, 0.0, 0.0],
+                "upper_bound": [0.4, 0.2, 0.4],
+            },
+            {
+                "name": "WallBoundary",
+                "type": "bounding_box",
+                "lower_bound": [-0.05, -0.05, -0.05],
+                "upper_bound": [1.05, 1.05, 1.05],
+            },
+        ]
+        data["gravity"] = [0.0, 0.0, -9.81]
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        arrow_calls = [c for c in fake_plotter.mesh_calls if c.get("label") == "Gravity"]
+        assert len(arrow_calls) == 1
+        arrow = arrow_calls[0]["mesh"]
+        assert arrow["direction"] == (0.0, 0.0, -1.0)
