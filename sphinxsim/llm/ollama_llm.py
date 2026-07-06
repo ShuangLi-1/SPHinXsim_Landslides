@@ -26,6 +26,65 @@ class OllamaLLM:
     def _endpoint(self) -> str:
         return f"{self.base_url.rstrip('/')}/api/chat"
 
+    @staticmethod
+    def _repair_json_text(text: str) -> str:
+        repaired = text.strip()
+
+        # Some local models return prose before/after the object even when
+        # format=json is requested. Keep the outermost JSON-looking payload.
+        first_obj = repaired.find("{")
+        last_obj = repaired.rfind("}")
+        first_arr = repaired.find("[")
+        last_arr = repaired.rfind("]")
+        if first_obj != -1 and last_obj > first_obj:
+            repaired = repaired[first_obj : last_obj + 1]
+        elif first_arr != -1 and last_arr > first_arr:
+            repaired = repaired[first_arr : last_arr + 1]
+
+        # Common Ollama small-model glitches: missing comma before the next
+        # object key and trailing comma before a closing brace/bracket.
+        repaired = re.sub(r"([}\]])(\s*\n\s*\")", r"\1,\2", repaired)
+        repaired = re.sub(
+            r"((?:\"(?:[^\"\\]|\\.)*\")|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)(\s*\n\s*\")",
+            r"\1,\2",
+            repaired,
+        )
+        repaired = re.sub(r",(\s*[}\]])", r"\1", repaired)
+        return repaired
+
+    @staticmethod
+    def _loads_json_content(text: str) -> Any:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            repaired = OllamaLLM._repair_json_text(text)
+            if repaired == text:
+                raise
+            return json.loads(repaired)
+
+    @staticmethod
+    def _fallback_json_from_messages(messages: list) -> Dict[str, Any] | None:
+        for message in reversed(messages):
+            if not isinstance(message, dict):
+                continue
+            content = message.get("content")
+            if not isinstance(content, str):
+                continue
+            try:
+                payload = json.loads(content)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                example_output = payload.get("example_output")
+                if isinstance(example_output, dict):
+                    return example_output
+                existing_config = payload.get("existing_config")
+                if isinstance(existing_config, dict):
+                    return existing_config
+                if "simulation_type" in payload:
+                    return payload
+        return None
+
     def _post_chat(self, *, messages: list, format_json: bool = True) -> Any:
         payload = {
             "model": self.model,
@@ -89,7 +148,13 @@ class OllamaLLM:
         if not format_json:
             return text
 
-        return json.loads(text)
+        try:
+            return self._loads_json_content(text)
+        except json.JSONDecodeError as exc:
+            fallback = self._fallback_json_from_messages(messages)
+            if fallback is not None:
+                return fallback
+            raise ValueError("Ollama returned invalid JSON") from exc
 
     @staticmethod
     def _example_config(description: str) -> Dict[str, Any]:
@@ -111,16 +176,48 @@ class OllamaLLM:
             / "data"
             / "milling.json"
         )
+        plastic_continuum_fixture = (
+            project_root
+            / "tests"
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "column_collapse.json"
+        )
 
         desc = (description or "").lower()
+        is_plastic_continuum_like = any(
+            token in desc
+            for token in (
+                "plastic",
+                "granular",
+                "soil",
+                "landslide",
+                "slope",
+                "column collapse",
+                "column-collapse",
+                "drucker-prager",
+                "drucker prager",
+                "friction angle",
+                "cohesion",
+                "dilatancy",
+            )
+        )
         is_solid_like = any(
             token in desc for token in ("solid", "elastic", "beam", "continuum", "milling")
         )
 
-        preferred = solid_fixture if is_solid_like else fluid_fixture
-        fallback = fluid_fixture if preferred == solid_fixture else solid_fixture
+        if is_plastic_continuum_like:
+            preferred = plastic_continuum_fixture
+            fallbacks = (solid_fixture, fluid_fixture)
+        elif is_solid_like:
+            preferred = solid_fixture
+            fallbacks = (plastic_continuum_fixture, fluid_fixture)
+        else:
+            preferred = fluid_fixture
+            fallbacks = (plastic_continuum_fixture, solid_fixture)
 
-        for fixture in (preferred, fallback):
+        for fixture in (preferred, *fallbacks):
             try:
                 payload = json.loads(fixture.read_text())
                 validated = SimulationConfig.model_validate(payload)
@@ -401,11 +498,17 @@ class OllamaLLM:
         return updated
 
     _BODY_TYPE_RULES: str = (
-        "STRICT RULES — you must follow these exactly: "
+        "STRICT RULES - you must follow these exactly: "
         "(1) fluid_bodies may ONLY contain entries whose material.type is 'weakly_compressible_fluid'. "
         "(2) solid_bodies may ONLY contain entries whose material.type is 'rigid_body'. "
-        "(3) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
-        "(4) Return ONLY the JSON object — no markdown fences, no comments, no extra keys."
+        "(3) continuum_bodies may contain 'general_continuum', 'j2_plasticity', or 'plastic_continuum'. "
+        "(4) For granular soil, landslide, slope, column collapse, Drucker-Prager, friction angle, "
+        "cohesion, or dilatancy requests, use simulation_type 'continuum_dynamics' with a "
+        "continuum_bodies material.type of 'plastic_continuum'. "
+        "(5) plastic_continuum material requires density, sound_speed, youngs_modulus, "
+        "poisson_ratio, and friction_angle; cohesion and dilatancy_angle are optional. "
+        "(6) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
+        "(7) Return ONLY the JSON object - no markdown fences, no comments, no extra keys."
     )
 
     def generate(self, description: str) -> SimulationConfig:

@@ -22,6 +22,7 @@ class PhysicsType(str, Enum):
 
     FLUID = "fluid"
     SOLID = "solid"
+    PLASTIC_CONTINUUM = "plastic_continuum"
     FSI = "fsi"
 
 
@@ -231,6 +232,7 @@ _FSI_TEMPLATE: Dict[str, Any] = {
 _TEMPLATES = {
     PhysicsType.FLUID: _FLUID_TEMPLATE,
     PhysicsType.SOLID: _SOLID_TEMPLATE,
+    PhysicsType.PLASTIC_CONTINUUM: _SOLID_TEMPLATE,
     PhysicsType.FSI: _FSI_TEMPLATE,
 }
 
@@ -246,6 +248,13 @@ _SOLID_KEYWORDS = re.compile(
     r"\b(solid|elastic|deform|beam|plate|shell|impact|fracture|structure(?!s?\s+interact))\b",
     re.IGNORECASE,
 )
+_PLASTIC_CONTINUUM_KEYWORDS = re.compile(
+    r"\b("
+    r"plastic(?:\s+continuum)?|granular|soil|landslide|slope|column[- ]collapse|"
+    r"drucker[- ]prager|cohesion|friction(?:\s+angle)?|dilatancy"
+    r")\b",
+    re.IGNORECASE,
+)
 _FSI_KEYWORDS = re.compile(
     r"\b(fsi|fluid[- ]structure|coupled|interaction|flexible|hydroelastic)\b",
     re.IGNORECASE,
@@ -257,9 +266,12 @@ def _detect_physics(description: str) -> PhysicsType:
     has_fsi = bool(_FSI_KEYWORDS.search(description))
     has_fluid = bool(_FLUID_KEYWORDS.search(description))
     has_solid = bool(_SOLID_KEYWORDS.search(description))
+    has_plastic_continuum = bool(_PLASTIC_CONTINUUM_KEYWORDS.search(description))
 
     if has_fsi or (has_fluid and has_solid):
         return PhysicsType.FSI
+    if has_plastic_continuum:
+        return PhysicsType.PLASTIC_CONTINUUM
     if has_fluid:
         return PhysicsType.FLUID
     if has_solid:
@@ -467,6 +479,7 @@ def _fixture_template_for_physics(physics: PhysicsType) -> Dict[str, Any] | None
     fixture_rel = {
         PhysicsType.FLUID: Path("tests/test_simulation/test_2d_simulation/data/dambreak.json"),
         PhysicsType.SOLID: Path("tests/test_simulation/test_2d_simulation/data/milling.json"),
+        PhysicsType.PLASTIC_CONTINUUM: Path("tests/test_simulation/test_2d_simulation/data/column_collapse.json"),
     }.get(physics)
 
     if fixture_rel is None:

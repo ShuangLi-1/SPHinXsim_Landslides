@@ -137,6 +137,17 @@ class TestOllamaLLMGenerate:
         user_content = json.loads(body["messages"][1]["content"])
         assert "example_output" in user_content
 
+    def test_plastic_continuum_request_uses_soil_example_output(self):
+        resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            cfg = self.llm.generate("granular soil column collapse with plastic continuum")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_material = user_content["example_output"]["continuum_bodies"][0]["material"]
+        assert example_material["type"] == "plastic_continuum"
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+
     def test_network_error_raises_runtime_error(self):
         with patch(
             "urllib.request.urlopen",
@@ -154,6 +165,20 @@ class TestOllamaLLMGenerate:
     def test_fenced_json_is_stripped(self):
         fenced = "```json\n" + _FLUID_CONFIG.model_dump_json(exclude_none=True) + "\n```"
         resp = _make_response({"message": {"role": "assistant", "content": fenced}})
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.generate("water flow")
+        assert isinstance(cfg, SimulationConfig)
+
+    def test_repairs_missing_comma_between_json_fields(self):
+        content = _FLUID_CONFIG.model_dump_json(exclude_none=True, indent=2)
+        content = content.replace('],\n  "solid_bodies"', ']\n  "solid_bodies"', 1)
+        resp = _make_response({"message": {"role": "assistant", "content": content}})
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.generate("water flow")
+        assert isinstance(cfg, SimulationConfig)
+
+    def test_invalid_json_falls_back_to_example_output(self):
+        resp = _make_response({"message": {"role": "assistant", "content": '{"broken": '}})
         with patch("urllib.request.urlopen", return_value=resp):
             cfg = self.llm.generate("water flow")
         assert isinstance(cfg, SimulationConfig)
