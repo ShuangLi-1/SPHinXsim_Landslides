@@ -30,6 +30,7 @@ from sphinxsim.bindings.loader import load_sphinxsys_core, load_sphinxsys_core_n
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
+        BodyConstraintConfig,
         OrientedBoxConfig,
         ShapeConfig,
         SimulationConfig,
@@ -47,6 +48,9 @@ _CONTINUUM_COLOUR = (0.90, 0.60, 0.10)   # amber
 _UNKNOWN_COLOUR = (0.60, 0.80, 0.40)     # green (shapes not in any body list)
 _INLET_OUTLET_COLOUR = (0.85, 0.20, 0.20)  # red
 _REGION_COLOUR = (0.85, 0.70, 0.10)        # yellow
+_OBSERVER_COLOUR = (0.93, 0.13, 0.93)      # magenta — observer positions
+_CONSTRAINT_COLOUR = (0.93, 0.55, 0.13)     # orange — body constraint regions
+_GRAVITY_COLOUR = (0.10, 0.90, 0.90)        # cyan — gravity direction arrow
 
 
 def _body_colour(body_name: str, config: "SimulationConfig") -> tuple[float, float, float]:
@@ -230,6 +234,7 @@ class ConfigVisualizer:
         *,
         title: str = "SPHinXsim - Configuration Preview",
         use_cpp: bool = True,
+        screenshot_path: str | Path | None = None,
     ) -> None:
         """Render the configuration preview.
 
@@ -240,6 +245,10 @@ class ConfigVisualizer:
         use_cpp:
             When *True*, call ``buildGeometries()`` from the C++ extension.
             Raises :class:`ImportError` if the extension is not installed.
+        screenshot_path:
+            When provided, save a screenshot of the render to this file path
+            instead of opening an interactive window.  Forces off-screen
+            rendering so the screenshot can be produced headlessly.
         """
         try:
             import pyvista as pv  # type: ignore[import]
@@ -258,7 +267,9 @@ class ConfigVisualizer:
             self._shape_bounds_cache = None
         self._vtp_dir = vtp_dir
 
-        plotter = pv.Plotter(title=title, off_screen=self.off_screen)
+        # Screenshot mode implies off-screen rendering.
+        off_screen = self.off_screen or screenshot_path is not None
+        plotter = pv.Plotter(title=title, off_screen=off_screen)
         self._populate_plotter(plotter, vtp_dir)
         self._configure_default_view(plotter, ndim)
         plotter.add_axes()
@@ -279,7 +290,10 @@ class ConfigVisualizer:
             color="white",
         )
 
-        plotter.show()
+        if screenshot_path is not None:
+            plotter.screenshot(str(screenshot_path))
+        else:
+            plotter.show()
 
     # ------------------------------------------------------------------
     # Internal helpers
@@ -445,8 +459,10 @@ class ConfigVisualizer:
         import pyvista as pv  # type: ignore[import]
 
         from sphinxsim.visualization.annotations import (
+            body_constraint_label,
             body_label,
             gravity_label,
+            observer_label,
             oriented_box_label,
         )
 
@@ -459,6 +475,32 @@ class ConfigVisualizer:
         body_names.update(b.name for b in config.continuum_bodies)
 
         rendered_shapes: set[str] = set()
+
+        # Build a name → shape lookup for later use (constraint labels, etc.)
+        shape_lookup: dict[str, "ShapeConfig"] = {
+            shape.name: shape for shape in config.geometries.shapes
+        }
+
+        occupied_points: list[tuple[float, float, float]] = []
+        scene_bounds: list[float] | None = None
+
+        def _update_scene_bounds(mesh: Any) -> None:
+            nonlocal scene_bounds
+            try:
+                bx = [float(v) for v in mesh.bounds]
+            except Exception:
+                return
+            if len(bx) != 6:
+                return
+            if scene_bounds is None:
+                scene_bounds = bx[:]
+                return
+            scene_bounds[0] = min(scene_bounds[0], bx[0])
+            scene_bounds[1] = max(scene_bounds[1], bx[1])
+            scene_bounds[2] = min(scene_bounds[2], bx[2])
+            scene_bounds[3] = max(scene_bounds[3], bx[3])
+            scene_bounds[4] = min(scene_bounds[4], bx[4])
+            scene_bounds[5] = max(scene_bounds[5], bx[5])
 
         # --- Render each shape ---
         for shape in config.geometries.shapes:
@@ -482,6 +524,7 @@ class ConfigVisualizer:
                 style=style,
                 label=shape.name,
             )
+            _update_scene_bounds(mesh)
 
             label_anchor = _label_anchor_point(mesh)
             label_text = body_label(shape.name, config) if is_body else shape.name
@@ -492,6 +535,13 @@ class ConfigVisualizer:
                 font_size=8,
                 text_color="white",
                 always_visible=True,
+            )
+            occupied_points.append(
+                (
+                    float(mesh.center[0]),
+                    float(mesh.center[1]),
+                    float(mesh.center[2]) if len(mesh.center) > 2 else 0.0,
+                )
             )
             rendered_shapes.add(shape.name)
 
@@ -510,6 +560,7 @@ class ConfigVisualizer:
                 line_width=2,
                 label=ob.name,
             )
+            _update_scene_bounds(mesh)
             label_text = oriented_box_label(ob, config)
             plotter.add_point_labels(
                 [mesh.center],
@@ -519,6 +570,59 @@ class ConfigVisualizer:
                 text_color="yellow",
                 always_visible=True,
             )
+            occupied_points.append(
+                (
+                    float(mesh.center[0]),
+                    float(mesh.center[1]),
+                    float(mesh.center[2]) if len(mesh.center) > 2 else 0.0,
+                )
+            )
+
+        # --- Body constraints ---
+        # For constraints with a *region* (oriented box reference) we overlay
+        # the referenced box mesh with the constraint colour.  For constraints
+        # without a region the label is placed at the centroid of the
+        # constrained body's shape mesh (if available).
+        oriented_box_lookup = {
+            ob.name: ob for ob in config.geometries.oriented_boxes
+        }
+        for constraint in config.body_constraints:
+            label_text = body_constraint_label(constraint)
+
+            if constraint.region is not None and constraint.region in oriented_box_lookup:
+                ob = oriented_box_lookup[constraint.region]
+                mesh = self._load_oriented_box_mesh(ob, vtp_dir)
+                if mesh is not None:
+                    plotter.add_mesh(
+                        mesh,
+                        color=_CONSTRAINT_COLOUR,
+                        opacity=0.30,
+                        style="wireframe",
+                        line_width=3,
+                        label=f"Constraint: {constraint.body_name}",
+                    )
+                    plotter.add_point_labels(
+                        [mesh.center],
+                        [label_text],
+                        point_size=0,
+                        font_size=7,
+                        text_color="orange",
+                        always_visible=True,
+                    )
+            else:
+                # No region — try to label at the body shape centroid.
+                shape = shape_lookup.get(constraint.body_name)
+                if shape is not None:
+                    mesh = self._load_shape_mesh(shape, vtp_dir, config)
+                    if mesh is not None:
+                        plotter.add_point_labels(
+                            [mesh.center],
+                            [label_text],
+                            point_size=0,
+                            font_size=7,
+                            text_color="orange",
+                            always_visible=True,
+                        )
 
         # --- Domain bounding box ---
         if config.geometries.system_domain is not None:
@@ -531,11 +635,48 @@ class ConfigVisualizer:
                 style="wireframe",
                 line_width=1,
             )
+            _update_scene_bounds(domain_mesh)
 
         # --- Gravity annotation ---
-        g_label = gravity_label(config)
-        if g_label:
-            plotter.add_text(g_label, position="lower_left", font_size=9, color="cyan")
+        self._add_gravity_arrow(
+            plotter,
+            config,
+            pv,
+            occupied_points,
+            scene_bounds=tuple(scene_bounds) if scene_bounds is not None else None,
+        )
+
+        # --- Observer positions ---
+        for observer in config.observers:
+            if not observer.positions:
+                continue
+
+            points: list[tuple[float, float, float]] = []
+            for position in observer.positions:
+                if len(position) == 2:
+                    points.append((float(position[0]), float(position[1]), 0.0))
+                elif len(position) == 3:
+                    points.append((float(position[0]), float(position[1]), float(position[2])))
+
+            if not points:
+                continue
+
+            observer_points = pv.PolyData(points)
+            plotter.add_mesh(
+                observer_points,
+                color=_OBSERVER_COLOUR,
+                point_size=10,
+                render_points_as_spheres=True,
+                label=f"Observer: {observer.name}",
+            )
+            plotter.add_point_labels(
+                [points[0]],
+                [observer_label(observer)],
+                point_size=0,
+                font_size=7,
+                text_color="magenta",
+                always_visible=True,
+            )
 
         # --- Legend ---
         legend_entries = [
@@ -545,6 +686,9 @@ class ConfigVisualizer:
             ["Other shape", _UNKNOWN_COLOUR],
             ["Inlet/Outlet", _INLET_OUTLET_COLOUR],
             ["Region", _REGION_COLOUR],
+            ["Observer", _OBSERVER_COLOUR],
+            ["Constraint", _CONSTRAINT_COLOUR],
+            ["Gravity", _GRAVITY_COLOUR],
         ]
         plotter.add_legend(
             [
@@ -555,6 +699,152 @@ class ConfigVisualizer:
             bcolor="black",
             border=True,
         )
+
+    def _add_gravity_arrow(
+        self,
+        plotter: Any,
+        config: "SimulationConfig",
+        pv: Any,
+        occupied_points: list[tuple[float, float, float]] | None = None,
+        scene_bounds: tuple[float, ...] | None = None,
+    ) -> None:
+        """Render gravity as a directional arrow with a text label.
+
+        In 2-D, the arrow is anchored near the lower-left of the scene so it is
+        easier to spot and appears close to the on-screen axes widget. In 3-D,
+        it originates near the upper-left/front of the domain bounding box. Its
+        length is scaled to a fraction of the domain size so it remains visible
+        regardless of scene scale. When gravity is unset, nothing is rendered.
+        """
+        from sphinxsim.visualization.annotations import gravity_label
+
+        g_label = gravity_label(config)
+        if g_label is None:
+            return
+
+        g = config.gravity
+        ndim = len(g)
+
+        # Determine a scene-appropriate arrow length from the domain bounds.
+        domain = config.geometries.system_domain
+        if domain is not None:
+            lower = list(domain.lower_bound)
+            upper = list(domain.upper_bound)
+        elif scene_bounds is not None and len(scene_bounds) == 6:
+            lower = [float(scene_bounds[0]), float(scene_bounds[2])]
+            upper = [float(scene_bounds[1]), float(scene_bounds[3])]
+            if ndim == 3:
+                lower.append(float(scene_bounds[4]))
+                upper.append(float(scene_bounds[5]))
+        else:
+            # Fall back to the extent of all shape bounds if available.
+            lower, upper = self._scene_extent(ndim)
+
+        extent = [upper[i] - lower[i] for i in range(ndim)]
+        max_extent = max(extent) if extent else 1.0
+        if max_extent <= 0:
+            max_extent = 1.0
+        arrow_length = 0.25 * max_extent
+
+        # Gravity direction (unit vector).  PyVista's Arrow always requires a
+        # 3-D direction vector, so pad 2-D gravity with a zero z-component.
+        magnitude = sum(c * c for c in g) ** 0.5
+        if magnitude == 0:
+            return
+        direction = tuple(c / magnitude for c in g)
+        if ndim == 2:
+            direction = direction + (0.0,)
+
+        # Arrow start point:
+        # - 2-D: choose from corner candidates and prefer visually empty space.
+        # - 3-D: keep upper-left/front to avoid clutter in perspective view.
+        if ndim == 2:
+            candidates = [
+                (lower[0] + 0.10 * extent[0], lower[1] + 0.18 * extent[1], 0.0),
+                (lower[0] + 0.10 * extent[0], upper[1] - 0.18 * extent[1], 0.0),
+                (upper[0] - 0.10 * extent[0], lower[1] + 0.18 * extent[1], 0.0),
+                (upper[0] - 0.10 * extent[0], upper[1] - 0.18 * extent[1], 0.0),
+            ]
+
+            points = occupied_points or []
+
+            def _score(candidate: tuple[float, float, float]) -> float:
+                # Prefer larger distance from rendered geometry centers.
+                if points:
+                    nearest = min(
+                        (candidate[0] - p[0]) ** 2 + (candidate[1] - p[1]) ** 2
+                        for p in points
+                    )
+                else:
+                    nearest = 0.0
+
+                # Prefer starts whose arrow end remains within scene bounds.
+                end_x = candidate[0] + direction[0] * arrow_length
+                end_y = candidate[1] + direction[1] * arrow_length
+                margin_x = 0.03 * extent[0]
+                margin_y = 0.03 * extent[1]
+                inside = (
+                    lower[0] + margin_x <= end_x <= upper[0] - margin_x
+                    and lower[1] + margin_y <= end_y <= upper[1] - margin_y
+                )
+                return nearest + (1e6 if inside else 0.0)
+
+            start = max(candidates, key=_score)
+        else:
+            start = (lower[0] + 0.05 * extent[0], upper[1] - 0.05 * extent[1], upper[2] - 0.05 * extent[2])
+
+        arrow = pv.Arrow(start=start, direction=direction, scale=arrow_length)
+        plotter.add_mesh(
+            arrow,
+            color=_GRAVITY_COLOUR,
+            line_width=4,
+            label="Gravity",
+        )
+
+        # Place the gravity text label just above the arrow start.
+        label_offset = 0.03 * max_extent
+        if ndim == 2:
+            label_pos = (start[0], start[1] + label_offset, 0.0)
+        else:
+            label_pos = (start[0], start[1] + label_offset, start[2])
+
+        try:
+            plotter.add_point_labels(
+                [label_pos],
+                [g_label],
+                point_size=0,
+                font_size=9,
+                text_color="cyan",
+                always_visible=True,
+            )
+        except Exception:
+            # Fall back to corner text if point labels are unavailable.
+            plotter.add_text(g_label, position="lower_left", font_size=9, color="cyan")
+
+    def _scene_extent(self, ndim: int) -> tuple[list[float], list[float]]:
+        """Return coarse lower/upper bounds for the scene.
+
+        Used when ``system_domain`` is absent so the gravity arrow can still be
+        scaled to the scene.  Falls back to a unit box if no bounds arepreview
+        available.
+        """
+        lower = [0.0] * ndim
+        upper = [1.0] * ndim
+
+        if self._shape_bounds_cache is not None:
+            for bounds in self._shape_bounds_cache.values():
+                lo, hi = list(bounds[0]), list(bounds[1])
+                for i in range(min(ndim, len(lo))):
+                    lower[i] = min(lower[i], lo[i])
+                    upper[i] = max(upper[i], hi[i])
+
+        # Pad slightly so the arrow sits just inside the scene.
+        for i in range(ndim):
+            pad = 0.05 * max(upper[i] - lower[i], 1.0)
+            lower[i] -= pad
+            upper[i] += pad
+
+        return lower, upper
 
     def _load_shape_mesh(
         self,
