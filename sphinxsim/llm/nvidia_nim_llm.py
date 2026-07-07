@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-import re
 from dataclasses import dataclass
 from typing import Any, Dict
 from urllib import error, request
@@ -12,7 +11,19 @@ from pydantic import ValidationError
 
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
-from sphinxsim.llm.ollama_llm import OllamaLLM
+from sphinxsim.llm.common import (
+    BODY_TYPE_RULES,
+    apply_shape_rename,
+    coerce_simulation_type,
+    dict_diff,
+    example_config,
+    infer_requested_shape_rename,
+    infer_requested_simulation_type,
+    json_safe_errors,
+    merge_dicts,
+    sanitize_config_dict,
+    strip_code_fences,
+)
 
 
 @dataclass
@@ -24,13 +35,7 @@ class NvidiaNIMLLM:
     fallback_models: tuple[str, ...] = ()
     api_key: str | None = None
     timeout: float = 60.0
-    _BODY_TYPE_RULES: str = (
-        "STRICT RULES — you must follow these exactly: "
-        "(1) fluid_bodies may ONLY contain entries whose material.type is 'weakly_compressible_fluid'. "
-        "(2) solid_bodies may ONLY contain entries whose material.type is 'rigid_body'. "
-        "(3) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
-        "(4) Return ONLY the JSON object — no markdown fences, no comments, no extra keys."
-    )
+    _BODY_TYPE_RULES: str = BODY_TYPE_RULES
 
     def __post_init__(self) -> None:
         if not self.api_key:
@@ -144,33 +149,11 @@ class NvidiaNIMLLM:
 
     @staticmethod
     def _strip_code_fences(text: str) -> str:
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if len(lines) >= 3:
-                return "\n".join(lines[1:-1]).strip()
-        return text
+        return strip_code_fences(text)
 
     @staticmethod
     def _dict_diff(base: Any, updated: Any) -> Any:
-        if isinstance(base, dict) and isinstance(updated, dict):
-            changed: Dict[str, Any] = {}
-            for key in updated.keys():
-                if key not in base:
-                    changed[key] = updated[key]
-                    continue
-                child = NvidiaNIMLLM._dict_diff(base[key], updated[key])
-                if child is not None:
-                    changed[key] = child
-            return changed if changed else None
-
-        if isinstance(base, list) and isinstance(updated, list):
-            if base != updated:
-                return updated
-            return None
-
-        if base != updated:
-            return updated
-        return None
+        return dict_diff(base, updated)
 
     def _load_json_content(self, content: str) -> Dict[str, Any]:
         cleaned = self._strip_code_fences(content)
@@ -178,176 +161,31 @@ class NvidiaNIMLLM:
 
     @staticmethod
     def _example_config(description: str) -> Dict[str, Any]:
-        return OllamaLLM._example_config(description)
+        return example_config(description)
 
     @staticmethod
     def _merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
-        return OllamaLLM._merge_dicts(base, updates)
+        return merge_dicts(base, updates)
 
     @staticmethod
     def _sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
-        return OllamaLLM._sanitize_config_dict(cfg)
+        return sanitize_config_dict(cfg)
 
     @staticmethod
     def _infer_requested_simulation_type(description: str) -> str | None:
-        text = (description or "").lower()
-        if not text:
-            return None
-
-        asks_for_type_change = bool(
-            re.search(r"\b(simulation|simulaiton|type|switch|change|convert)\b", text)
-        )
-        if not asks_for_type_change:
-            return None
-
-        if "continuum" in text:
-            return "continuum_dynamics"
-        if "fluid" in text:
-            return "fluid_dynamics"
-        return None
+        return infer_requested_simulation_type(description)
 
     @staticmethod
     def _coerce_simulation_type(existing: Dict[str, Any], target_type: str) -> Dict[str, Any]:
-        updated = json.loads(json.dumps(existing))
-        updated["simulation_type"] = target_type
-        updated.setdefault("solver_parameters", {})
-
-        if target_type == "continuum_dynamics":
-            updated["solver_parameters"].setdefault("continuum_dynamics", {})
-            if not updated.get("continuum_bodies"):
-                shape_names: list[str] = []
-                for shape in updated.get("geometries", {}).get("shapes", []):
-                    if isinstance(shape, dict) and isinstance(shape.get("name"), str):
-                        shape_names.append(shape["name"])
-
-                if not shape_names and updated.get("fluid_bodies"):
-                    shape_names = [
-                        body.get("name")
-                        for body in updated.get("fluid_bodies", [])
-                        if isinstance(body, dict) and isinstance(body.get("name"), str)
-                    ]
-
-                if shape_names:
-                    updated["continuum_bodies"] = [
-                        {
-                            "name": shape_names[0],
-                            "material": {
-                                "type": "general_continuum",
-                                "density": 1000.0,
-                                "sound_speed": 100.0,
-                                "youngs_modulus": 1000000.0,
-                                "poisson_ratio": 0.3,
-                            },
-                        }
-                    ]
-
-        if target_type == "fluid_dynamics":
-            updated["solver_parameters"].setdefault("fluid_dynamics", {})
-            if not updated.get("fluid_bodies"):
-                shape_names: list[str] = []
-                for shape in updated.get("geometries", {}).get("shapes", []):
-                    if isinstance(shape, dict) and isinstance(shape.get("name"), str):
-                        shape_names.append(shape["name"])
-                if shape_names:
-                    updated["fluid_bodies"] = [
-                        {
-                            "name": shape_names[0],
-                            "material": {
-                                "type": "weakly_compressible_fluid",
-                                "density": 1000.0,
-                            },
-                        }
-                    ]
-
-        return updated
+        return coerce_simulation_type(existing, target_type)
 
     @staticmethod
     def _infer_requested_shape_rename(description: str) -> tuple[str, str] | None:
-        text = (description or "").strip()
-        if not text:
-            return None
-
-        # Prefer quoted rename targets first to support broader shape names.
-        quoted_patterns = [
-            r"(?:shape\s+name|shape|rename|change)\s+[\"']([^\"']+)[\"']\s+(?:to|as)\s+[\"']([^\"']+)[\"']",
-            r"rename\s+[\"']([^\"']+)[\"']\s+to\s+[\"']([^\"']+)[\"']",
-        ]
-        for pattern in quoted_patterns:
-            match = re.search(pattern, text, flags=re.IGNORECASE)
-            if not match:
-                continue
-            old_name = match.group(1).strip()
-            new_name = match.group(2).strip()
-            if old_name and new_name and old_name != new_name:
-                return old_name, new_name
-
-        patterns = [
-            r"(?:shape\s+name|shape|rename)\s+['\"]?([A-Za-z_][\w]*)['\"]?\s+(?:to|as)\s+['\"]?([A-Za-z_][\w]*)['\"]?",
-            r"change\s+['\"]?([A-Za-z_][\w]*)['\"]?\s+to\s+['\"]?([A-Za-z_][\w]*)['\"]?",
-        ]
-        lowered = text.lower()
-        if "shape" not in lowered and "rename" not in lowered and "change" not in lowered:
-            return None
-
-        for pattern in patterns:
-            match = re.search(pattern, text, flags=re.IGNORECASE)
-            if not match:
-                continue
-            old_name = match.group(1)
-            new_name = match.group(2)
-            if old_name != new_name:
-                return old_name, new_name
-        return None
+        return infer_requested_shape_rename(description)
 
     @staticmethod
     def _apply_shape_rename(config_dict: Dict[str, Any], old_name: str, new_name: str) -> Dict[str, Any]:
-        updated = json.loads(json.dumps(config_dict))
-
-        for shape in updated.get("geometries", {}).get("shapes", []):
-            if not isinstance(shape, dict):
-                continue
-            if shape.get("name") == old_name:
-                shape["name"] = new_name
-            if shape.get("original") == old_name:
-                shape["original"] = new_name
-            sub_shapes = shape.get("sub_shapes")
-            if isinstance(sub_shapes, list):
-                shape["sub_shapes"] = [new_name if item == old_name else item for item in sub_shapes]
-
-        for section in ("fluid_bodies", "continuum_bodies", "solid_bodies"):
-            for body in updated.get(section, []):
-                if isinstance(body, dict) and body.get("name") == old_name:
-                    body["name"] = new_name
-
-        settings = updated.get("particle_generation", {}).get("settings", {})
-        for body in settings.get("bodies", []):
-            if isinstance(body, dict) and body.get("name") == old_name:
-                body["name"] = new_name
-        for constraint in settings.get("relaxation_constraints", []):
-            if isinstance(constraint, dict) and constraint.get("body_name") == old_name:
-                constraint["body_name"] = new_name
-
-        for observer in updated.get("observers", []):
-            if isinstance(observer, dict) and observer.get("observed_body") == old_name:
-                observer["observed_body"] = new_name
-
-        for bc in updated.get("fluid_boundary_conditions", []):
-            if isinstance(bc, dict) and bc.get("body_name") == old_name:
-                bc["body_name"] = new_name
-
-        for constraint in updated.get("body_constraints", []):
-            if isinstance(constraint, dict) and constraint.get("body_name") == old_name:
-                constraint["body_name"] = new_name
-
-        for initial_condition in updated.get("initial_conditions", []):
-            if isinstance(initial_condition, dict) and initial_condition.get("body_name") == old_name:
-                initial_condition["body_name"] = new_name
-
-        for entry in updated.get("extra_state_recording", []):
-            if isinstance(entry, dict) and entry.get("name") == old_name:
-                entry["name"] = new_name
-
-        return updated
+        return apply_shape_rename(config_dict, old_name, new_name)
 
     def generate(self, description: str) -> SimulationConfig:
         if not description or not description.strip():
@@ -424,7 +262,7 @@ class NvidiaNIMLLM:
         try:
             return SimulationConfig(**merged)
         except ValidationError as exc:
-            safe_validation_errors = json.loads(json.dumps(exc.errors(), default=str))
+            safe_validation_errors = json_safe_errors(exc.errors())
             retry_system = (
                 "You are repairing a simulator config update that failed schema validation. "
                 f"Apply this instruction: \"{description}\". "

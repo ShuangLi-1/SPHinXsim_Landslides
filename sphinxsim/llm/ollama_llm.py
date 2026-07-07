@@ -3,16 +3,22 @@
 from __future__ import annotations
 
 import json
-import re
 import time
-from difflib import get_close_matches
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any, Dict
 from urllib import error, request
 
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
+from sphinxsim.llm.common import (
+    BODY_TYPE_RULES,
+    apply_explicit_instruction_overrides,
+    dict_diff,
+    example_config,
+    merge_dicts,
+    sanitize_config_dict,
+    strip_code_fences,
+)
 
 
 @dataclass
@@ -81,10 +87,7 @@ class OllamaLLM:
             raise ValueError("Ollama returned an empty response")
 
         text = content.strip()
-        if text.startswith("```"):
-            lines = text.splitlines()
-            if len(lines) >= 3:
-                text = "\n".join(lines[1:-1]).strip()
+        text = strip_code_fences(text)
 
         if not format_json:
             return text
@@ -93,320 +96,25 @@ class OllamaLLM:
 
     @staticmethod
     def _example_config(description: str) -> Dict[str, Any]:
-        """Return a validated fixture-backed example config for few-shot prompting."""
-        project_root = Path(__file__).resolve().parents[2]
-        fluid_fixture = (
-            project_root
-            / "tests"
-            / "test_simulation"
-            / "test_2d_simulation"
-            / "data"
-            / "dambreak.json"
-        )
-        solid_fixture = (
-            project_root
-            / "tests"
-            / "test_simulation"
-            / "test_2d_simulation"
-            / "data"
-            / "milling.json"
-        )
-
-        desc = (description or "").lower()
-        is_solid_like = any(
-            token in desc for token in ("solid", "elastic", "beam", "continuum", "milling")
-        )
-
-        preferred = solid_fixture if is_solid_like else fluid_fixture
-        fallback = fluid_fixture if preferred == solid_fixture else solid_fixture
-
-        for fixture in (preferred, fallback):
-            try:
-                payload = json.loads(fixture.read_text())
-                validated = SimulationConfig.model_validate(payload)
-                return json.loads(validated.model_dump_json(exclude_none=True))
-            except Exception:
-                continue
-
-        # Last resort if fixture files are unavailable/corrupt.
-        from sphinxsim.llm.mock_llm import MockLLM
-
-        return json.loads(MockLLM().generate(description).model_dump_json(exclude_none=True))
+        return example_config(description)
 
     @staticmethod
     def _merge_dicts(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
-        merged = dict(base)
-        for key, value in updates.items():
-            if isinstance(value, dict) and isinstance(merged.get(key), dict):
-                merged[key] = OllamaLLM._merge_dicts(merged[key], value)
-            elif isinstance(value, list) and isinstance(merged.get(key), list):
-                base_list = merged[key]
-                if all(isinstance(item, dict) for item in value) and all(
-                    isinstance(item, dict) for item in base_list[: len(value)]
-                ):
-                    merged[key] = [
-                        OllamaLLM._merge_dicts(base_item, update_item)
-                        for base_item, update_item in zip(base_list, value)
-                    ] + base_list[len(value) :]
-                else:
-                    merged[key] = value
-            else:
-                merged[key] = value
-        return merged
+        return merge_dicts(base, updates)
 
     @staticmethod
     def _dict_diff(base: Any, updated: Any) -> Any:
-        if isinstance(base, dict) and isinstance(updated, dict):
-            changed: Dict[str, Any] = {}
-            for key in updated.keys():
-                if key not in base:
-                    changed[key] = updated[key]
-                    continue
-                child = OllamaLLM._dict_diff(base[key], updated[key])
-                if child is not None:
-                    changed[key] = child
-            return changed if changed else None
-
-        if isinstance(base, list) and isinstance(updated, list):
-            if base != updated:
-                return updated
-            return None
-
-        if base != updated:
-            return updated
-        return None
+        return dict_diff(base, updated)
 
     @staticmethod
     def _apply_explicit_instruction_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
-        updated = json.loads(json.dumps(cfg))
-
-        time_match = re.search(
-            r"(\d+(?:\.\d+)?)\s*(?:s|sec|secs|second|seconds)\b",
-            description,
-            re.IGNORECASE,
-        )
-        if time_match:
-            updated.setdefault("solver_parameters", {})["end_time"] = float(time_match.group(1))
-
-        res_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s+resolution", description, re.IGNORECASE)
-        if res_match:
-            updated.setdefault("geometries", {}).setdefault("global_resolution", {})["particle_spacing"] = (
-                float(res_match.group(1)) / 1000.0
-            )
-
-        return updated
+        return apply_explicit_instruction_overrides(cfg, description)
 
     @staticmethod
     def _sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
-        updated = json.loads(json.dumps(cfg))
+        return sanitize_config_dict(cfg)
 
-        geometries = updated.get("geometries")
-        if not isinstance(geometries, dict):
-            geometries = {}
-            updated["geometries"] = geometries
-
-        # LLM outputs may occasionally inject stray strings/keys into arrays.
-        # Keep only object entries in schema-defined object arrays.
-        for key in ("shapes", "oriented_boxes"):
-            items = geometries.get(key, [])
-            if not isinstance(items, list):
-                geometries[key] = []
-                continue
-            geometries[key] = [item for item in items if isinstance(item, dict)]
-
-        for key in (
-            "fluid_bodies",
-            "solid_bodies",
-            "continuum_bodies",
-            "observers",
-            "fluid_boundary_conditions",
-            "body_constraints",
-            "extra_state_recording",
-            "initial_conditions",
-        ):
-            items = updated.get(key, [])
-            if not isinstance(items, list):
-                updated[key] = []
-                continue
-            updated[key] = [item for item in items if isinstance(item, dict)]
-
-        # Keep generated/output configs robust for runtime by omitting optional
-        # scaling hints that small models frequently corrupt.
-        updated.pop("characteristic_dimensions", None)
-
-        shapes = updated.get("geometries", {}).get("shapes", [])
-        shape_names = {
-            shape.get("name")
-            for shape in shapes
-            if isinstance(shape, dict) and shape.get("name")
-        }
-
-        rename_map: Dict[str, str] = {}
-        shape_rename_map: Dict[str, str] = {}
-
-        def _normalize_wall_typo(name: str | None) -> str | None:
-            if not name or not isinstance(name, str):
-                return name
-            if name.startswith("Wal") and not name.startswith("Wall"):
-                return "Wall" + name[3:]
-            return name
-
-        def _canonical_name(name: str | None) -> str | None:
-            name = _normalize_wall_typo(name)
-            if not name:
-                return name
-            if name in shape_names:
-                return name
-            shape_candidates = [n for n in shape_names if isinstance(n, str)]
-            candidates = get_close_matches(name, shape_candidates, n=1, cutoff=0.6)
-            if candidates:
-                return candidates[0]
-            return name
-
-        # Build a map of potential typos in shape names themselves
-        # by looking for common misspellings (e.g., Wal* → Wall*)
-        for shape in shapes:
-            if not isinstance(shape, dict):
-                continue
-            name = shape.get("name")
-            corrected = _canonical_name(name)
-            if name and corrected and corrected != name:
-                shape_rename_map[name] = corrected
-                shape["name"] = corrected
-                shape_names.discard(name)
-                shape_names.add(corrected)
-
-        # Second pass: fix shape references that point to typoed names.
-        for shape in shapes:
-            if not isinstance(shape, dict):
-                continue
-            original = shape.get("original")
-            if isinstance(original, str):
-                original = shape_rename_map.get(original, original)
-                shape["original"] = _canonical_name(original)
-            sub_shapes = shape.get("sub_shapes")
-            if isinstance(sub_shapes, list):
-                shape["sub_shapes"] = [
-                    _canonical_name(shape_rename_map.get(item, item) if isinstance(item, str) else item)
-                    if isinstance(item, str)
-                    else item
-                    for item in sub_shapes
-                ]
-
-        for body in updated.get("fluid_bodies", []):
-            if not isinstance(body, dict):
-                continue
-            old = body.get("name")
-            new = _normalize_wall_typo(old)
-            if old and new and old != new:
-                rename_map[old] = new
-                body["name"] = new
-
-        for body in updated.get("solid_bodies", []):
-            if not isinstance(body, dict):
-                continue
-            old = body.get("name")
-            new = _normalize_wall_typo(old)
-            if old and new and old != new:
-                rename_map[old] = new
-                body["name"] = new
-
-        for body in updated.get("continuum_bodies", []):
-            if not isinstance(body, dict):
-                continue
-            old = body.get("name")
-            new = _normalize_wall_typo(old)
-            if old and new and old != new:
-                rename_map[old] = new
-                body["name"] = new
-
-        # Also canonicalize body names in extra_state_recording to catch typos from LLM output
-        all_body_names = {
-            body.get("name")
-            for bodies_list in [
-                updated.get("fluid_bodies", []),
-                updated.get("solid_bodies", []),
-                updated.get("continuum_bodies", []),
-            ]
-            for body in bodies_list
-            if isinstance(body, dict) and body.get("name")
-        }
-
-        def _canonical_body_name(name: str | None) -> str | None:
-            name = _normalize_wall_typo(name)
-            if not name:
-                return name
-            if name in all_body_names:
-                return name
-            body_candidates = [n for n in all_body_names if isinstance(n, str)]
-            candidates = get_close_matches(name, body_candidates, n=1, cutoff=0.6)
-            if candidates:
-                return candidates[0]
-            return name
-
-        for entry in updated.get("extra_state_recording", []):
-            if not isinstance(entry, dict):
-                continue
-            old_name = entry.get("name")
-            new_name = _canonical_body_name(old_name)
-            if old_name and new_name and old_name != new_name:
-                rename_map[old_name] = new_name
-
-        for entry in updated.get("particle_generation", {}).get("settings", {}).get("bodies", []):
-            if isinstance(entry, dict):
-                entry["name"] = _canonical_body_name(entry.get("name"))
-
-        for entry in updated.get("observers", []):
-            if isinstance(entry, dict):
-                entry["observed_body"] = _canonical_body_name(entry.get("observed_body"))
-
-        for entry in updated.get("fluid_boundary_conditions", []):
-            if isinstance(entry, dict):
-                entry["body_name"] = _canonical_body_name(entry.get("body_name"))
-
-        for entry in updated.get("body_constraints", []):
-            if isinstance(entry, dict):
-                entry["body_name"] = _canonical_body_name(entry.get("body_name"))
-
-        for entry in updated.get("extra_state_recording", []):
-            if not isinstance(entry, dict):
-                continue
-            entry["name"] = _canonical_body_name(entry.get("name"))
-            for variable in entry.get("variables", []):
-                if not isinstance(variable, dict):
-                    continue
-                real_type = variable.get("real_type")
-                vector_type = variable.get("vector_type")
-                if isinstance(real_type, str):
-                    variable["real_type"] = [real_type]
-                if isinstance(vector_type, str):
-                    variable["vector_type"] = [vector_type]
-
-        settings = updated.get("particle_generation", {}).get("settings", {})
-        bodies = settings.get("bodies", [])
-        fluid_names = {body.get("name") for body in updated.get("fluid_bodies", [])}
-        solid_names = {body.get("name") for body in updated.get("solid_bodies", [])}
-
-        for body in bodies:
-            if not isinstance(body, dict):
-                continue
-            name = body.get("name")
-            solid_body = body.get("solid_body")
-
-            if name in solid_names:
-                body["solid_body"] = {} if not isinstance(solid_body, dict) else solid_body
-            elif name in fluid_names and not isinstance(solid_body, dict):
-                body.pop("solid_body", None)
-
-        return updated
-
-    _BODY_TYPE_RULES: str = (
-        "STRICT RULES — you must follow these exactly: "
-        "(1) fluid_bodies may ONLY contain entries whose material.type is 'weakly_compressible_fluid'. "
-        "(2) solid_bodies may ONLY contain entries whose material.type is 'rigid_body'. "
-        "(3) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
-        "(4) Return ONLY the JSON object — no markdown fences, no comments, no extra keys."
-    )
+    _BODY_TYPE_RULES: str = BODY_TYPE_RULES
 
     def generate(self, description: str) -> SimulationConfig:
         if not description or not description.strip():
