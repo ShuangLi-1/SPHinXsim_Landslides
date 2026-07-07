@@ -283,11 +283,13 @@ class ConfigVisualizer:
         else:
             mode_label = "No C++ geometry"
         dim_label = "2-D" if ndim == 2 else "3-D"
+        sim_type_label = self.config.simulation_type.value.replace("_", " ").title()
+        config_info = f"{dim_label}  •  {sim_type_label}  •  {mode_label}"
         plotter.add_text(
-            f"{title}\n[{dim_label} | {mode_label}]",
-            position="upper_right",
-            font_size=8,
-            color="white",
+            config_info,
+            position="upper_edge",
+            font_size=10,
+            color="cyan",
         )
 
         if screenshot_path is not None:
