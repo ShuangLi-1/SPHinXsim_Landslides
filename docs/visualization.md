@@ -66,6 +66,31 @@ sphinxsim preview path/to/config.json --off-screen
 Renders to an off-screen buffer instead of opening a window.  Intended for
 automated testing or headless environments.
 
+### Screenshot output
+
+```bash
+sphinxsim preview path/to/config.json --screenshot preview.png
+# or equivalently:
+sphinxsim preview path/to/config.json -s preview.png
+```
+
+Saves a screenshot of the preview to the specified file instead of opening an
+interactive window.  This automatically enables off-screen rendering, so
+`--off-screen` is implied and does not need to be passed separately.
+
+Supported formats depend on your PyVista/VTK build, but typically include PNG,
+JPEG, and TIFF.
+
+```bash
+sphinxsim preview path/to/config.json -s preview.png
+📸 Screenshot saved to: preview.png
+```
+
+This is useful for:
+- Generating preview images for reports or documentation.
+- Batch-generating previews in CI pipelines.
+- Headless environments where no display is available.
+
 ### Interactive shell
 
 `preview` is available as a first-class shell command:
@@ -83,6 +108,12 @@ sphinxsim> preview --no-cpp
 🖼  Building configuration preview for: .../config.json
    Skipping C++ geometry build (--no-cpp).
 ℹ️ Preview rendered without C++ geometry (--no-cpp).
+
+sphinxsim> preview --screenshot preview.png
+🖼  Building configuration preview for: .../config.json
+   Attempting C++ geometry build for accurate VTP meshes...
+✅ Preview used C++ geometry (VTP meshes).
+📸 Screenshot saved to: preview.png
 ```
 
 `preview` requires a config to be loaded first (via `load` or `generate`).
@@ -102,6 +133,7 @@ viz = ConfigVisualizer(config, project_root=Path("."), config_path=config_path)
 viz.preview()                     # opens interactive window
 viz.preview(use_cpp=False)        # skip C++ build (shapes not rendered)
 viz.preview(title="My setup")     # custom window title
+viz.preview(screenshot_path="preview.png")  # save screenshot, no window
 ```
 
 ### `ConfigVisualizer` parameters
@@ -119,6 +151,7 @@ viz.preview(title="My setup")     # custom window title
 |---|---|---|---|
 | `title` | `str` | `"SPHinXsim - Configuration Preview"` | Window title |
 | `use_cpp` | `bool` | `True` | Run C++ geometry build. Raises `ImportError` if extension not installed. |
+| `screenshot_path` | `str \| Path \| None` | `None` | When set, saves a screenshot to this path instead of opening a window. Implies off-screen rendering. |
 
 After rendering, the CLI reports which tier was used:
 - `✅ Preview used C++ geometry (VTP meshes).`
