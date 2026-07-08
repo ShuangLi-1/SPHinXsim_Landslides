@@ -43,7 +43,7 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "sphinxsim", "bindings", "native")
 
 from pydantic import ValidationError
 
-from sphinxsim.bindings.loader import load_sphinxsys_core
+from sphinxsim.bindings.loader import load_sphinxsys_core_nd
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch, apply_update_patch
 from sphinxsim.llm import get_llm
@@ -130,6 +130,42 @@ def _print_update_summary(before_cfg: SimulationConfig, after_cfg: SimulationCon
         print(f"  - {line}")
     if len(changes) > 12:
         print(f"  - ... and {len(changes) - 12} more changes")
+
+
+def _config_spatial_dim(config: SimulationConfig) -> int:
+    """Infer whether a validated config should use the 2-D or 3-D native module."""
+    geo = config.geometries
+
+    if geo.system_domain is not None:
+        return len(geo.system_domain.lower_bound)
+
+    if config.gravity is not None:
+        return len(config.gravity)
+
+    for constraint in config.body_constraints:
+        if constraint.type.value == "simbody":
+            if (constraint.mobilized_body or "").lower() == "planar":
+                return 2
+            if constraint.velocity is not None:
+                return len(constraint.velocity)
+
+    for shape in geo.shapes:
+        for vec in (shape.lower_bound, shape.upper_bound, shape.half_size):
+            if vec is not None:
+                return len(vec)
+        if shape.transform is not None:
+            return len(shape.transform.translation)
+        if shape.translation is not None:
+            return len(shape.translation)
+
+    for oriented_box in geo.oriented_boxes:
+        for vec in (oriented_box.center, oriented_box.normal, oriented_box.half_size):
+            if vec is not None:
+                return len(vec)
+        if oriented_box.transform is not None:
+            return len(oriented_box.transform.translation)
+
+    return 3
 
 
 # ---------------------------------------------------------------------------
@@ -320,10 +356,11 @@ def cmd_run(args: argparse.Namespace) -> int:
         return rc
     assert config is not None
 
+    ndim = _config_spatial_dim(config)
     try:
-        sph = load_sphinxsys_core()
+        sph = load_sphinxsys_core_nd(ndim)
     except ImportError:
-        print("❌ C++ extension not available", file=sys.stderr)
+        print(f"❌ {ndim}D C++ extension not available", file=sys.stderr)
         print("\n🔧 Please build the C++ extension:", file=sys.stderr)
         print("   cd sphinxsim/sphinxsys", file=sys.stderr)
         print("   cmake --preset integrated-build", file=sys.stderr)
@@ -783,7 +820,12 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
             try:
-                sph = load_sphinxsys_core()
+                cfg, rc = _load_config(config_path)
+                if rc != 0 or cfg is None:
+                    print(f"❌ Validation failed for {config_path}", file=sys.stderr)
+                    continue
+                ndim = _config_spatial_dim(cfg)
+                sph = load_sphinxsys_core_nd(ndim)
 
                 shell_sim = sph.SPHSimulation(str(config_path))
                 output_dir = PROJECT_ROOT / ".build-temp" / "test_simulation"
