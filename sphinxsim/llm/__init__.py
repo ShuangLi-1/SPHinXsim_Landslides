@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from sphinxsim.llm.mock_llm import MockLLM
+    from sphinxsim.llm.nvidia_nim_llm import NvidiaNIMLLM
     from sphinxsim.llm.ollama_llm import OllamaLLM
     from sphinxsim.llm.openai_llm import OpenAILLM
 
@@ -17,6 +18,21 @@ def get_llm():
         return OpenAILLM(
             model=os.getenv("OPENAI_MODEL", "gpt-4.1-mini"),
             api_key=os.getenv("OPENAI_API_KEY"),
+        )
+
+    if provider == "nvidia_nim":
+        from sphinxsim.llm.nvidia_nim_llm import NvidiaNIMLLM
+
+        return NvidiaNIMLLM(
+            base_url=os.getenv("NVIDIA_NIM_BASE_URL", "https://integrate.api.nvidia.com/v1"),
+            model=os.getenv("NVIDIA_NIM_MODEL", os.getenv("NVIDIA_NIM", "z-ai/glm-5.2")),
+            fallback_models=tuple(
+                m.strip()
+                for m in os.getenv("NVIDIA_NIM_FALLBACK_MODELS", "").split(",")
+                if m.strip()
+            ),
+            api_key=os.getenv("NVIDIA_NIM_API_KEY", os.getenv("NVIDIA_API_KEY")),
+            timeout=float(os.getenv("NVIDIA_NIM_TIMEOUT", "180")),
         )
     
     if provider == "ollama":
@@ -31,7 +47,7 @@ def get_llm():
 
     return MockLLM()
 
-__all__ = ["MockLLM", "OpenAILLM", "OllamaLLM", "get_llm"]
+__all__ = ["MockLLM", "OpenAILLM", "OllamaLLM", "NvidiaNIMLLM", "get_llm"]
 
 
 def __getattr__(name):
@@ -49,6 +65,11 @@ def __getattr__(name):
         from sphinxsim.llm.ollama_llm import OllamaLLM
 
         return OllamaLLM
+
+    if name == "NvidiaNIMLLM":
+        from sphinxsim.llm.nvidia_nim_llm import NvidiaNIMLLM
+
+        return NvidiaNIMLLM
 
 
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

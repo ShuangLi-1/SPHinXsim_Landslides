@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
+from sphinxsim.llm.common import dict_diff, strip_code_fences
 
 # OpenAI SDK (new-style)
 from openai import OpenAI
@@ -48,7 +49,7 @@ class OpenAILLM:
         )
 
         content = resp.choices[0].message.content or ""
-        data: Dict[str, Any] = json.loads(content)
+        data: Dict[str, Any] = json.loads(strip_code_fences(content))
 
         # Final safety: schema validation on your side
         return SimulationConfig(**data)
@@ -82,30 +83,12 @@ class OpenAILLM:
         )
 
         content = resp.choices[0].message.content or ""
-        data: Dict[str, Any] = json.loads(content)
+        data: Dict[str, Any] = json.loads(strip_code_fences(content))
         return SimulationConfig(**data)
 
     @staticmethod
     def _dict_diff(base: Any, updated: Any) -> Any:
-        if isinstance(base, dict) and isinstance(updated, dict):
-            changed: Dict[str, Any] = {}
-            for key in updated.keys():
-                if key not in base:
-                    changed[key] = updated[key]
-                    continue
-                child = OpenAILLM._dict_diff(base[key], updated[key])
-                if child is not None:
-                    changed[key] = child
-            return changed if changed else None
-
-        if isinstance(base, list) and isinstance(updated, list):
-            if base != updated:
-                return updated
-            return None
-
-        if base != updated:
-            return updated
-        return None
+        return dict_diff(base, updated)
 
     def update_patch(self, existing: SimulationConfig, description: str, strict: bool = True) -> Dict[str, Any]:
         updated = self.update(existing, description)
