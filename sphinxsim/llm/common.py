@@ -19,11 +19,26 @@ from typing import Any, Dict
 from sphinxsim.config.schemas import SimulationConfig
 
 BODY_TYPE_RULES: str = (
-    "STRICT RULES — you must follow these exactly: "
+    "STRICT RULES - you must follow these exactly: "
     "(1) fluid_bodies may ONLY contain entries whose material.type is 'weakly_compressible_fluid'. "
     "(2) solid_bodies may ONLY contain entries whose material.type is 'rigid_body'. "
-    "(3) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
-    "(4) Return ONLY the JSON object — no markdown fences, no comments, no extra keys."
+    "(3) continuum_bodies may contain 'general_continuum', 'j2_plasticity', or 'plastic_continuum'. "
+    "(4) For granular soil, landslide, slope, column collapse, Drucker-Prager, friction angle, "
+    "cohesion, dilatancy, or PlasticContinuum requests, use simulation_type 'continuum_dynamics' "
+    "with a continuum_bodies material.type of 'plastic_continuum'. "
+    "(5) plastic_continuum material requires density, sound_speed, youngs_modulus, "
+    "poisson_ratio, and friction_angle; cohesion and dilatancy_angle are optional. "
+    "(6) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
+    "(7) Return ONLY the JSON object - no markdown fences, no comments, no extra keys."
+)
+
+PLASTIC_CONTINUUM_KEYWORDS = re.compile(
+    r"\b("
+    r"plastic\s*continu(?:um|umn)|plasticcontinuum|"
+    r"granular|soil|landslide|slope|column\s+collapse|column-collapse|"
+    r"drucker[-\s]?prager|friction\s+angle|cohesion|dilatancy"
+    r")\b",
+    re.IGNORECASE,
 )
 
 
@@ -101,14 +116,27 @@ def example_config(description: str) -> Dict[str, Any]:
         / "data"
         / "milling.json"
     )
+    plastic_continuum_fixture = (
+        project_root
+        / "tests"
+        / "test_simulation"
+        / "test_2d_simulation"
+        / "data"
+        / "column_collapse.json"
+    )
 
     desc = (description or "").lower()
+    is_plastic_continuum_like = bool(PLASTIC_CONTINUUM_KEYWORDS.search(desc))
     is_solid_like = any(token in desc for token in ("solid", "elastic", "beam", "continuum", "milling"))
 
-    preferred = solid_fixture if is_solid_like else fluid_fixture
-    fallback = fluid_fixture if preferred == solid_fixture else solid_fixture
+    if is_plastic_continuum_like:
+        fixtures = (plastic_continuum_fixture, solid_fixture, fluid_fixture)
+    elif is_solid_like:
+        fixtures = (solid_fixture, plastic_continuum_fixture, fluid_fixture)
+    else:
+        fixtures = (fluid_fixture, plastic_continuum_fixture, solid_fixture)
 
-    for fixture in (preferred, fallback):
+    for fixture in fixtures:
         try:
             payload = json.loads(fixture.read_text())
             validated = SimulationConfig.model_validate(payload)
