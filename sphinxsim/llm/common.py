@@ -41,6 +41,11 @@ PLASTIC_CONTINUUM_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
+THREE_D_KEYWORDS = re.compile(
+    r"\b(3d|3-d|three[-\s]?d|three[-\s]?dimensional|3\s*dimensional)\b",
+    re.IGNORECASE,
+)
+
 
 def strip_code_fences(text: str) -> str:
     stripped = (text or "").strip()
@@ -108,6 +113,14 @@ def example_config(description: str) -> Dict[str, Any]:
         / "data"
         / "dambreak.json"
     )
+    fluid_3d_fixture = (
+        project_root
+        / "tests"
+        / "test_simulation"
+        / "test_3d_simulation"
+        / "data"
+        / "dambreak.json"
+    )
     solid_fixture = (
         project_root
         / "tests"
@@ -126,10 +139,13 @@ def example_config(description: str) -> Dict[str, Any]:
     )
 
     desc = (description or "").lower()
+    is_3d_like = bool(THREE_D_KEYWORDS.search(desc))
     is_plastic_continuum_like = bool(PLASTIC_CONTINUUM_KEYWORDS.search(desc))
     is_solid_like = any(token in desc for token in ("solid", "elastic", "beam", "continuum", "milling"))
 
-    if is_plastic_continuum_like:
+    if is_3d_like and not is_plastic_continuum_like and not is_solid_like:
+        fixtures = (fluid_3d_fixture, fluid_fixture, plastic_continuum_fixture, solid_fixture)
+    elif is_plastic_continuum_like:
         fixtures = (plastic_continuum_fixture, solid_fixture, fluid_fixture)
     elif is_solid_like:
         fixtures = (solid_fixture, plastic_continuum_fixture, fluid_fixture)

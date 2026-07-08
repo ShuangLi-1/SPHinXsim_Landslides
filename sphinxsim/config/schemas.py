@@ -638,6 +638,41 @@ class SimulationConfig(BaseModel):
 
     solver_parameters: SolverParametersConfig
 
+    def _infer_spatial_dim(self) -> int | None:
+        """Infer spatial dimension from available vector-valued config fields."""
+        if self.geometries.system_domain is not None:
+            return len(self.geometries.system_domain.lower_bound)
+
+        dims: set[int] = set()
+        if self.gravity is not None:
+            dims.add(len(self.gravity))
+
+        for shape in self.geometries.shapes:
+            for vec in (shape.lower_bound, shape.upper_bound, shape.half_size, shape.translation):
+                if vec is not None:
+                    dims.add(len(vec))
+            if shape.transform is not None:
+                dims.add(len(shape.transform.translation))
+
+        for oriented_box in self.geometries.oriented_boxes:
+            for vec in (oriented_box.center, oriented_box.normal, oriented_box.half_size):
+                if vec is not None:
+                    dims.add(len(vec))
+            if oriented_box.transform is not None:
+                dims.add(len(oriented_box.transform.translation))
+
+        for observer in self.observers:
+            for position in observer.positions:
+                dims.add(len(position))
+
+        for constraint in self.body_constraints:
+            if constraint.velocity is not None:
+                dims.add(len(constraint.velocity))
+
+        if len(dims) > 1:
+            raise ValueError("configuration vector dimensionality must be consistent")
+        return next(iter(dims), None)
+
     @model_validator(mode="after")
     def _cross_validate(self) -> "SimulationConfig":
         shape_names = {shape.name for shape in self.geometries.shapes}
@@ -751,5 +786,16 @@ class SimulationConfig(BaseModel):
                 for p in observer.positions:
                     if len(p) != dim:
                         raise ValueError("observer positions dimensionality must match geometries.system_domain")
+
+        dim = self._infer_spatial_dim()
+        if dim == 3:
+            if any(shape.type == BodyShapeType.MULTIPOLYGON for shape in self.geometries.shapes):
+                raise ValueError(
+                    "multipolygon shapes are 2D-only; use bounding_box, box, "
+                    "complex_shape, or triangle_mesh for 3D configurations"
+                )
+        elif dim == 2:
+            if any(shape.type == BodyShapeType.TRIANGLE_MESH for shape in self.geometries.shapes):
+                raise ValueError("triangle_mesh shapes are 3D-only; use 2D shapes for 2D configurations")
 
         return self
