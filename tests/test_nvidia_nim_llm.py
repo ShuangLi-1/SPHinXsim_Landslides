@@ -80,6 +80,21 @@ class TestNvidiaNIMLLMGenerate:
             cfg = self.llm.generate("water flow")
         assert isinstance(cfg, SimulationConfig)
 
+    def test_plastic_continuum_request_uses_soil_example_output(self):
+        resp = _make_response(
+            _nim_response(
+                MockLLM().generate("granular soil column collapse").model_dump_json(exclude_none=True)
+            )
+        )
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            cfg = self.llm.generate("Plastic continumn granular soil column collapse")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_material = user_content["example_output"]["continuum_bodies"][0]["material"]
+        assert example_material["type"] == "plastic_continuum"
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+
     def test_network_error_raises_runtime_error(self):
         with patch("urllib.request.urlopen", side_effect=urllib_error.URLError("connection refused")):
             with pytest.raises(RuntimeError, match="Failed to contact NVIDIA NIM"):

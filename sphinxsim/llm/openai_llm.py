@@ -31,6 +31,12 @@ class OpenAILLM:
         system = (
             "You are a simulator configuration generator. "
             "Return ONLY valid JSON that conforms to the provided JSON Schema. "
+            "For granular soil, landslide, slope, column collapse, Drucker-Prager, "
+            "friction angle, cohesion, or dilatancy requests, use simulation_type "
+            "'continuum_dynamics' with a continuum_bodies material.type of "
+            "'plastic_continuum'. plastic_continuum requires density, sound_speed, "
+            "youngs_modulus, poisson_ratio, and friction_angle; cohesion and "
+            "dilatancy_angle are optional. "
             "Do not include markdown, comments, or extra keys."
         )
 
@@ -64,6 +70,10 @@ class OpenAILLM:
             "You revise simulator configurations. "
             "Given an existing config and an update instruction, return ONLY the full updated JSON "
             "that conforms to the provided JSON Schema. "
+            "For granular soil, landslide, slope, column collapse, Drucker-Prager, "
+            "friction angle, cohesion, or dilatancy requests, keep or use simulation_type "
+            "'continuum_dynamics' with a continuum_bodies material.type of "
+            "'plastic_continuum'. "
             "Do not include markdown, comments, or extra keys."
         )
 
@@ -134,4 +144,3 @@ class OpenAILLM:
         if not answer:
             raise ValueError("OpenAI returned an empty exploration answer")
         return answer
-    

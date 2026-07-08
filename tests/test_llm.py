@@ -22,6 +22,10 @@ class TestDetectPhysics:
         assert _detect_physics("elastic beam under load") == PhysicsType.SOLID
         assert _detect_physics("deformation of a steel plate") == PhysicsType.SOLID
 
+    def test_plastic_continuum_keywords(self):
+        assert _detect_physics("granular soil column collapse") == PhysicsType.PLASTIC_CONTINUUM
+        assert _detect_physics("landslide with plastic continuum material") == PhysicsType.PLASTIC_CONTINUUM
+
     def test_fsi_keywords(self):
         assert _detect_physics("fsi simulation of a flexible flap") == PhysicsType.FSI
         assert _detect_physics("fluid-structure interaction") == PhysicsType.FSI
@@ -53,6 +57,12 @@ class TestMockLLM:
     def test_physics_solid(self):
         cfg = self.llm.generate("elastic beam bending under load")
         assert cfg.simulation_type.value == "continuum_dynamics"
+
+    def test_physics_plastic_continuum(self):
+        cfg = self.llm.generate("2D column collapse of granular soil using plastic continuum")
+        assert cfg.simulation_type.value == "continuum_dynamics"
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert cfg.continuum_bodies[0].material.friction_angle is not None
 
     def test_physics_fsi(self):
         cfg = self.llm.generate("hydroelastic fluid-structure interaction")

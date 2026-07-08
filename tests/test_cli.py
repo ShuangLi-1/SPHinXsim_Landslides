@@ -9,7 +9,7 @@ from unittest.mock import patch
 import pytest
 
 import sphinxsim
-from sphinxsim.cli import _load_config, main
+from sphinxsim.cli import _config_spatial_dim, _load_config, main
 
 
 def _has_native_extension() -> bool:
@@ -103,6 +103,60 @@ def _valid_data() -> dict:
     }
 
 
+def _valid_3d_data() -> dict:
+    data = json.loads(json.dumps(_valid_data()))
+    data["geometries"]["system_domain"] = {
+        "lower_bound": [0.0, 0.0, 0.0],
+        "upper_bound": [1.0, 1.0, 1.0],
+    }
+    data["geometries"]["shapes"] = [
+        {
+            "name": "WaterBody",
+            "type": "bounding_box",
+            "lower_bound": [0.0, 0.0, 0.0],
+            "upper_bound": [0.4, 0.2, 0.2],
+        },
+        {
+            "name": "WallBoundary",
+            "type": "bounding_box",
+            "lower_bound": [0.0, 0.0, 0.0],
+            "upper_bound": [1.0, 1.0, 1.0],
+        },
+    ]
+    data["geometries"]["oriented_boxes"] = []
+    data["gravity"] = [0.0, 0.0, -1.0]
+    data["observers"][0]["positions"] = [[0.5, 0.2, 0.1]]
+    data["fluid_boundary_conditions"] = []
+    return data
+
+
+class _FakeSimulation:
+    def __init__(self, config_path):
+        self.config_path = config_path
+
+    def resetOutputRoot(self, output_dir):
+        self.output_dir = output_dir
+
+    def buildGeometries(self):
+        pass
+
+    def generateParticles(self):
+        pass
+
+    def buildSimulation(self):
+        pass
+
+    def initializeSimulation(self):
+        pass
+
+    def run(self):
+        pass
+
+
+class _FakeNativeModule:
+    SPHSimulation = _FakeSimulation
+
+
 class TestLoadConfigHelper:
     def _write(self, build_temp_path: Path, data: dict) -> Path:
         p = build_temp_path / "cfg.json"
@@ -135,6 +189,16 @@ class TestLoadConfigHelper:
         config, rc = _load_config(p)
         assert config is None
         assert rc != 0
+
+
+class TestSpatialDimension:
+    def test_infers_2d_from_domain(self):
+        config = sphinxsim.SimulationConfig.model_validate(_valid_data())
+        assert _config_spatial_dim(config) == 2
+
+    def test_infers_3d_from_domain(self):
+        config = sphinxsim.SimulationConfig.model_validate(_valid_3d_data())
+        assert _config_spatial_dim(config) == 3
 
 
 class TestCLIGenerate:
@@ -212,6 +276,11 @@ class TestCLIRun:
         p.write_text(json.dumps(_valid_data()))
         return p
 
+    def _write_valid_3d(self, build_temp_path: Path) -> Path:
+        p = build_temp_path / "config_3d.json"
+        p.write_text(json.dumps(_valid_3d_data()))
+        return p
+
     def test_run_completes(self, build_temp_path, capsys):
         if not _has_native_extension():
             pytest.skip("_sphinxsys_core_2d is not available in this environment")
@@ -226,6 +295,14 @@ class TestCLIRun:
             pytest.skip("_sphinxsys_core_2d is not available in this environment")
         rc = main(["run", str(build_temp_path / "nope.json")])
         assert rc != 0
+
+    def test_run_selects_3d_native_module(self, build_temp_path):
+        p = self._write_valid_3d(build_temp_path)
+        with patch("sphinxsim.cli.load_sphinxsys_core_nd", return_value=_FakeNativeModule) as load_native:
+            rc = main(["run", str(p)])
+
+        assert rc == 0
+        load_native.assert_called_once_with(3)
 
 
 class TestCLIUpdate:
@@ -325,6 +402,21 @@ class TestCLIShell:
 
         out = capsys.readouterr().out
         assert "Auto-validation passed" in out
+
+    def test_shell_run_selects_3d_native_module(self, build_temp_path):
+        cfg = build_temp_path / "shell_3d_config.json"
+        cfg.write_text(json.dumps(_valid_3d_data()))
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_3d_config.json"
+        inputs = [f"load {shell_rel_cfg}", "run", "exit"]
+
+        with (
+            patch("builtins.input", side_effect=inputs),
+            patch("sphinxsim.cli.load_sphinxsys_core_nd", return_value=_FakeNativeModule) as load_native,
+        ):
+            rc = main(["shell"])
+
+        assert rc == 0
+        load_native.assert_called_once_with(3)
 
     def test_shell_update_before_load_errors(self, build_temp_path, capsys):
         inputs = ['update "simulate for 2 s"', "exit"]

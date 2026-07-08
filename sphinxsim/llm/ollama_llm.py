@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from dataclasses import dataclass
 from typing import Any, Dict
@@ -31,6 +32,65 @@ class OllamaLLM:
 
     def _endpoint(self) -> str:
         return f"{self.base_url.rstrip('/')}/api/chat"
+
+    @staticmethod
+    def _repair_json_text(text: str) -> str:
+        repaired = text.strip()
+
+        # Some local models return prose before/after the object even when
+        # format=json is requested. Keep the outermost JSON-looking payload.
+        first_obj = repaired.find("{")
+        last_obj = repaired.rfind("}")
+        first_arr = repaired.find("[")
+        last_arr = repaired.rfind("]")
+        if first_obj != -1 and last_obj > first_obj:
+            repaired = repaired[first_obj : last_obj + 1]
+        elif first_arr != -1 and last_arr > first_arr:
+            repaired = repaired[first_arr : last_arr + 1]
+
+        # Common Ollama small-model glitches: missing comma before the next
+        # object key and trailing comma before a closing brace/bracket.
+        repaired = re.sub(r"([}\]])(\s*\n\s*\")", r"\1,\2", repaired)
+        repaired = re.sub(
+            r"((?:\"(?:[^\"\\]|\\.)*\")|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)(\s*\n\s*\")",
+            r"\1,\2",
+            repaired,
+        )
+        repaired = re.sub(r",(\s*[}\]])", r"\1", repaired)
+        return repaired
+
+    @staticmethod
+    def _loads_json_content(text: str) -> Any:
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError:
+            repaired = OllamaLLM._repair_json_text(text)
+            if repaired == text:
+                raise
+            return json.loads(repaired)
+
+    @staticmethod
+    def _fallback_json_from_messages(messages: list) -> Dict[str, Any] | None:
+        for message in reversed(messages):
+            if not isinstance(message, dict):
+                continue
+            content = message.get("content")
+            if not isinstance(content, str):
+                continue
+            try:
+                payload = json.loads(content)
+            except json.JSONDecodeError:
+                continue
+            if isinstance(payload, dict):
+                example_output = payload.get("example_output")
+                if isinstance(example_output, dict):
+                    return example_output
+                existing_config = payload.get("existing_config")
+                if isinstance(existing_config, dict):
+                    return existing_config
+                if "simulation_type" in payload:
+                    return payload
+        return None
 
     def _post_chat(self, *, messages: list, format_json: bool = True) -> Any:
         payload = {
@@ -92,7 +152,13 @@ class OllamaLLM:
         if not format_json:
             return text
 
-        return json.loads(text)
+        try:
+            return self._loads_json_content(text)
+        except json.JSONDecodeError as exc:
+            fallback = self._fallback_json_from_messages(messages)
+            if fallback is not None:
+                return fallback
+            raise ValueError("Ollama returned invalid JSON") from exc
 
     @staticmethod
     def _example_config(description: str) -> Dict[str, Any]:
