@@ -111,12 +111,8 @@
     {
       "name": "GranularBody",
       "variables": [
-        { "real_type": ["Density", "Pressure", "VerticalStress", "AccDeviatoricPlasticStrain"] }
+        { "real_type": ["Density", "Pressure"] }
       ]
-    },
-    {
-      "name": "WallBoundary",
-      "variables": [{ "vector_type": ["NormalDirection"] }]
     }
   ],
 
