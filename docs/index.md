@@ -56,7 +56,7 @@ For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 - `sphinxsim/config/schemas.py`:
   Defines the top-level `SimulationConfig` and the typed config surface for system domains, global resolution, shapes, oriented boxes, particle generation, fluid bodies, continuum bodies, solid bodies, boundary conditions, observers, restart settings, body constraints, and extra state recording.
 - `sphinxsim/llm/`:
-  Provides LLM backends that translate natural-language prompts into schema-compliant configs and answer schema exploration questions. The default mock backend supports deterministic local testing, while the OpenAI backend can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, and `OPENAI_MODEL`.
+  Provides LLM backends that translate natural-language prompts into schema-compliant configs and answer schema exploration questions. The default mock backend supports deterministic local testing, while OpenAI and NVIDIA NIM backends can be enabled with environment variables such as `SPHINXSIM_LLM_PROVIDER`, `OPENAI_API_KEY`, `OPENAI_MODEL`, `NVIDIA_NIM_API_KEY`, and `NVIDIA_NIM_MODEL`.
 - `sphinxsim/sph_simulation/` and native bindings:
   Build and load SPHinXsys-backed simulation objects from validated JSON, including fluid and continuum-oriented workflows exposed through the Python package.
 
@@ -65,7 +65,7 @@ For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 SPHinXsim currently supports a broader config surface than a basic fluid-only demo workflow:
 
 - Fluid dynamics configurations with typed fluid materials, inflow boundary conditions, observers, and solver controls.
-- Continuum dynamics configurations with continuum material models and dedicated continuum solver parameters.
+- Continuum dynamics configurations with continuum material models (including `plastic_continuum` for soil/granular cases) and dedicated continuum solver parameters.
 - Solid boundary/body definitions required by the current validation and simulation builders.
 - Config-driven geometry composition using domains, shapes, oriented boxes, transforms, and particle-generation settings.
 - Incremental config editing through the CLI update command instead of regenerating cases from scratch.

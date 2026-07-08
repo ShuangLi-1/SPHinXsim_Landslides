@@ -94,7 +94,7 @@ void ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent(
         auto *time_stepper = &sim.getSPHSolver().getTimeStepper();
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
-            SimulationHookPoint::BeforeAcousticStep1stHalf, [shear_force, time_stepper]()
+            SimulationHookPoint::BeforeMainPhysicalTimeStep, [shear_force, time_stepper]()
             { shear_force->exec(time_stepper->getGlobalTimeStepSize()); });
     };
 
@@ -199,7 +199,7 @@ void ContinuumSimulationBuilder::buildContactRepulsionIfPresent(
 
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
-        SimulationHookPoint::BeforeAcousticStep1stHalf, [repulsion_force]()
+        SimulationHookPoint::BeforeMainPhysicalTimeStep, [repulsion_force]()
         { repulsion_force->exec(); });
     simulation_pipeline.insert_hook(
         SimulationHookPoint::AfterLinearCorrectionMatrix, [repulsion_factor]()
@@ -261,7 +261,7 @@ void ContinuumSimulationBuilder::buildStressDiffusionIfPresent(
     auto *time_stepper = &sim.getSPHSolver().getTimeStepper();
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
-        SimulationHookPoint::BeforeAcousticStep1stHalf, [stress_diffusion_ptr, time_stepper]()
+        SimulationHookPoint::BeforeMainPhysicalTimeStep, [stress_diffusion_ptr, time_stepper]()
         { stress_diffusion_ptr->exec(time_stepper->getGlobalTimeStepSize()); });
 }
 //=================================================================================================//

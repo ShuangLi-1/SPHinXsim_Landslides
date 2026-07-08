@@ -78,6 +78,7 @@ Inside the shell, you can use the following commands:
 | `validate` | Reload the loaded file from disk and validate it |
 | `preview` | Render an interactive geometry/BC preview of the loaded config |
 | `preview --no-cpp` | Preview using schema bounding-box fallback only (no C++ build) |
+| `preview --screenshot FILE` | Save a screenshot to FILE instead of opening an interactive window |
 | `run` | Build and execute the loaded config |
 | `lock-geometry` | Lock geometry updates for the active shell session |
 | `unlock-geometry` | Unlock geometry updates (and reset downstream simulator state when attached) |
@@ -197,6 +198,7 @@ Options:
 | --- | --- |
 | `--no-cpp` | Skip C++ geometry build; render only the system domain bounding box and annotations |
 | `--off-screen` | Render off-screen (no window) — useful for automated testing |
+| `--screenshot FILE` / `-s FILE` | Save a screenshot to FILE instead of opening a window. Implies `--off-screen`. |
 
 Requires the optional `[visualization]` extra:
 
@@ -262,6 +264,7 @@ sphinxsim shell
 > validate
 > preview                   # inspect geometry and BCs interactively
 > preview --no-cpp          # quick bounding-box fallback if C++ not built
+> preview --screenshot preview.png   # save a screenshot for a report
 > run
 > exit
 ```
@@ -280,6 +283,23 @@ sphinxsim shell
 > run
 ```
 
+### Example 7: Soil column-collapse workflow (continuum dynamics)
+
+```bash
+# Validate and run the soil benchmark config
+sphinxsim validate tests/test_simulation/test_2d_simulation/data/column_collapse.json
+sphinxsim run tests/test_simulation/test_2d_simulation/data/column_collapse.json
+
+# Optional: iterate in shell
+sphinxsim shell
+> load tests/test_simulation/test_2d_simulation/data/column_collapse.json
+> explore what material fields are required for plastic_continuum?
+> validate
+> run
+```
+
+This case uses continuum dynamics with a `plastic_continuum` material model for granular/soil behavior.
+
 ## LLM provider selection
 
 By default, `sphinxsim` uses a local mock LLM that works offline. To use a different provider:
@@ -294,6 +314,7 @@ sphinxsim generate "water dam break"
 ```
 
 First, ensure Ollama is running:
+
 ```bash
 ollama serve
 # In another terminal:
@@ -308,6 +329,18 @@ export OPENAI_API_KEY=sk-...
 export OPENAI_MODEL=gpt-4
 sphinxsim generate "water dam break"
 ```
+
+### Use NVIDIA NIM (OpenAI-compatible API)
+
+```bash
+export SPHINXSIM_LLM_PROVIDER=nvidia_nim
+export NVIDIA_NIM_API_KEY=nvapi-...
+export NVIDIA_NIM_MODEL=z-ai/glm-5.2
+export NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+sphinxsim generate "water dam break"
+```
+
+`NVIDIA_API_KEY` is also accepted for compatibility.
 
 ### Use mock (default)
 

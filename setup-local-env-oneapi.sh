@@ -4,10 +4,46 @@
 # Prevent Python from creating __pycache__ directories
 export PYTHONDONTWRITEBYTECODE=1
 
-# Set LLM provider and API keys for local development
+# Ensure local sphinxsim package is importable from any working directory.
+_SPHINXSIM_REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -z "${PYTHONPATH:-}" ]; then
+    export PYTHONPATH="$_SPHINXSIM_REPO_ROOT"
+else
+    export PYTHONPATH="$_SPHINXSIM_REPO_ROOT:$PYTHONPATH"
+fi
+
+# Provide a fallback launcher if the console script is not installed on PATH.
+if ! command -v sphinxsim >/dev/null 2>&1; then
+    if command -v python >/dev/null 2>&1; then
+        sphinxsim() { python -m sphinxsim "$@"; }
+        echo "ℹ️ sphinxsim command not found on PATH; using python -m sphinxsim fallback"
+    elif command -v python3 >/dev/null 2>&1; then
+        sphinxsim() { python3 -m sphinxsim "$@"; }
+        echo "ℹ️ sphinxsim command not found on PATH; using python3 -m sphinxsim fallback"
+    else
+        echo "❌ Neither python nor python3 was found in PATH"
+    fi
+fi
+
+# Set LLM provider for local development
 export SPHINXSIM_LLM_PROVIDER=openai
-export OPENAI_API_KEY="..."
 export OPENAI_MODEL="gpt-4.1-mini"
+
+# API key loading order:
+# 1) Existing OPENAI_API_KEY in environment
+# 2) First line from OPENAI_API_KEY_FILE (default: ~/.config/sphinxsim/openai_api_key)
+export OPENAI_API_KEY_FILE="${OPENAI_API_KEY_FILE:-$HOME/.config/sphinxsim/openai_api_key}"
+
+if [ -z "${OPENAI_API_KEY:-}" ] && [ -f "$OPENAI_API_KEY_FILE" ]; then
+    export OPENAI_API_KEY="$(head -n 1 "$OPENAI_API_KEY_FILE" | tr -d '\r')"
+fi
+
+if [ -n "${OPENAI_API_KEY:-}" ]; then
+    echo "✅ OpenAI API key loaded"
+else
+    echo "❌ OpenAI API key not found"
+    echo "Set OPENAI_API_KEY or create: $OPENAI_API_KEY_FILE"
+fi
 
 # Set VCPKG_ROOT for local development
 export VCPKG_ROOT="$HOME/vcpkg"

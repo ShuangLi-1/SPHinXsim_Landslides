@@ -24,7 +24,7 @@ import shlex
 import sys
 import tempfile
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 # Set up sys.path FIRST, before any sphinxsim imports
 def _find_project_root(start=None):
@@ -83,6 +83,53 @@ def _load_config(path: Path) -> Tuple[SimulationConfig | None, int]:
     except ValidationError as exc:
         print(f"Config validation failed:\n{exc}", file=sys.stderr)
         return None, 1
+
+
+def _short_repr(value: Any, max_len: int = 80) -> str:
+    text = repr(value)
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
+
+
+def _collect_change_lines(before: Any, after: Any, path: str = "") -> list[str]:
+    if isinstance(before, dict) and isinstance(after, dict):
+        lines: list[str] = []
+        keys = sorted(set(before.keys()) | set(after.keys()))
+        for key in keys:
+            key_path = f"{path}.{key}" if path else key
+            if key not in before:
+                lines.append(f"{key_path}: added {_short_repr(after[key])}")
+                continue
+            if key not in after:
+                lines.append(f"{key_path}: removed")
+                continue
+            lines.extend(_collect_change_lines(before[key], after[key], key_path))
+        return lines
+
+    if isinstance(before, list) and isinstance(after, list):
+        if before == after:
+            return []
+        return [f"{path or '<root>'}: list changed (size {len(before)} -> {len(after)})"]
+
+    if before != after:
+        return [f"{path or '<root>'}: {_short_repr(before)} -> {_short_repr(after)}"]
+    return []
+
+
+def _print_update_summary(before_cfg: SimulationConfig, after_cfg: SimulationConfig) -> None:
+    before = before_cfg.model_dump(exclude_none=True)
+    after = after_cfg.model_dump(exclude_none=True)
+    changes = _collect_change_lines(before, after)
+    if not changes:
+        print("ℹ️ No effective changes were applied to the config.")
+        return
+
+    print("Changes applied:")
+    for line in changes[:12]:
+        print(f"  - {line}")
+    if len(changes) > 12:
+        print(f"  - ... and {len(changes) - 12} more changes")
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +230,9 @@ def cmd_update(args: argparse.Namespace) -> int:
     except (ValueError, ValidationError) as exc:
         print(f"Error updating config: {exc}", file=sys.stderr)
         return 1
+    except Exception as exc:
+        print(f"Unexpected error updating config: {exc}", file=sys.stderr)
+        return 1
 
     if geometry_locked and _geometry_changed(config, updated_config):
         print(
@@ -207,6 +257,8 @@ def cmd_update(args: argparse.Namespace) -> int:
         print(f"Updated config written to {output_path}")
     else:
         print(f"Updated config in place: {output_path}")
+
+    _print_update_summary(config, updated_config)
     return 0
 
 
@@ -399,6 +451,11 @@ def cmd_preview(args: argparse.Namespace) -> int:
 
     use_cpp = not getattr(args, "no_cpp", False)
     off_screen = getattr(args, "off_screen", False)
+    screenshot_path = getattr(args, "screenshot", None)
+
+    # Screenshot mode implies off-screen rendering.
+    if screenshot_path:
+        off_screen = True
 
     print(f"🖼  Building configuration preview for: {resolved_config_path}")
     if use_cpp:
@@ -413,7 +470,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
         off_screen=off_screen,
     )
     try:
-        visualizer.preview(use_cpp=use_cpp)
+        visualizer.preview(use_cpp=use_cpp, screenshot_path=screenshot_path)
         if use_cpp:
             if visualizer.used_cpp_geometry:
                 print("✅ Preview used C++ geometry (VTP meshes).")
@@ -421,6 +478,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
                 print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
         else:
             print("ℹ️ Preview rendered without C++ geometry (--no-cpp).")
+        if screenshot_path:
+            print(f"📸 Screenshot saved to: {screenshot_path}")
     except ImportError as exc:
         print(f"❌ {exc}", file=sys.stderr)
         return 1
@@ -512,7 +571,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print(
         "Commands: load FILE, generate DESCRIPTION FILE, "
         "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, preview [--no-cpp], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+        "validate, run, preview [--no-cpp] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
     print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
@@ -552,6 +611,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  validate                        - Reload and validate config from disk")
             print("  preview                         - Render geometry/BC preview (requires pyvista)")
             print("  preview --no-cpp                - Preview without C++ geometry build")
+            print("  preview --screenshot FILE        - Save a screenshot to FILE instead of interactive window")
             print("  run                             - Run simulation from loaded config")
             print("  lock-geometry                   - Manually lock geometry updates")
             print("  unlock-geometry                 - Unlock geometry updates")
@@ -698,11 +758,22 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
             no_cpp = "--no-cpp" in parts
+            # Extract --screenshot / -s value from shell input
+            screenshot_path = None
+            if "--screenshot" in parts:
+                idx = parts.index("--screenshot")
+                if idx + 1 < len(parts):
+                    screenshot_path = parts[idx + 1]
+            elif "-s" in parts:
+                idx = parts.index("-s")
+                if idx + 1 < len(parts):
+                    screenshot_path = parts[idx + 1]
             _ = cmd_preview(
                 argparse.Namespace(
                     config_file=str(config_path),
                     no_cpp=no_cpp,
                     off_screen=False,
+                    screenshot=screenshot_path,
                 )
             )
             continue
@@ -872,6 +943,12 @@ def _build_parser() -> argparse.ArgumentParser:
         "--off-screen",
         action="store_true",
         help="Render off-screen (no window). Useful for automated testing.",
+    )
+    prev.add_argument(
+        "--screenshot",
+        "-s",
+        default=None,
+        help="Save a screenshot to this file path instead of opening an interactive window.",
     )
     prev.set_defaults(func=cmd_preview)
 

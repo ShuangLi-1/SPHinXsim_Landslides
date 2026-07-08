@@ -586,6 +586,156 @@ class TestSimulationConfig:
         assert cfg.fluid_bodies[0].particle_reserve_factor == pytest.approx(350.0)
         assert cfg.fluid_boundary_conditions[0].type.value == "emitter"
 
+    def test_filling_tank_fixture_accepts_boundary_condition_schedule(self):
+        fixture_path = (
+            Path(__file__).parent
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "filling_tank.json"
+        )
+        payload = json.loads(fixture_path.read_text())
+        cfg = SimulationConfig.model_validate(payload)
+
+        schedule = cfg.fluid_boundary_conditions[0].on_schedule
+        assert schedule is not None
+        assert schedule.switch_on_time == pytest.approx(1.0)
+        assert schedule.duration == pytest.approx(25.0)
+
+    def test_boundary_condition_schedule_rejects_negative_duration(self):
+        with pytest.raises(ValidationError):
+            _make_minimal_fluid_config(
+                fluid_boundary_conditions=[
+                    {
+                        "body_name": "WaterBody",
+                        "oriented_box": "Inlet",
+                        "type": "emitter",
+                        "inflow_speed": 1.5,
+                        "on_schedule": {
+                            "switch_on_time": 0.0,
+                            "duration": -1.0,
+                        },
+                    }
+                ]
+            )
+
+    def test_column_collapse_fixture_accepts_plastic_continuum(self):
+        fixture_path = (
+            Path(__file__).parent
+            / "test_simulation"
+            / "test_2d_simulation"
+            / "data"
+            / "column_collapse.json"
+        )
+        payload = json.loads(fixture_path.read_text())
+        cfg = SimulationConfig.model_validate(payload)
+
+        material = cfg.continuum_bodies[0].material
+        assert material.type.value == "plastic_continuum"
+        assert material.friction_angle is not None
+        assert material.cohesion is not None
+        assert material.dilatancy_angle is not None
+
+    def test_plastic_continuum_accepts_optional_cohesion_and_dilatancy(self):
+        cfg = _make_minimal_continuum_config(
+            continuum_bodies=[
+                {
+                    "name": "ContinuumBody",
+                    "material": {
+                        "type": "plastic_continuum",
+                        "density": 1000.0,
+                        "sound_speed": 20.0,
+                        "youngs_modulus": 1.0e6,
+                        "poisson_ratio": 0.3,
+                        "friction_angle": 30.0,
+                    },
+                }
+            ]
+        )
+        material = cfg.continuum_bodies[0].material
+        assert material.type.value == "plastic_continuum"
+        assert material.friction_angle == pytest.approx(30.0)
+        assert material.cohesion is None
+        assert material.dilatancy_angle is None
+
+    def test_plastic_continuum_requires_friction_angle(self):
+        with pytest.raises(ValidationError, match="plastic_continuum requires"):
+            _make_minimal_continuum_config(
+                continuum_bodies=[
+                    {
+                        "name": "ContinuumBody",
+                        "material": {
+                            "type": "plastic_continuum",
+                            "density": 1000.0,
+                            "sound_speed": 20.0,
+                            "youngs_modulus": 1.0e6,
+                            "poisson_ratio": 0.3,
+                        },
+                    }
+                ]
+            )
+
+    def test_continuum_solver_accepts_surface_type(self):
+        cfg = _make_minimal_continuum_config(
+            solver_parameters={
+                "end_time": 1.0,
+                "output_interval": 0.01,
+                "continuum_dynamics": {
+                    "acoustic_cfl": 0.4,
+                    "advection_cfl": 0.2,
+                    "surface_type": "open_boundary",
+                },
+            }
+        )
+        assert cfg.solver_parameters.continuum_dynamics is not None
+        assert cfg.solver_parameters.continuum_dynamics.surface_type == "open_boundary"
+
+    def test_continuum_solver_rejects_invalid_surface_type(self):
+        with pytest.raises(ValidationError):
+            _make_minimal_continuum_config(
+                solver_parameters={
+                    "end_time": 1.0,
+                    "output_interval": 0.01,
+                    "continuum_dynamics": {
+                        "acoustic_cfl": 0.4,
+                        "advection_cfl": 0.2,
+                        "surface_type": "invalid_surface",
+                    },
+                }
+            )
+
+    def test_continuum_solver_accepts_plastic_riemann_dissipation_factor(self):
+        cfg = _make_minimal_continuum_config(
+            solver_parameters={
+                "end_time": 1.0,
+                "output_interval": 0.01,
+                "continuum_dynamics": {
+                    "acoustic_cfl": 0.4,
+                    "advection_cfl": 0.2,
+                    "plastic_riemann_dissipation_factor": 35.0,
+                },
+            }
+        )
+        assert cfg.solver_parameters.continuum_dynamics is not None
+        assert (
+            cfg.solver_parameters.continuum_dynamics.plastic_riemann_dissipation_factor
+            == pytest.approx(35.0)
+        )
+
+    def test_continuum_solver_rejects_non_positive_plastic_riemann_dissipation_factor(self):
+        with pytest.raises(ValidationError):
+            _make_minimal_continuum_config(
+                solver_parameters={
+                    "end_time": 1.0,
+                    "output_interval": 0.01,
+                    "continuum_dynamics": {
+                        "acoustic_cfl": 0.4,
+                        "advection_cfl": 0.2,
+                        "plastic_riemann_dissipation_factor": 0.0,
+                    },
+                }
+            )
+
     def test_heat_transfer_fixture_accepts_thermal_properties(self):
         fixture_path = (
             Path(__file__).parent
