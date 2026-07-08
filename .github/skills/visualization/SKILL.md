@@ -1,9 +1,9 @@
 ---
-name: visualization-framework
-description: "SPHinXsim visualization framework guidance for preview architecture, rendering modes, annotations, constraints, and testing patterns. Invoke by default for any task that edits or debugs files under sphinxsim/visualization."
+name: visualization
+description: "SPHinXsim visualization guidance for preview architecture, rendering modes, annotations, constraints, and testing patterns. Invoke by default for any task that edits or debugs files under sphinxsim/visualization."
 ---
 
-# SPHinXsim Visualization Framework
+# SPHinXsim Visualization
 
 ## Purpose
 Use this skill when working on preview and rendering behavior in SPHinXsim, especially under `sphinxsim/visualization`.
