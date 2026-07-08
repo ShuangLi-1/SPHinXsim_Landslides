@@ -294,6 +294,16 @@ class TestCLIUpdate:
             rc = main(["update", str(p), "simulate for 1 s", "--patch-mode", "--strict", "true"])
         assert rc != 0
 
+    def test_update_unexpected_provider_exception_returns_nonzero(self, build_temp_path):
+        class _BoomLLM:
+            def update(self, existing, description):
+                raise TypeError("boom")
+
+        p = self._write_valid(build_temp_path)
+        with patch("sphinxsim.cli.get_llm", return_value=_BoomLLM()):
+            rc = main(["update", str(p), "simulate for 1 s"])
+        assert rc != 0
+
 
 class TestCLIShell:
     def test_shell_generate_then_update_auto_validates(self, build_temp_path, capsys):

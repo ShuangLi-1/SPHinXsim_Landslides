@@ -24,7 +24,7 @@ import shlex
 import sys
 import tempfile
 from pathlib import Path
-from typing import Tuple
+from typing import Any, Tuple
 
 # Set up sys.path FIRST, before any sphinxsim imports
 def _find_project_root(start=None):
@@ -83,6 +83,53 @@ def _load_config(path: Path) -> Tuple[SimulationConfig | None, int]:
     except ValidationError as exc:
         print(f"Config validation failed:\n{exc}", file=sys.stderr)
         return None, 1
+
+
+def _short_repr(value: Any, max_len: int = 80) -> str:
+    text = repr(value)
+    if len(text) <= max_len:
+        return text
+    return text[: max_len - 3] + "..."
+
+
+def _collect_change_lines(before: Any, after: Any, path: str = "") -> list[str]:
+    if isinstance(before, dict) and isinstance(after, dict):
+        lines: list[str] = []
+        keys = sorted(set(before.keys()) | set(after.keys()))
+        for key in keys:
+            key_path = f"{path}.{key}" if path else key
+            if key not in before:
+                lines.append(f"{key_path}: added {_short_repr(after[key])}")
+                continue
+            if key not in after:
+                lines.append(f"{key_path}: removed")
+                continue
+            lines.extend(_collect_change_lines(before[key], after[key], key_path))
+        return lines
+
+    if isinstance(before, list) and isinstance(after, list):
+        if before == after:
+            return []
+        return [f"{path or '<root>'}: list changed (size {len(before)} -> {len(after)})"]
+
+    if before != after:
+        return [f"{path or '<root>'}: {_short_repr(before)} -> {_short_repr(after)}"]
+    return []
+
+
+def _print_update_summary(before_cfg: SimulationConfig, after_cfg: SimulationConfig) -> None:
+    before = before_cfg.model_dump(exclude_none=True)
+    after = after_cfg.model_dump(exclude_none=True)
+    changes = _collect_change_lines(before, after)
+    if not changes:
+        print("ℹ️ No effective changes were applied to the config.")
+        return
+
+    print("Changes applied:")
+    for line in changes[:12]:
+        print(f"  - {line}")
+    if len(changes) > 12:
+        print(f"  - ... and {len(changes) - 12} more changes")
 
 
 # ---------------------------------------------------------------------------
@@ -183,6 +230,9 @@ def cmd_update(args: argparse.Namespace) -> int:
     except (ValueError, ValidationError) as exc:
         print(f"Error updating config: {exc}", file=sys.stderr)
         return 1
+    except Exception as exc:
+        print(f"Unexpected error updating config: {exc}", file=sys.stderr)
+        return 1
 
     if geometry_locked and _geometry_changed(config, updated_config):
         print(
@@ -207,6 +257,8 @@ def cmd_update(args: argparse.Namespace) -> int:
         print(f"Updated config written to {output_path}")
     else:
         print(f"Updated config in place: {output_path}")
+
+    _print_update_summary(config, updated_config)
     return 0
 
 

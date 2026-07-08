@@ -314,6 +314,7 @@ sphinxsim generate "water dam break"
 ```
 
 First, ensure Ollama is running:
+
 ```bash
 ollama serve
 # In another terminal:
@@ -328,6 +329,18 @@ export OPENAI_API_KEY=sk-...
 export OPENAI_MODEL=gpt-4
 sphinxsim generate "water dam break"
 ```
+
+### Use NVIDIA NIM (OpenAI-compatible API)
+
+```bash
+export SPHINXSIM_LLM_PROVIDER=nvidia_nim
+export NVIDIA_NIM_API_KEY=nvapi-...
+export NVIDIA_NIM_MODEL=z-ai/glm-5.2
+export NVIDIA_NIM_BASE_URL=https://integrate.api.nvidia.com/v1
+sphinxsim generate "water dam break"
+```
+
+`NVIDIA_API_KEY` is also accepted for compatibility.
 
 ### Use mock (default)
 
