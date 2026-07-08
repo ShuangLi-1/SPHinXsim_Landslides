@@ -148,6 +148,19 @@ class TestOllamaLLMGenerate:
         assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
         assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
 
+    def test_3d_plastic_request_uses_repose_angle_example_output(self):
+        resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            self.llm.generate("3d column collapse using plastic material")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_output = user_content["example_output"]
+        assert example_output["simulation_type"] == "continuum_dynamics"
+        assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert example_output["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
+        assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
+
     def test_plastic_continuum_request_uses_soil_example_output(self):
         resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
@@ -276,6 +289,18 @@ class TestOllamaLLMUpdate:
         assert isinstance(cfg, SimulationConfig)
         assert cfg.simulation_type.value == "fluid_dynamics"
         assert all(isinstance(shape, type(cfg.geometries.shapes[0])) for shape in cfg.geometries.shapes)
+
+    def test_update_plastic_continuum_intent_creates_continuum_body(self):
+        resp = _make_response(_mock_raw(_FLUID_CONFIG))
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.update(
+                _FLUID_CONFIG,
+                "I want a 3d column collapse case, matertialtype is plastic_continuum",
+            )
+
+        assert cfg.simulation_type.value == "continuum_dynamics"
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert not cfg.fluid_bodies
 
 
 class TestOllamaLLMUpdatePatch:

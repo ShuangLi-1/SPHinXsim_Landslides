@@ -14,8 +14,11 @@ from sphinxsim.config.update_patch import UpdatePatch
 from sphinxsim.llm.common import (
     BODY_TYPE_RULES,
     apply_explicit_instruction_overrides,
+    coerce_simulation_type,
     dict_diff,
     example_config,
+    infer_requested_material_type,
+    infer_requested_simulation_type,
     merge_dicts,
     sanitize_config_dict,
     strip_code_fences,
@@ -180,6 +183,22 @@ class OllamaLLM:
     def _sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         return sanitize_config_dict(cfg)
 
+    @staticmethod
+    def _infer_requested_simulation_type(description: str) -> str | None:
+        return infer_requested_simulation_type(description)
+
+    @staticmethod
+    def _infer_requested_material_type(description: str) -> str | None:
+        return infer_requested_material_type(description)
+
+    @staticmethod
+    def _coerce_simulation_type(
+        existing: Dict[str, Any],
+        target_type: str,
+        material_type: str | None = None,
+    ) -> Dict[str, Any]:
+        return coerce_simulation_type(existing, target_type, material_type=material_type)
+
     _BODY_TYPE_RULES: str = BODY_TYPE_RULES
 
     def generate(self, description: str) -> SimulationConfig:
@@ -239,6 +258,7 @@ class OllamaLLM:
         if not isinstance(data, dict):
             raise ValueError("Ollama returned an invalid update response")
         merged = self._merge_dicts(existing_dict, data)
+        patch_data = None
         if merged == existing_dict:
             patch_system = (
                 f"You revise simulator configurations. The instruction is: \"{description}\". "
@@ -256,14 +276,20 @@ class OllamaLLM:
                     {"role": "user", "content": json.dumps(patch_user)},
                 ]
             )
-            if isinstance(patch_data, dict):
-                merged = self._merge_dicts(existing_dict, patch_data)
+        if isinstance(patch_data, dict):
+            merged = self._merge_dicts(existing_dict, patch_data)
         merged = self._apply_explicit_instruction_overrides(merged, description)
+        requested_type = self._infer_requested_simulation_type(description)
+        requested_material = self._infer_requested_material_type(description)
+        if requested_type is not None:
+            merged = self._coerce_simulation_type(merged, requested_type, requested_material)
         merged = self._sanitize_config_dict(merged)
         try:
             return SimulationConfig(**merged)
         except Exception:
             repaired = self._merge_dicts(merged, existing_dict)
+            if requested_type is not None:
+                repaired = self._coerce_simulation_type(repaired, requested_type, requested_material)
             repaired = self._sanitize_config_dict(repaired)
             return SimulationConfig(**repaired)
 

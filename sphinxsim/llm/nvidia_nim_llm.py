@@ -17,6 +17,7 @@ from sphinxsim.llm.common import (
     coerce_simulation_type,
     dict_diff,
     example_config,
+    infer_requested_material_type,
     infer_requested_shape_rename,
     infer_requested_simulation_type,
     json_safe_errors,
@@ -176,8 +177,16 @@ class NvidiaNIMLLM:
         return infer_requested_simulation_type(description)
 
     @staticmethod
-    def _coerce_simulation_type(existing: Dict[str, Any], target_type: str) -> Dict[str, Any]:
-        return coerce_simulation_type(existing, target_type)
+    def _infer_requested_material_type(description: str) -> str | None:
+        return infer_requested_material_type(description)
+
+    @staticmethod
+    def _coerce_simulation_type(
+        existing: Dict[str, Any],
+        target_type: str,
+        material_type: str | None = None,
+    ) -> Dict[str, Any]:
+        return coerce_simulation_type(existing, target_type, material_type=material_type)
 
     @staticmethod
     def _infer_requested_shape_rename(description: str) -> tuple[str, str] | None:
@@ -253,9 +262,10 @@ class NvidiaNIMLLM:
 
         merged = self._merge_dicts(existing_dict, data)
         requested_type = self._infer_requested_simulation_type(description)
+        requested_material = self._infer_requested_material_type(description)
         requested_shape_rename = self._infer_requested_shape_rename(description)
         if requested_type is not None:
-            merged = self._coerce_simulation_type(merged, requested_type)
+            merged = self._coerce_simulation_type(merged, requested_type, requested_material)
         if requested_shape_rename is not None:
             merged = self._apply_shape_rename(merged, requested_shape_rename[0], requested_shape_rename[1])
         merged = self._sanitize_config_dict(merged)
@@ -287,7 +297,7 @@ class NvidiaNIMLLM:
             if isinstance(retry_data, dict):
                 retried = self._merge_dicts(existing_dict, retry_data)
                 if requested_type is not None:
-                    retried = self._coerce_simulation_type(retried, requested_type)
+                    retried = self._coerce_simulation_type(retried, requested_type, requested_material)
                 if requested_shape_rename is not None:
                     retried = self._apply_shape_rename(retried, requested_shape_rename[0], requested_shape_rename[1])
                 retried = self._sanitize_config_dict(retried)
@@ -297,7 +307,7 @@ class NvidiaNIMLLM:
                     pass
 
             if requested_type is not None:
-                coerced = self._coerce_simulation_type(existing_dict, requested_type)
+                coerced = self._coerce_simulation_type(existing_dict, requested_type, requested_material)
                 if requested_shape_rename is not None:
                     coerced = self._apply_shape_rename(coerced, requested_shape_rename[0], requested_shape_rename[1])
                 coerced = self._sanitize_config_dict(coerced)

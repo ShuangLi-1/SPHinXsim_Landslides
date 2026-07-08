@@ -106,6 +106,23 @@ class TestNvidiaNIMLLMGenerate:
         assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
         assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
 
+    def test_3d_plastic_request_uses_repose_angle_example_output(self):
+        resp = _make_response(
+            _nim_response(
+                MockLLM().generate("granular soil column collapse").model_dump_json(exclude_none=True)
+            )
+        )
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            self.llm.generate("3d column collapse using plastic material")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_output = user_content["example_output"]
+        assert example_output["simulation_type"] == "continuum_dynamics"
+        assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert example_output["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
+        assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
+
     def test_network_error_raises_runtime_error(self):
         with patch("urllib.request.urlopen", side_effect=urllib_error.URLError("connection refused")):
             with pytest.raises(RuntimeError, match="Failed to contact NVIDIA NIM"):
@@ -200,6 +217,20 @@ class TestNvidiaNIMLLMUpdate:
         assert updated.simulation_type.value == "continuum_dynamics"
         assert updated.solver_parameters.continuum_dynamics is not None
         assert len(updated.continuum_bodies) >= 1
+
+    def test_update_plastic_continuum_intent_creates_continuum_body(self):
+        llm = NvidiaNIMLLM(api_key="test-key")
+        base = MockLLM().generate("water dam break simulation")
+        resp = _make_response(_nim_response(base.model_dump_json(exclude_none=True)))
+        with patch("urllib.request.urlopen", return_value=resp):
+            updated = llm.update(
+                base,
+                "I want a 3d column collapse case, matertialtype is plastic_continuum",
+            )
+
+        assert updated.simulation_type.value == "continuum_dynamics"
+        assert updated.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert not updated.fluid_bodies
 
     def test_update_retry_payload_serializes_validation_errors(self):
         llm = NvidiaNIMLLM(api_key="test-key")

@@ -417,6 +417,17 @@ class TestSimulationConfig:
         assert len(cfg.geometries.system_domain.lower_bound) == 3
         assert all(shape.type.value != "multipolygon" for shape in cfg.geometries.shapes)
 
+    def test_3d_repose_angle_fixture_uses_plastic_continuum(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/repose_angle.json")
+        data = json.loads(data_path.read_text())
+
+        cfg = SimulationConfig.model_validate(data)
+
+        assert cfg.simulation_type.value == "continuum_dynamics"
+        assert len(cfg.geometries.system_domain.lower_bound) == 3
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert all(shape.type.value != "multipolygon" for shape in cfg.geometries.shapes)
+
     def test_3d_config_rejects_multipolygon_shape(self):
         data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
         data = json.loads(data_path.read_text())

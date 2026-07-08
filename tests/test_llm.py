@@ -139,3 +139,11 @@ class TestExampleConfig:
 
         assert len(example["geometries"]["system_domain"]["lower_bound"]) == 3
         assert all(shape["type"] != "multipolygon" for shape in example["geometries"]["shapes"])
+
+    def test_3d_plastic_column_uses_repose_angle_fixture(self):
+        example = example_config("3d column collapse using plastic material")
+
+        assert example["simulation_type"] == "continuum_dynamics"
+        assert len(example["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert example["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
+        assert all(shape["type"] != "multipolygon" for shape in example["geometries"]["shapes"])

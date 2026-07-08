@@ -24,7 +24,8 @@ BODY_TYPE_RULES: str = (
     "(2) solid_bodies may ONLY contain entries whose material.type is 'rigid_body'. "
     "(3) continuum_bodies may contain 'general_continuum', 'j2_plasticity', or 'plastic_continuum'. "
     "(4) For granular soil, landslide, slope, column collapse, Drucker-Prager, friction angle, "
-    "cohesion, dilatancy, or PlasticContinuum requests, use simulation_type 'continuum_dynamics' "
+    "cohesion, dilatancy, plastic material, or PlasticContinuum requests, "
+    "use simulation_type 'continuum_dynamics' "
     "with a continuum_bodies material.type of 'plastic_continuum'. "
     "(5) plastic_continuum material requires density, sound_speed, youngs_modulus, "
     "poisson_ratio, and friction_angle; cohesion and dilatancy_angle are optional. "
@@ -35,7 +36,11 @@ BODY_TYPE_RULES: str = (
 PLASTIC_CONTINUUM_KEYWORDS = re.compile(
     r"\b("
     r"plastic\s*continu(?:um|umn)|plasticcontinuum|"
+    r"plastic\s+material|plastic\s+soil|plastic\s+column|"
+    r"material\s*type\s*(?:is|=)?\s*plastic[_\s-]?continu(?:um|umn)|"
+    r"matertial\s*type\s*(?:is|=)?\s*plastic[_\s-]?continu(?:um|umn)|"
     r"granular|soil|landslide|slope|column\s+collapse|column-collapse|"
+    r"repose\s+angle|angle\s+of\s+repose|"
     r"drucker[-\s]?prager|friction\s+angle|cohesion|dilatancy"
     r")\b",
     re.IGNORECASE,
@@ -137,13 +142,23 @@ def example_config(description: str) -> Dict[str, Any]:
         / "data"
         / "column_collapse.json"
     )
+    plastic_continuum_3d_fixture = (
+        project_root
+        / "tests"
+        / "test_simulation"
+        / "test_3d_simulation"
+        / "data"
+        / "repose_angle.json"
+    )
 
     desc = (description or "").lower()
     is_3d_like = bool(THREE_D_KEYWORDS.search(desc))
     is_plastic_continuum_like = bool(PLASTIC_CONTINUUM_KEYWORDS.search(desc))
     is_solid_like = any(token in desc for token in ("solid", "elastic", "beam", "continuum", "milling"))
 
-    if is_3d_like and not is_plastic_continuum_like and not is_solid_like:
+    if is_3d_like and is_plastic_continuum_like:
+        fixtures = (plastic_continuum_3d_fixture, plastic_continuum_fixture, solid_fixture, fluid_3d_fixture)
+    elif is_3d_like and not is_plastic_continuum_like and not is_solid_like:
         fixtures = (fluid_3d_fixture, fluid_fixture, plastic_continuum_fixture, solid_fixture)
     elif is_plastic_continuum_like:
         fixtures = (plastic_continuum_fixture, solid_fixture, fluid_fixture)
@@ -336,6 +351,9 @@ def infer_requested_simulation_type(description: str) -> str | None:
     if not text:
         return None
 
+    if PLASTIC_CONTINUUM_KEYWORDS.search(text):
+        return "continuum_dynamics"
+
     asks_for_type_change = bool(re.search(r"\b(simulation|simulaiton|type|switch|change|convert)\b", text))
     if not asks_for_type_change:
         return None
@@ -347,18 +365,35 @@ def infer_requested_simulation_type(description: str) -> str | None:
     return None
 
 
-def coerce_simulation_type(config_dict: Dict[str, Any], target_type: str) -> Dict[str, Any]:
+def infer_requested_material_type(description: str) -> str | None:
+    text = (description or "").lower()
+    if not text:
+        return None
+    if PLASTIC_CONTINUUM_KEYWORDS.search(text):
+        return "plastic_continuum"
+    return None
+
+
+def coerce_simulation_type(
+    config_dict: Dict[str, Any],
+    target_type: str,
+    material_type: str | None = None,
+) -> Dict[str, Any]:
     updated = json.loads(json.dumps(config_dict))
     updated["simulation_type"] = target_type
     updated.setdefault("solver_parameters", {})
 
     if target_type == "continuum_dynamics":
         updated["solver_parameters"].setdefault("continuum_dynamics", {})
+        if material_type == "plastic_continuum":
+            updated.pop("fluid_bodies", None)
+            updated["solver_parameters"].pop("fluid_dynamics", None)
         if not updated.get("continuum_bodies"):
             shape_names = [
                 shape["name"]
                 for shape in updated.get("geometries", {}).get("shapes", [])
                 if isinstance(shape, dict) and isinstance(shape.get("name"), str)
+                and not shape.get("name", "").lower().startswith("wall")
             ]
             if not shape_names and updated.get("fluid_bodies"):
                 shape_names = [
@@ -367,18 +402,45 @@ def coerce_simulation_type(config_dict: Dict[str, Any], target_type: str) -> Dic
                     if isinstance(body, dict) and isinstance(body.get("name"), str)
                 ]
             if shape_names:
+                if material_type == "plastic_continuum":
+                    material = {
+                        "type": "plastic_continuum",
+                        "density": 2600.0,
+                        "sound_speed": 23.179591595844596,
+                        "youngs_modulus": 5980000.0,
+                        "poisson_ratio": 0.3,
+                        "friction_angle": 0.5235987755982988,
+                        "cohesion": 0.0,
+                        "dilatancy_angle": 0.0,
+                    }
+                else:
+                    material = {
+                        "type": "general_continuum",
+                        "density": 1000.0,
+                        "sound_speed": 100.0,
+                        "youngs_modulus": 1000000.0,
+                        "poisson_ratio": 0.3,
+                    }
                 updated["continuum_bodies"] = [
                     {
                         "name": shape_names[0],
-                        "material": {
-                            "type": "general_continuum",
-                            "density": 1000.0,
-                            "sound_speed": 100.0,
-                            "youngs_modulus": 1000000.0,
-                            "poisson_ratio": 0.3,
-                        },
+                        "material": material,
                     }
                 ]
+        elif material_type == "plastic_continuum":
+            for body in updated.get("continuum_bodies", []):
+                if not isinstance(body, dict):
+                    continue
+                body["material"] = {
+                    "type": "plastic_continuum",
+                    "density": 2600.0,
+                    "sound_speed": 23.179591595844596,
+                    "youngs_modulus": 5980000.0,
+                    "poisson_ratio": 0.3,
+                    "friction_angle": 0.5235987755982988,
+                    "cohesion": 0.0,
+                    "dilatancy_angle": 0.0,
+                }
 
     if target_type == "fluid_dynamics":
         updated["solver_parameters"].setdefault("fluid_dynamics", {})
