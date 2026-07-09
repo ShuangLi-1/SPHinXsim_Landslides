@@ -124,7 +124,7 @@
     {
       "name": "WaterBody",
       "material": {
-        "type": "weakly_compressible_mixture",
+        "type": "weakly_compressible_multi_species",
         "species": [
           {
             "name": "Water",
