@@ -30,7 +30,9 @@ BODY_TYPE_RULES: str = (
     "(5) plastic_continuum material requires density, sound_speed, youngs_modulus, "
     "poisson_ratio, and friction_angle; cohesion and dilatancy_angle are optional. "
     "(6) observers[].variable.real_type must be a plain string such as 'Pressure', never a list. "
-    "(7) Return ONLY the JSON object - no markdown fences, no comments, no extra keys."
+    "(7) If the user mentions an STL file or .stl path, represent that geometry as "
+    "a triangle_mesh shape with file_name, translation, and scale. "
+    "(8) Return ONLY the JSON object - no markdown fences, no comments, no extra keys."
 )
 
 PLASTIC_CONTINUUM_KEYWORDS = re.compile(
@@ -39,7 +41,7 @@ PLASTIC_CONTINUUM_KEYWORDS = re.compile(
     r"plastic\s+material|plastic\s+soil|plastic\s+column|"
     r"material\s*type\s*(?:is|=)?\s*plastic[_\s-]?continu(?:um|umn)|"
     r"matertial\s*type\s*(?:is|=)?\s*plastic[_\s-]?continu(?:um|umn)|"
-    r"granular|soil|landslide|slope|column\s+collapse|column-collapse|"
+    r"granular|soil|landslide|landsldie|slope|column\s+collapse|column-collapse|"
     r"repose\s+angle|angle\s+of\s+repose|"
     r"drucker[-\s]?prager|friction\s+angle|cohesion|dilatancy"
     r")\b",
@@ -151,7 +153,7 @@ def example_config(description: str) -> Dict[str, Any]:
         / "repose_angle.json"
     )
 
-    desc = (description or "").lower()
+    desc = _description_without_stl_paths(description).lower()
     is_3d_like = bool(THREE_D_KEYWORDS.search(desc))
     is_plastic_continuum_like = bool(PLASTIC_CONTINUUM_KEYWORDS.search(desc))
     is_solid_like = any(token in desc for token in ("solid", "elastic", "beam", "continuum", "milling"))
@@ -192,6 +194,122 @@ def apply_explicit_instruction_overrides(cfg: Dict[str, Any], description: str) 
         updated.setdefault("geometries", {}).setdefault("global_resolution", {})["particle_spacing"] = (
             float(res_match.group(1)) / 1000.0
         )
+
+    return updated
+
+
+_STL_PATH_RE = re.compile(
+    r"(?P<path>(?:[./\\\w-]+[/\\])?[\w.-]+\.stl)",
+    re.IGNORECASE,
+)
+
+
+def _description_without_stl_paths(description: str) -> str:
+    return _STL_PATH_RE.sub(" ", description or "")
+
+
+def _primary_body_name(cfg: Dict[str, Any], section: str, fallback_keywords: tuple[str, ...]) -> str | None:
+    bodies = cfg.get(section)
+    if isinstance(bodies, list):
+        for body in bodies:
+            if isinstance(body, dict) and isinstance(body.get("name"), str):
+                return body["name"]
+
+    shapes = cfg.get("geometries", {}).get("shapes", [])
+    if isinstance(shapes, list):
+        for shape in shapes:
+            if not isinstance(shape, dict) or not isinstance(shape.get("name"), str):
+                continue
+            name = shape["name"]
+            lowered = name.lower()
+            if any(keyword in lowered for keyword in fallback_keywords):
+                return name
+    return None
+
+
+def _infer_stl_shape_name(cfg: Dict[str, Any], path: str, context: str) -> str | None:
+    context_without_path = context.replace(path, " ")
+    context_lowered = context_without_path.lower()
+    shapes = cfg.get("geometries", {}).get("shapes", [])
+    shape_names = [
+        shape.get("name")
+        for shape in shapes
+        if isinstance(shape, dict) and isinstance(shape.get("name"), str)
+    ]
+
+    for name in shape_names:
+        if name and name.lower() in context_lowered:
+            return name
+
+    soil_keywords = ("landslide", "landsldie", "soil", "granular", "moving")
+    boundary_keywords = ("channel", "terrain", "boundary", "wall", "fixed", "bed")
+    if any(keyword in context_lowered for keyword in boundary_keywords):
+        return _primary_body_name(cfg, "solid_bodies", ("wall", "boundary", "terrain", "channel"))
+    if any(keyword in context_lowered for keyword in soil_keywords):
+        return _primary_body_name(cfg, "continuum_bodies", ("granular", "soil", "slide", "body"))
+
+    return None
+
+
+def _triangle_mesh_shape(name: str, file_name: str) -> Dict[str, Any]:
+    return {
+        "name": name,
+        "type": "triangle_mesh",
+        "file_name": file_name,
+        "translation": [0.0, 0.0, 0.0],
+        "scale": 1.0,
+    }
+
+
+def apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
+    """Map natural-language STL references to triangle_mesh shape definitions."""
+    if not description or ".stl" not in description.lower():
+        return cfg
+
+    updated = json.loads(json.dumps(cfg))
+    geometries = updated.setdefault("geometries", {})
+    shapes = geometries.setdefault("shapes", [])
+    if not isinstance(shapes, list):
+        geometries["shapes"] = []
+        shapes = geometries["shapes"]
+
+    replacements: Dict[str, str] = {}
+    matches = list(_STL_PATH_RE.finditer(description))
+    for index, match in enumerate(matches):
+        path = match.group("path").replace("\\", "/")
+        previous_delimiters = [
+            description.rfind(delimiter, 0, match.start())
+            for delimiter in (".", ";", ",")
+        ]
+        window_start = max(max(previous_delimiters) + 1, match.start() - 80)
+        next_match_start = matches[index + 1].start() if index + 1 < len(matches) else len(description)
+        next_delimiters = [
+            pos
+            for delimiter in (".", ";", ",")
+            for pos in [description.find(delimiter, match.end(), next_match_start)]
+            if pos != -1
+        ]
+        window_end = min(next_delimiters) if next_delimiters else min(next_match_start, match.end() + 120)
+        context = description[window_start:window_end]
+        shape_name = _infer_stl_shape_name(updated, path, context)
+        if shape_name:
+            replacements[shape_name] = path
+
+    if not replacements:
+        return updated
+
+    seen: set[str] = set()
+    for index, shape in enumerate(shapes):
+        if not isinstance(shape, dict):
+            continue
+        name = shape.get("name")
+        if isinstance(name, str) and name in replacements:
+            shapes[index] = _triangle_mesh_shape(name, replacements[name])
+            seen.add(name)
+
+    for name, path in replacements.items():
+        if name not in seen:
+            shapes.append(_triangle_mesh_shape(name, path))
 
     return updated
 
@@ -347,7 +465,7 @@ def sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def infer_requested_simulation_type(description: str) -> str | None:
-    text = (description or "").lower()
+    text = _description_without_stl_paths(description).lower()
     if not text:
         return None
 
@@ -366,7 +484,7 @@ def infer_requested_simulation_type(description: str) -> str | None:
 
 
 def infer_requested_material_type(description: str) -> str | None:
-    text = (description or "").lower()
+    text = _description_without_stl_paths(description).lower()
     if not text:
         return None
     if PLASTIC_CONTINUUM_KEYWORDS.search(text):

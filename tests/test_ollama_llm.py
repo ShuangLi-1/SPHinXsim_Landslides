@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.llm.common import example_config
 from sphinxsim.llm.mock_llm import MockLLM
 from sphinxsim.llm.ollama_llm import OllamaLLM
 
@@ -161,6 +162,22 @@ class TestOllamaLLMGenerate:
         assert example_output["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
         assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
 
+    def test_stl_landslide_request_generates_triangle_mesh_shapes(self):
+        resp = _make_response({"message": {"role": "assistant", "content": "{}"}})
+        description = (
+            "Create a runnable 3D landslide simulation from two STL files: "
+            "./input/SlideBody.stl is the moving landslide soil body, and "
+            "./input/Channel.stl is the fixed terrain boundary."
+        )
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.generate(description)
+
+        shapes = {shape.name: shape for shape in cfg.geometries.shapes}
+        assert shapes["GranularBody"].type.value == "triangle_mesh"
+        assert shapes["GranularBody"].file_name == "./input/SlideBody.stl"
+        assert shapes["WallBoundary"].type.value == "triangle_mesh"
+        assert shapes["WallBoundary"].file_name == "./input/Channel.stl"
+
     def test_plastic_continuum_request_uses_soil_example_output(self):
         resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
@@ -301,6 +318,21 @@ class TestOllamaLLMUpdate:
         assert cfg.simulation_type.value == "continuum_dynamics"
         assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
         assert not cfg.fluid_bodies
+
+    def test_update_stl_landslide_request_replaces_shapes(self):
+        base = SimulationConfig.model_validate(example_config("3d landslide case"))
+        resp = _make_response({"message": {"role": "assistant", "content": "{}"}})
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.update(
+                base,
+                "Use ./input/SlideBody.stl as the landslide body and ./input/Channel.stl as the terrain.",
+            )
+
+        shapes = {shape.name: shape for shape in cfg.geometries.shapes}
+        assert shapes["GranularBody"].type.value == "triangle_mesh"
+        assert shapes["GranularBody"].file_name == "./input/SlideBody.stl"
+        assert shapes["WallBoundary"].type.value == "triangle_mesh"
+        assert shapes["WallBoundary"].file_name == "./input/Channel.stl"
 
 
 class TestOllamaLLMUpdatePatch:

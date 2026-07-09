@@ -11,6 +11,7 @@ import pytest
 
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.llm import get_llm
+from sphinxsim.llm.common import example_config
 from sphinxsim.llm.mock_llm import MockLLM
 from sphinxsim.llm.nvidia_nim_llm import NvidiaNIMLLM
 
@@ -123,6 +124,22 @@ class TestNvidiaNIMLLMGenerate:
         assert example_output["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
         assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
 
+    def test_stl_landslide_request_generates_triangle_mesh_shapes(self):
+        resp = _make_response(_nim_response("{}"))
+        description = (
+            "Create a runnable 3D landslide simulation from two STL files: "
+            "./input/SlideBody.stl is the moving landslide soil body, and "
+            "./input/Channel.stl is the fixed terrain boundary."
+        )
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.generate(description)
+
+        shapes = {shape.name: shape for shape in cfg.geometries.shapes}
+        assert shapes["GranularBody"].type.value == "triangle_mesh"
+        assert shapes["GranularBody"].file_name == "./input/SlideBody.stl"
+        assert shapes["WallBoundary"].type.value == "triangle_mesh"
+        assert shapes["WallBoundary"].file_name == "./input/Channel.stl"
+
     def test_network_error_raises_runtime_error(self):
         with patch("urllib.request.urlopen", side_effect=urllib_error.URLError("connection refused")):
             with pytest.raises(RuntimeError, match="Failed to contact NVIDIA NIM"):
@@ -231,6 +248,22 @@ class TestNvidiaNIMLLMUpdate:
         assert updated.simulation_type.value == "continuum_dynamics"
         assert updated.continuum_bodies[0].material.type.value == "plastic_continuum"
         assert not updated.fluid_bodies
+
+    def test_update_stl_landslide_request_replaces_shapes(self):
+        llm = NvidiaNIMLLM(api_key="test-key")
+        base = SimulationConfig.model_validate(example_config("3d landslide case"))
+        resp = _make_response(_nim_response("{}"))
+        with patch("urllib.request.urlopen", return_value=resp):
+            updated = llm.update(
+                base,
+                "Use ./input/SlideBody.stl as the landslide body and ./input/Channel.stl as the terrain.",
+            )
+
+        shapes = {shape.name: shape for shape in updated.geometries.shapes}
+        assert shapes["GranularBody"].type.value == "triangle_mesh"
+        assert shapes["GranularBody"].file_name == "./input/SlideBody.stl"
+        assert shapes["WallBoundary"].type.value == "triangle_mesh"
+        assert shapes["WallBoundary"].file_name == "./input/Channel.stl"
 
     def test_update_retry_payload_serializes_validation_errors(self):
         llm = NvidiaNIMLLM(api_key="test-key")

@@ -13,6 +13,7 @@ from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
 from sphinxsim.llm.common import (
     BODY_TYPE_RULES,
+    apply_stl_geometry_overrides,
     apply_shape_rename,
     coerce_simulation_type,
     dict_diff,
@@ -173,6 +174,10 @@ class NvidiaNIMLLM:
         return sanitize_config_dict(cfg)
 
     @staticmethod
+    def _apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
+        return apply_stl_geometry_overrides(cfg, description)
+
+    @staticmethod
     def _infer_requested_simulation_type(description: str) -> str | None:
         return infer_requested_simulation_type(description)
 
@@ -225,11 +230,13 @@ class NvidiaNIMLLM:
             raise ValueError("NVIDIA NIM returned an invalid generation response")
 
         merged = self._merge_dicts(example_cfg, data)
+        merged = self._apply_stl_geometry_overrides(merged, description)
         merged = self._sanitize_config_dict(merged)
         try:
             return SimulationConfig(**merged)
         except Exception:
             repaired = self._merge_dicts(merged, example_cfg)
+            repaired = self._apply_stl_geometry_overrides(repaired, description)
             repaired = self._sanitize_config_dict(repaired)
             return SimulationConfig(**repaired)
 
@@ -266,6 +273,7 @@ class NvidiaNIMLLM:
         requested_shape_rename = self._infer_requested_shape_rename(description)
         if requested_type is not None:
             merged = self._coerce_simulation_type(merged, requested_type, requested_material)
+        merged = self._apply_stl_geometry_overrides(merged, description)
         if requested_shape_rename is not None:
             merged = self._apply_shape_rename(merged, requested_shape_rename[0], requested_shape_rename[1])
         merged = self._sanitize_config_dict(merged)
@@ -298,6 +306,7 @@ class NvidiaNIMLLM:
                 retried = self._merge_dicts(existing_dict, retry_data)
                 if requested_type is not None:
                     retried = self._coerce_simulation_type(retried, requested_type, requested_material)
+                retried = self._apply_stl_geometry_overrides(retried, description)
                 if requested_shape_rename is not None:
                     retried = self._apply_shape_rename(retried, requested_shape_rename[0], requested_shape_rename[1])
                 retried = self._sanitize_config_dict(retried)
@@ -308,6 +317,7 @@ class NvidiaNIMLLM:
 
             if requested_type is not None:
                 coerced = self._coerce_simulation_type(existing_dict, requested_type, requested_material)
+                coerced = self._apply_stl_geometry_overrides(coerced, description)
                 if requested_shape_rename is not None:
                     coerced = self._apply_shape_rename(coerced, requested_shape_rename[0], requested_shape_rename[1])
                 coerced = self._sanitize_config_dict(coerced)

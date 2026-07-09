@@ -4,7 +4,12 @@ import pytest
 from pydantic import ValidationError
 
 from sphinxsim.config.schemas import SimulationConfig
-from sphinxsim.llm.common import example_config
+from sphinxsim.llm.common import (
+    apply_stl_geometry_overrides,
+    example_config,
+    infer_requested_material_type,
+    infer_requested_simulation_type,
+)
 from sphinxsim.llm.mock_llm import MockLLM, PhysicsType, _detect_physics
 
 
@@ -147,3 +152,38 @@ class TestExampleConfig:
         assert len(example["geometries"]["system_domain"]["lower_bound"]) == 3
         assert example["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
         assert all(shape["type"] != "multipolygon" for shape in example["geometries"]["shapes"])
+
+
+class TestSTLGeometryOverrides:
+    def test_landslide_stl_files_replace_body_and_boundary_shapes(self):
+        cfg = example_config("3d landslide case")
+        updated = apply_stl_geometry_overrides(
+            cfg,
+            "Create a runnable 3D landslide simulation from two STL files: "
+            "./input/SlideBody.stl is the moving landslide soil body, and "
+            "./input/Channel.stl is the fixed terrain boundary.",
+        )
+
+        shapes = {shape["name"]: shape for shape in updated["geometries"]["shapes"]}
+        assert shapes["GranularBody"]["type"] == "triangle_mesh"
+        assert shapes["GranularBody"]["file_name"] == "./input/SlideBody.stl"
+        assert shapes["GranularBody"]["translation"] == [0.0, 0.0, 0.0]
+        assert shapes["GranularBody"]["scale"] == pytest.approx(1.0)
+        assert shapes["WallBoundary"]["type"] == "triangle_mesh"
+        assert shapes["WallBoundary"]["file_name"] == "./input/Channel.stl"
+
+        restored = SimulationConfig.model_validate(updated)
+        assert restored.continuum_bodies[0].name == "GranularBody"
+        assert restored.solid_bodies[0].name == "WallBoundary"
+
+    def test_stl_file_name_does_not_drive_material_intent(self):
+        description = "Create a 3D case from ./input/Landslide.stl and ./input/Channel.stl."
+
+        assert infer_requested_simulation_type(description) is None
+        assert infer_requested_material_type(description) is None
+
+    def test_textual_landslide_typo_drives_material_intent(self):
+        description = "Create a 3D landsldie case using ./input/SlideBody.stl as the moving body."
+
+        assert infer_requested_simulation_type(description) == "continuum_dynamics"
+        assert infer_requested_material_type(description) == "plastic_continuum"
