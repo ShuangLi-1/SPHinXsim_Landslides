@@ -1009,64 +1009,57 @@ class TestShellPreview:
 
     def test_shell_preview_calls_visualizer(self, build_temp_path, capsys):
         _, rel = self._write_config(build_temp_path)
-        fake_visualizer = MagicMock()
 
         inputs = [f"load {rel}", "preview", "exit"]
         with patch.dict(sys.modules, {"pyvista": MagicMock()}):
             with patch(
-                "sphinxsim.visualization.preview.ConfigVisualizer",
-                return_value=fake_visualizer,
-            ) as MockViz:
+                "sphinxsim.cli._ShellPreviewRuntime.show_or_update",
+                return_value=0,
+            ) as mock_show_or_update:
                 with patch("builtins.input", side_effect=inputs):
                     rc = main(["shell"])
 
         assert rc == 0
-        MockViz.assert_called_once()
-        fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
-            screenshot_path=None,
-            with_particles=False,
-        )
+        mock_show_or_update.assert_called_once()
+        _, kwargs = mock_show_or_update.call_args
+        assert kwargs.get("use_cpp") is True
+        assert kwargs.get("with_particles") is False
 
     def test_shell_preview_no_cpp_flag(self, build_temp_path):
         _, rel = self._write_config(build_temp_path)
-        fake_visualizer = MagicMock()
 
         inputs = [f"load {rel}", "preview --no-cpp", "exit"]
         with patch.dict(sys.modules, {"pyvista": MagicMock()}):
             with patch(
-                "sphinxsim.visualization.preview.ConfigVisualizer",
-                return_value=fake_visualizer,
-            ):
+                "sphinxsim.cli._ShellPreviewRuntime.show_or_update",
+                return_value=0,
+            ) as mock_show_or_update:
                 with patch("builtins.input", side_effect=inputs):
                     rc = main(["shell"])
 
         assert rc == 0
-        fake_visualizer.preview.assert_called_once_with(
-            use_cpp=False,
-            screenshot_path=None,
-            with_particles=False,
-        )
+        mock_show_or_update.assert_called_once()
+        _, kwargs = mock_show_or_update.call_args
+        assert kwargs.get("use_cpp") is False
+        assert kwargs.get("with_particles") is False
 
     def test_shell_preview_with_particles_flag(self, build_temp_path):
         _, rel = self._write_config(build_temp_path)
-        fake_visualizer = MagicMock()
 
         inputs = [f"load {rel}", "preview --with-particles", "exit"]
         with patch.dict(sys.modules, {"pyvista": MagicMock()}):
             with patch(
-                "sphinxsim.visualization.preview.ConfigVisualizer",
-                return_value=fake_visualizer,
-            ):
+                "sphinxsim.cli._ShellPreviewRuntime.show_or_update",
+                return_value=0,
+            ) as mock_show_or_update:
                 with patch("builtins.input", side_effect=inputs):
                     rc = main(["shell"])
 
         assert rc == 0
-        fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
-            screenshot_path=None,
-            with_particles=True,
-        )
+        mock_show_or_update.assert_called_once()
+        _, kwargs = mock_show_or_update.call_args
+        assert kwargs.get("use_cpp") is True
+        assert kwargs.get("with_particles") is True
 
     def test_shell_help_mentions_preview(self, build_temp_path, capsys):
         inputs = ["help", "exit"]

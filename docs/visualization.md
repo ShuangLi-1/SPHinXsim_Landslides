@@ -13,6 +13,14 @@ PyVista is required:
 pip install sphinxsim[visualization]
 ```
 
+For responsive persistent preview in interactive shell mode, install
+`pyvistaqt` with a Qt binding backend:
+
+```bash
+pip install pyvistaqt PySide6
+# alternatively: pip install pyvistaqt PyQt5
+```
+
 The compiled C++ extension (`_sphinxsys_core_2d` or `_sphinxsys_core_3d`) is
 required only for C++ geometry rendering (simulation shapes and oriented-box
 meshes). Without it (or when using `--no-cpp`), preview still opens and
@@ -117,6 +125,14 @@ This is useful for:
 
 `preview` is available as a first-class shell command:
 
+In shell mode, `preview` keeps a persistent window and returns control to the
+shell prompt. Running `preview` again updates the existing window.
+
+Notes:
+- `preview --screenshot ...` is one-shot and does not use the persistent window.
+- Persistent interactive mode relies on `pyvistaqt` plus a Qt backend (for
+   example `PySide6` or `PyQt5`).
+
 ```
 sphinxsim> load config.json
 ✅ Loaded config from config.json
@@ -179,6 +195,7 @@ viz.preview(screenshot_path="preview.png")  # save screenshot, no window
 |---|---|---|---|
 | `title` | `str` | `"SPHinXsim - Configuration Preview"` | Window title |
 | `use_cpp` | `bool` | `True` | Run C++ geometry build. Raises `ImportError` if extension not installed. |
+| `with_particles` | `bool` | `False` | Run particle generation and overlay latest particles per body. In shell persistent mode, enabling this always redraws the scene. |
 | `screenshot_path` | `str \| Path \| None` | `None` | When set, saves a screenshot to this path instead of opening a window. Implies off-screen rendering. |
 
 After rendering, the CLI reports which tier was used:

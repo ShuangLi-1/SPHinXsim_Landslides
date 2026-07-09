@@ -91,6 +91,8 @@ Notes:
 - `sphinxsim shell` starts with no file loaded.
 - Relative file paths inside the shell resolve from the current directory first, then fall back to `.build-temp/`.
 - `validate` always reloads from disk, so external edits are picked up immediately.
+- In shell mode, `preview` keeps a persistent window and returns control to the prompt. Running `preview` again updates the same window.
+- For responsive persistent preview, install `pyvistaqt` and a Qt backend (`PySide6` or `PyQt5`).
 
 ## Geometry lock behavior
 
@@ -206,6 +208,13 @@ Requires the optional `[visualization]` extra:
 
 ```bash
 pip install sphinxsim[visualization]
+```
+
+For responsive persistent shell preview:
+
+```bash
+pip install pyvistaqt PySide6
+# or: pip install pyvistaqt PyQt5
 ```
 
 See [Visualization](visualization.md) for full details.
