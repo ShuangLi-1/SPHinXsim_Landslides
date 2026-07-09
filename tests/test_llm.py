@@ -4,6 +4,7 @@ import pytest
 from pydantic import ValidationError
 
 from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.llm.common import example_config
 from sphinxsim.llm.mock_llm import MockLLM, PhysicsType, _detect_physics
 
 
@@ -130,3 +131,11 @@ class TestMockLLM:
         updated = self.llm.update(base, "add observer named outlet at (1.0, 0.5)")
         assert len(updated.observers) == len(base.observers) + 1
         assert updated.observers[-1].name == "outlet"
+
+
+class TestExampleConfig:
+    def test_3d_dam_break_uses_3d_fixture(self):
+        example = example_config("3d dam break")
+
+        assert len(example["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert all(shape["type"] != "multipolygon" for shape in example["geometries"]["shapes"])

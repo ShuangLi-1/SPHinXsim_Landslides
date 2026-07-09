@@ -95,6 +95,17 @@ class TestNvidiaNIMLLMGenerate:
         assert example_material["type"] == "plastic_continuum"
         assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
 
+    def test_3d_request_uses_3d_example_output(self):
+        resp = _make_response(_nim_response(_FLUID_CONFIG.model_dump_json(exclude_none=True)))
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            self.llm.generate("3d dam break")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_output = user_content["example_output"]
+        assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
+
     def test_network_error_raises_runtime_error(self):
         with patch("urllib.request.urlopen", side_effect=urllib_error.URLError("connection refused")):
             with pytest.raises(RuntimeError, match="Failed to contact NVIDIA NIM"):

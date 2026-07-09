@@ -137,6 +137,17 @@ class TestOllamaLLMGenerate:
         user_content = json.loads(body["messages"][1]["content"])
         assert "example_output" in user_content
 
+    def test_3d_request_uses_3d_example_output(self):
+        resp = _make_response(_mock_raw(_FLUID_CONFIG))
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            self.llm.generate("3d dam break")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_output = user_content["example_output"]
+        assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
+
     def test_plastic_continuum_request_uses_soil_example_output(self):
         resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:

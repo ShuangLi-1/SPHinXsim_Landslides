@@ -408,6 +408,34 @@ class TestSimulationConfig:
         assert triangle_mesh.type.value == "triangle_mesh"
         assert triangle_mesh.file_name == "tetra.stl"
 
+    def test_3d_dambreak_fixture_uses_supported_shapes(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
+        data = json.loads(data_path.read_text())
+
+        cfg = SimulationConfig.model_validate(data)
+
+        assert len(cfg.geometries.system_domain.lower_bound) == 3
+        assert all(shape.type.value != "multipolygon" for shape in cfg.geometries.shapes)
+
+    def test_3d_config_rejects_multipolygon_shape(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
+        data = json.loads(data_path.read_text())
+        data["geometries"]["shapes"][0] = {
+            "name": "WaterBody",
+            "type": "multipolygon",
+            "polygons": [
+                {
+                    "operation": "union",
+                    "type": "bounding_box",
+                    "lower_bound": [0.0, 0.0],
+                    "upper_bound": [1.0, 1.0],
+                }
+            ],
+        }
+
+        with pytest.raises(ValidationError, match="multipolygon shapes are 2D-only"):
+            SimulationConfig.model_validate(data)
+
     def test_shape_duplicate_name_rejected(self):
         geometries = {
             "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
