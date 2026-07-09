@@ -452,6 +452,7 @@ def cmd_preview(args: argparse.Namespace) -> int:
     use_cpp = not getattr(args, "no_cpp", False)
     off_screen = getattr(args, "off_screen", False)
     screenshot_path = getattr(args, "screenshot", None)
+    with_particles = getattr(args, "with_particles", False)
 
     # Screenshot mode implies off-screen rendering.
     if screenshot_path:
@@ -460,6 +461,8 @@ def cmd_preview(args: argparse.Namespace) -> int:
     print(f"🖼  Building configuration preview for: {resolved_config_path}")
     if use_cpp:
         print("   Attempting C++ geometry build for accurate VTP meshes...")
+        if with_particles:
+            print("   Particle generation overlay is enabled (--with-particles).")
     else:
         print("   Skipping C++ geometry build (--no-cpp).")
 
@@ -470,7 +473,11 @@ def cmd_preview(args: argparse.Namespace) -> int:
         off_screen=off_screen,
     )
     try:
-        visualizer.preview(use_cpp=use_cpp, screenshot_path=screenshot_path)
+        visualizer.preview(
+            use_cpp=use_cpp,
+            screenshot_path=screenshot_path,
+            with_particles=with_particles,
+        )
         if use_cpp:
             if visualizer.used_cpp_geometry:
                 print("✅ Preview used C++ geometry (VTP meshes).")
@@ -571,7 +578,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print(
         "Commands: load FILE, generate DESCRIPTION FILE, "
         "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, preview [--no-cpp] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+        "validate, run, preview [--no-cpp] [--with-particles] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
     print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
@@ -611,6 +618,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  validate                        - Reload and validate config from disk")
             print("  preview                         - Render geometry/BC preview (requires pyvista)")
             print("  preview --no-cpp                - Preview without C++ geometry build")
+            print("  preview --with-particles        - Run particle generation and overlay particles")
             print("  preview --screenshot FILE        - Save a screenshot to FILE instead of interactive window")
             print("  run                             - Run simulation from loaded config")
             print("  lock-geometry                   - Manually lock geometry updates")
@@ -758,6 +766,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
             no_cpp = "--no-cpp" in parts
+            with_particles = "--with-particles" in parts
             # Extract --screenshot / -s value from shell input
             screenshot_path = None
             if "--screenshot" in parts:
@@ -772,6 +781,7 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 argparse.Namespace(
                     config_file=str(config_path),
                     no_cpp=no_cpp,
+                    with_particles=with_particles,
                     off_screen=False,
                     screenshot=screenshot_path,
                 )
@@ -938,6 +948,11 @@ def _build_parser() -> argparse.ArgumentParser:
         "--no-cpp",
         action="store_true",
         help="Skip C++ geometry build (no shapes rendered without C++).",
+    )
+    prev.add_argument(
+        "--with-particles",
+        action="store_true",
+        help="Also run particle generation and overlay the latest generated particles per body.",
     )
     prev.add_argument(
         "--off-screen",
