@@ -659,6 +659,12 @@ class _ShellPreviewRuntime:
 
         try:
             import pyvista as pv
+
+            # On some Windows setups, Qt fails to initialize OpenGL contexts
+            # unless software rendering is requested before Qt is imported.
+            if sys.platform.startswith("win"):
+                os.environ.setdefault("QT_OPENGL", "software")
+
             pyvistaqt_error: Exception | None = None
             try:
                 from pyvistaqt import BackgroundPlotter  # type: ignore[import]
@@ -668,11 +674,23 @@ class _ShellPreviewRuntime:
 
             if self.plotter is None:
                 if BackgroundPlotter is not None:
-                    self.plotter = BackgroundPlotter(
-                        title="SPHinXsim - Configuration Preview",
-                        show=True,
-                    )
-                    self._using_background_plotter = True
+                    try:
+                        self.plotter = BackgroundPlotter(
+                            title="SPHinXsim - Configuration Preview",
+                            show=True,
+                        )
+                        self._using_background_plotter = True
+                    except Exception as exc:
+                        pyvistaqt_error = exc
+                        self.plotter = pv.Plotter(title="SPHinXsim - Configuration Preview", off_screen=False)
+                        self._using_background_plotter = False
+                        detail = f" ({pyvistaqt_error})" if pyvistaqt_error is not None else ""
+                        print(
+                            "ℹ️ pyvistaqt background mode could not initialize"
+                            f"{detail}; falling back to standard Plotter.\n"
+                            "   If you see OpenGL init warnings, keep QT_OPENGL=software and update your GPU drivers.",
+                            file=sys.stderr,
+                        )
                 else:
                     self.plotter = pv.Plotter(title="SPHinXsim - Configuration Preview", off_screen=False)
                     self._using_background_plotter = False
@@ -690,7 +708,6 @@ class _ShellPreviewRuntime:
             visualizer._configure_default_view(self.plotter, ndim)
             self.plotter.add_axes()
             self.plotter.show_grid(font_size=10)
-            visualizer._add_view_direction_widgets(self.plotter, ndim)
 
             if vtp_dir:
                 mode_label = "VTP geometry"
