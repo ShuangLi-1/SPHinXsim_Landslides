@@ -294,12 +294,7 @@ class ConfigVisualizer:
         dim_label = "2-D" if ndim == 2 else "3-D"
         sim_type_label = self.config.simulation_type.value.replace("_", " ").title()
         config_info = f"{dim_label}  •  {sim_type_label}  •  {mode_label}"
-        plotter.add_text(
-            config_info,
-            position="upper_edge",
-            font_size=10,
-            color="cyan",
-        )
+        self._add_config_info_text(plotter, config_info, ndim)
 
         if screenshot_path is not None:
             plotter.screenshot(str(screenshot_path))
@@ -374,7 +369,8 @@ class ConfigVisualizer:
         _, height = plotter.window_size
         size = 9
         margin_x = 14.0
-        margin_top = 32.0
+        # In 3-D keep the single icon row lower so top-center info text stays clear.
+        margin_top = 76.0 if ndim == 3 else 32.0
         y0 = max(10.0, float(height) - margin_top)
 
         plotter.add_text(
@@ -398,6 +394,24 @@ class ConfigVisualizer:
                 color_on="dodgerblue",
                 color_off="gray",
             )
+
+    def _add_config_info_text(self, plotter: Any, config_info: str, ndim: int) -> None:
+        """Add the simulation-info overlay text in a non-overlapping location."""
+        if ndim == 2:
+            plotter.add_text(
+                config_info,
+                position="upper_edge",
+                font_size=10,
+                color="cyan",
+            )
+            return
+
+        plotter.add_text(
+            config_info,
+            position="upper_edge",
+            font_size=10,
+            color="cyan",
+        )
 
     def _try_build_geometries(self, ndim: int, with_particles: bool = False) -> Path | None:
         """Run buildGeometries() and return the VTP output directory, or None.

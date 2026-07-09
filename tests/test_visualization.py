@@ -351,6 +351,82 @@ class TestPreviewViewMode:
 
         assert fake_plotter.titles == ["+z", "-z"]
 
+    def test_3d_widgets_are_placed_lower_than_2d(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
+
+        class FakePlotter:
+            window_size = (1200, 800)
+
+            def __init__(self):
+                self.positions: list[tuple[float, float]] = []
+
+            def add_text(self, *args, **kwargs):
+                return None
+
+            def add_radio_button_widget(self, callback, group, value, title, **kwargs):
+                self.positions.append(kwargs.get("position"))
+                return None
+
+        plotter_2d = FakePlotter()
+        viz._add_view_direction_widgets(plotter_2d, ndim=2)
+
+        plotter_3d = FakePlotter()
+        viz._add_view_direction_widgets(plotter_3d, ndim=3)
+
+        assert plotter_2d.positions
+        assert plotter_3d.positions
+        y_2d = plotter_2d.positions[0][1]
+        y_3d = plotter_3d.positions[0][1]
+        assert y_3d < y_2d
+
+    def test_3d_widgets_use_single_row(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
+
+        class FakePlotter:
+            window_size = (1200, 800)
+
+            def __init__(self):
+                self.positions: list[tuple[float, float]] = []
+
+            def add_text(self, *args, **kwargs):
+                return None
+
+            def add_radio_button_widget(self, callback, group, value, title, **kwargs):
+                self.positions.append(kwargs.get("position"))
+                return None
+
+        fake_plotter = FakePlotter()
+        viz._add_view_direction_widgets(fake_plotter, ndim=3)
+
+        unique_y = {pos[1] for pos in fake_plotter.positions}
+        assert len(unique_y) == 1
+
+    def test_3d_config_info_is_centered_top(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
+
+        class FakePlotter:
+            window_size = (1200, 800)
+
+            def __init__(self):
+                self.calls: list[dict[str, Any]] = []
+
+            def add_text(self, text, **kwargs):
+                self.calls.append({"text": text, **kwargs})
+                return None
+
+        fake_plotter = FakePlotter()
+        viz._add_config_info_text(fake_plotter, "3-D  •  Fluid Dynamics  •  VTP geometry", ndim=3)
+
+        assert len(fake_plotter.calls) == 1
+        position = fake_plotter.calls[0].get("position")
+        assert position == "upper_edge"
+
 
 class TestPreviewObservers:
     def test_populate_plotter_renders_observer_points(self, fluid_config, tmp_path):
