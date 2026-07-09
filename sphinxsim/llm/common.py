@@ -261,6 +261,17 @@ def _triangle_mesh_shape(name: str, file_name: str) -> Dict[str, Any]:
     }
 
 
+def _shape_reference_names(shape: Dict[str, Any]) -> set[str]:
+    refs: set[str] = set()
+    original = shape.get("original")
+    if isinstance(original, str):
+        refs.add(original)
+    sub_shapes = shape.get("sub_shapes")
+    if isinstance(sub_shapes, list):
+        refs.update(item for item in sub_shapes if isinstance(item, str))
+    return refs
+
+
 def apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
     """Map natural-language STL references to triangle_mesh shape definitions."""
     if not description or ".stl" not in description.lower():
@@ -298,6 +309,28 @@ def apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[
     if not replacements:
         return updated
 
+    shapes_by_name = {
+        shape.get("name"): shape
+        for shape in shapes
+        if isinstance(shape, dict) and isinstance(shape.get("name"), str)
+    }
+    removable_helpers: set[str] = set()
+    pending_helpers: list[str] = []
+    for name in replacements:
+        old_shape = shapes_by_name.get(name)
+        if not isinstance(old_shape, dict):
+            continue
+        pending_helpers.extend(_shape_reference_names(old_shape))
+
+    while pending_helpers:
+        helper_name = pending_helpers.pop()
+        if helper_name in removable_helpers:
+            continue
+        removable_helpers.add(helper_name)
+        helper_shape = shapes_by_name.get(helper_name)
+        if isinstance(helper_shape, dict):
+            pending_helpers.extend(_shape_reference_names(helper_shape))
+
     seen: set[str] = set()
     for index, shape in enumerate(shapes):
         if not isinstance(shape, dict):
@@ -311,7 +344,54 @@ def apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[
         if name not in seen:
             shapes.append(_triangle_mesh_shape(name, path))
 
+    referenced_after_replace: set[str] = set()
+    body_names: set[str] = set()
+    for section in ("fluid_bodies", "continuum_bodies", "solid_bodies"):
+        for body in updated.get(section, []):
+            if isinstance(body, dict) and isinstance(body.get("name"), str):
+                body_names.add(body["name"])
+    settings = updated.get("particle_generation", {}).get("settings", {})
+    for body in settings.get("bodies", []):
+        if isinstance(body, dict) and isinstance(body.get("name"), str):
+            body_names.add(body["name"])
+
+    for shape in shapes:
+        if isinstance(shape, dict) and shape.get("name") not in removable_helpers:
+            referenced_after_replace.update(_shape_reference_names(shape))
+
+    geometries["shapes"] = [
+        shape
+        for shape in shapes
+        if not (
+            isinstance(shape, dict)
+            and isinstance(shape.get("name"), str)
+            and shape["name"] in removable_helpers
+            and shape["name"] not in referenced_after_replace
+            and shape["name"] not in body_names
+        )
+    ]
+
     return updated
+
+
+_SHAPE_FIELDS_BY_TYPE = {
+    "box": {"name", "type", "half_size", "transform"},
+    "bounding_box": {"name", "type", "lower_bound", "upper_bound"},
+    "expanded_box": {"name", "type", "original", "expansion"},
+    "complex_shape": {"name", "type", "sub_shapes", "operations"},
+    "multipolygon": {"name", "type", "polygons"},
+    "triangle_mesh": {"name", "type", "file_name", "translation", "scale"},
+}
+
+
+def _strip_shape_fields_for_type(shape: Dict[str, Any]) -> Dict[str, Any]:
+    shape_type = shape.get("type")
+    if not isinstance(shape_type, str):
+        return shape
+    allowed = _SHAPE_FIELDS_BY_TYPE.get(shape_type)
+    if allowed is None:
+        return shape
+    return {key: value for key, value in shape.items() if key in allowed}
 
 
 def sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
@@ -392,6 +472,9 @@ def sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 else item
                 for item in sub_shapes
             ]
+
+    geometries["shapes"] = [_strip_shape_fields_for_type(shape) for shape in shapes]
+    shapes = geometries["shapes"]
 
     for section in ("fluid_bodies", "solid_bodies", "continuum_bodies"):
         for body in updated.get(section, []):

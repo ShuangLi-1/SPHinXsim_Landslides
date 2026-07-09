@@ -9,6 +9,7 @@ from sphinxsim.llm.common import (
     example_config,
     infer_requested_material_type,
     infer_requested_simulation_type,
+    sanitize_config_dict,
 )
 from sphinxsim.llm.mock_llm import MockLLM, PhysicsType, _detect_physics
 
@@ -171,10 +172,24 @@ class TestSTLGeometryOverrides:
         assert shapes["GranularBody"]["scale"] == pytest.approx(1.0)
         assert shapes["WallBoundary"]["type"] == "triangle_mesh"
         assert shapes["WallBoundary"]["file_name"] == "./input/Channel.stl"
+        assert "WallInnerBox" not in shapes
+        assert "WallOuterBox" not in shapes
 
         restored = SimulationConfig.model_validate(updated)
         assert restored.continuum_bodies[0].name == "GranularBody"
         assert restored.solid_bodies[0].name == "WallBoundary"
+
+    def test_sanitize_removes_shape_fields_that_do_not_match_type(self):
+        cfg = example_config("3d landslide case")
+        cfg["geometries"]["shapes"][0]["file_name"] = "./input/SlideBody.stl"
+        cfg["geometries"]["shapes"][0]["scale"] = 1.0
+
+        sanitized = sanitize_config_dict(cfg)
+
+        granular = sanitized["geometries"]["shapes"][0]
+        assert granular["type"] == "bounding_box"
+        assert "file_name" not in granular
+        assert "scale" not in granular
 
     def test_stl_file_name_does_not_drive_material_intent(self):
         description = "Create a 3D case from ./input/Landslide.stl and ./input/Channel.stl."
