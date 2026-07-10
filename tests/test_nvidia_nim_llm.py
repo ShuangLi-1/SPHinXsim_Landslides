@@ -164,10 +164,37 @@ class TestNvidiaNIMLLMGenerate:
                 },
             }
         ]
-        resp = _make_response(_nim_response(json.dumps(malformed)))
-        with patch("urllib.request.urlopen", return_value=resp):
+        first = _make_response(_nim_response(json.dumps(malformed)))
+        repaired = MockLLM().generate("granular soil column collapse")
+        second = _make_response(_nim_response(repaired.model_dump_json(exclude_none=True)))
+        with patch("urllib.request.urlopen", side_effect=[first, second]) as mock_open:
             cfg = self.llm.generate("soil column collapse")
         assert isinstance(cfg, SimulationConfig)
+        assert mock_open.call_count == 2
+
+        retry_body = json.loads(mock_open.call_args_list[1][0][0].data.decode("utf-8"))
+        retry_user = json.loads(retry_body["messages"][1]["content"])
+        assert retry_user["description"] == "soil column collapse"
+        assert retry_user["candidate_config"]["simulation_type"] == "continuum_dynamics"
+        assert retry_user["validation_errors"]
+        assert retry_user["example_output"]["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
+
+    def test_generate_retries_only_once_then_uses_template_fallback(self):
+        malformed = _FLUID_CONFIG.model_dump(exclude_none=True)
+        malformed["simulation_type"] = "continuum_dynamics"
+        malformed["geometries"]["shapes"][0]["type"] = "box"
+        malformed["geometries"]["shapes"][0].pop("half_size", None)
+        malformed["geometries"]["shapes"][0].pop("transform", None)
+
+        first = _make_response(_nim_response(json.dumps(malformed)))
+        second = _make_response(_nim_response(json.dumps(malformed)))
+        with patch("urllib.request.urlopen", side_effect=[first, second]) as mock_open:
+            cfg = self.llm.generate("soil column collapse")
+
+        assert isinstance(cfg, SimulationConfig)
+        assert cfg.simulation_type.value == "continuum_dynamics"
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert mock_open.call_count == 2
 
     def test_degraded_primary_model_falls_back_to_secondary(self):
         llm = NvidiaNIMLLM(

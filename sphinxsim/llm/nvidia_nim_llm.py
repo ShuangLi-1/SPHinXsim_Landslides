@@ -234,7 +234,39 @@ class NvidiaNIMLLM:
         merged = self._sanitize_config_dict(merged)
         try:
             return SimulationConfig(**merged)
-        except Exception:
+        except ValidationError as exc:
+            safe_validation_errors = json_safe_errors(exc.errors())
+            retry_system = (
+                "You are repairing a newly generated simulator config that failed schema validation. "
+                f"Continue to satisfy this original description: \"{description}\". "
+                "Return ONLY full valid JSON. Preserve valid user-requested values and structure. "
+                "Fix all reported validation errors. "
+            ) + self._BODY_TYPE_RULES
+            retry_user = {
+                "description": description,
+                "candidate_config": merged,
+                "validation_errors": safe_validation_errors,
+                "example_output": example_cfg,
+            }
+            retry_content = self._post_chat(
+                messages=[
+                    {"role": "system", "content": retry_system},
+                    {"role": "user", "content": json.dumps(retry_user)},
+                ],
+                temperature=0.0,
+            )
+            retry_data = self._load_json_content(retry_content)
+            if isinstance(retry_data, dict):
+                retried = self._merge_dicts(example_cfg, retry_data)
+                retried = self._apply_stl_geometry_overrides(retried, description)
+                retried = self._sanitize_config_dict(retried)
+                try:
+                    return SimulationConfig(**retried)
+                except ValidationError:
+                    pass
+
+            # The single LLM repair attempt also failed schema validation.
+            # Restore the validated example structure as the final deterministic fallback.
             repaired = self._merge_dicts(merged, example_cfg)
             repaired = self._apply_stl_geometry_overrides(repaired, description)
             repaired = self._sanitize_config_dict(repaired)
