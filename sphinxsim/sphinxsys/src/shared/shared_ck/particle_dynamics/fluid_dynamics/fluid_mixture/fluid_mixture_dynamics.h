@@ -21,41 +21,36 @@
  *                                                                           *
  * ------------------------------------------------------------------------- */
 /**
- * @file    material_builder.h
- * @brief   TBD.
- * @author  Xiangyu Hu
+ * @file 	fluid_mixture_dynamics.h
+ * @brief 	TBD.
+ * @details TBD.
+ * @author	Xiangyu Hu
  */
 
-#ifndef MATERIAL_BUILDER_H
-#define MATERIAL_BUILDER_H
+#ifndef FLUID_MIXTURE_DYNAMICS_H
+#define FLUID_MIXTURE_DYNAMICS_H
 
-#include "base_simulation_builder.h"
+#include "base_fluid_dynamics.h"
+#include "weakly_compressible_fluid.h"
 
 namespace SPH
 {
-class EntityManager;
-class SPHBody;
-using NamesAndDensities = StdVec<std::pair<std::string, Real>>;
-
-struct ThermalBoundaryConfig
+namespace fluid_dynamics
 {
-    std::string boundary_type; // "Dirichlet",  "Neumann" or "Robin"
-};
-
-class MaterialBuilder
+template <class LocalDynamicsType>
+class MultiPhaseAcousticStep : public AcousticStep<LocalDynamicsType>
 {
   public:
-    void addMaterial(EntityManager &config_manager, SPHBody &sph_body, const json &config);
-    static StdVec<Real> parseMixtureFractions(const ScalingConfig &scaling_config, const json &config);
+    template <class DynamicsIdentifier>
+    explicit MultiPhaseAcousticStep(DynamicsIdentifier &identifier);
+    virtual ~MultiPhaseAcousticStep(){};
 
-  private:
-    void addMatterMaterial(EntityManager &config_manager, SPHBody &sph_body, const json &config);
-    NamesAndDensities parseNamesAndDensities(const ScalingConfig &scaling_config, const json &config);
-    void addOtherMaterialProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
-    void addViscosity(EntityManager &config_manager, SPHBody &sph_body, const json &config);
-    void addThermalProperties(EntityManager &config_manager, SPHBody &sph_body, const json &config);
-    ThermalBoundaryConfig parseThermalBoundaryConfig(const json &config);
-    Real getWeaklyCompressibleSoundSpeed(EntityManager &config_manager);
+  protected:
+    WeaklyCompressibleMultiPhase &multi_phase_fluid_;
+    DiscreteVariable<Real> *dv_phi_list_, *dv_mass_list_, *dev_dmass_dt_list_;
+    DiscreteVariable<Vecd> *dv_velocity_list_, dv_momentum_list_, *dv_dmomentum_dt_list_;
 };
+
+} // namespace fluid_dynamics
 } // namespace SPH
-#endif // MATERIAL_BUILDER_H
+#endif // FLUID_MIXTURE_DYNAMICS_H

@@ -63,7 +63,8 @@ class GeometryBuilder
     static SystemDomainConfig parseSystemDomainConfig(const ScalingConfig &scaling_config, const json &config);
     static Real parseGlobalResolution(const ScalingConfig &scaling_config, const json &config);
 #ifdef SPHINXSYS_2D
-    static MultiPolygon parseMultiPolygon(const ScalingConfig &scaling_config, const json &config);
+    static MultiPolygon parseMultiPolygon(
+        const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
 #endif
 
   private:
@@ -71,8 +72,10 @@ class GeometryBuilder
     EntityManager config_manager_;
     json loadConfig();
 
-    static Shape *
-    addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+    static void addPrimitive(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+    static TransformGeometryBox fetch_or_parseBox(
+        const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+    static Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
     static GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
 };

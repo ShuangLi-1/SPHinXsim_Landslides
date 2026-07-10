@@ -658,6 +658,142 @@ class TestSimulationConfig:
                 ]
             )
 
+    def test_emitter_accepts_multi_species_phases_and_volume_fractions(self):
+        cfg = _make_minimal_fluid_config(
+            fluid_bodies=[
+                {
+                    "name": "WaterBody",
+                    "material": {
+                        "type": "weakly_compressible_multi_phase",
+                        "pure_phases": [
+                            {"name": "Water", "density": 1.0},
+                            {"name": "Oil", "density": 0.8},
+                        ],
+                        "multi_species_phases": [
+                            {
+                                "name": "SpeciesPhaseA",
+                                "species": [
+                                    {"name": "SpeciesA", "density": 2.0},
+                                    {"name": "SpeciesB", "density": 0.5},
+                                ],
+                            }
+                        ],
+                    },
+                    "particle_reserve_factor": 10.0,
+                }
+            ],
+            fluid_boundary_conditions=[
+                {
+                    "body_name": "WaterBody",
+                    "oriented_box": "Inlet",
+                    "type": "emitter",
+                    "inflow_speed": 1.5,
+                    "multi_species_phases": [
+                        {
+                            "phase_name": "SpeciesPhaseA",
+                            "mass_fractions": [0.4, 0.6],
+                        }
+                    ],
+                    "volume_fractions": [0.2, 0.3, 0.5],
+                }
+            ]
+        )
+
+        bc = cfg.fluid_boundary_conditions[0]
+        assert bc.multi_species_phases is not None
+        assert bc.multi_species_phases[0].phase_name == "SpeciesPhaseA"
+        assert bc.multi_species_phases[0].mass_fractions == pytest.approx([0.4, 0.6])
+        assert bc.volume_fractions == pytest.approx([0.2, 0.3, 0.5])
+
+    def test_emitter_rejects_multi_species_phase_mass_fractions_not_normalized(self):
+        with pytest.raises(ValidationError, match="multi_species_phases mass_fractions must sum to 1.0"):
+            _make_minimal_fluid_config(
+                fluid_bodies=[
+                    {
+                        "name": "WaterBody",
+                        "material": {
+                            "type": "weakly_compressible_multi_phase",
+                            "pure_phases": [
+                                {"name": "Water", "density": 1.0},
+                            ],
+                            "multi_species_phases": [
+                                {
+                                    "name": "SpeciesPhaseA",
+                                    "species": [
+                                        {"name": "SpeciesA", "density": 2.0},
+                                        {"name": "SpeciesB", "density": 0.5},
+                                    ],
+                                }
+                            ],
+                        },
+                        "particle_reserve_factor": 10.0,
+                    }
+                ],
+                fluid_boundary_conditions=[
+                    {
+                        "body_name": "WaterBody",
+                        "oriented_box": "Inlet",
+                        "type": "emitter",
+                        "inflow_speed": 1.5,
+                        "multi_species_phases": [
+                            {
+                                "phase_name": "SpeciesPhaseA",
+                                "mass_fractions": [0.8, 0.3],
+                            }
+                        ],
+                    }
+                ]
+            )
+
+    def test_emitter_rejects_volume_fractions_not_normalized(self):
+        with pytest.raises(ValidationError, match="volume_fractions must sum to 1.0"):
+            _make_minimal_fluid_config(
+                fluid_bodies=[
+                    {
+                        "name": "WaterBody",
+                        "material": {
+                            "type": "weakly_compressible_multi_phase",
+                            "pure_phases": [
+                                {"name": "Water", "density": 1.0},
+                                {"name": "Oil", "density": 0.8},
+                            ],
+                        },
+                        "particle_reserve_factor": 10.0,
+                    }
+                ],
+                fluid_boundary_conditions=[
+                    {
+                        "body_name": "WaterBody",
+                        "oriented_box": "Inlet",
+                        "type": "emitter",
+                        "inflow_speed": 1.5,
+                        "volume_fractions": [0.2, 0.2],
+                    }
+                ]
+            )
+
+    def test_bi_directional_rejects_multi_species_phases(self):
+        with pytest.raises(
+            ValidationError,
+            match="multi_species_phases are only supported for emitter boundary conditions",
+        ):
+            _make_minimal_fluid_config(
+                fluid_boundary_conditions=[
+                    {
+                        "body_name": "WaterBody",
+                        "oriented_box": "Inlet",
+                        "type": "bi_directional",
+                        "pressure": 1000.0,
+                        "multi_species_phases": [
+                            {
+                                "phase_name": "SpeciesPhaseA",
+                                "mass_fractions": [0.5, 0.5],
+                            }
+                        ],
+                    }
+                ]
+            )
+
     def test_column_collapse_fixture_accepts_plastic_continuum(self):
         fixture_path = (
             Path(__file__).parent
@@ -804,7 +940,7 @@ class TestSimulationConfig:
         assert cfg.initial_conditions[0].body_name == "WallBoundary"
         assert cfg.initial_conditions[0].assignments[0].variable.real_type == "Temperature"
 
-    def test_t_junction_fixture_accepts_mixture_and_mass_fractions(self):
+    def test_t_junction_fixture_accepts_multi_species_and_mass_fractions(self):
         fixture_path = (
             Path(__file__).parent
             / "test_simulation"
@@ -816,7 +952,7 @@ class TestSimulationConfig:
         cfg = SimulationConfig.model_validate(payload)
 
         material = cfg.fluid_bodies[0].material
-        assert material.type.value == "weakly_compressible_mixture"
+        assert material.type.value == "weakly_compressible_multi_species"
         assert len(material.species) == 3
 
         first_bc = cfg.fluid_boundary_conditions[0]

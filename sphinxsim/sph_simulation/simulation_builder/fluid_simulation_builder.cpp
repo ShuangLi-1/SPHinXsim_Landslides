@@ -39,7 +39,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // post-processing, and they can run with host kernels.
     //----------------------------------------------------------------------
     auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
-    buildInitialConditionIfPresent(sim, host_methods, config);
     //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
@@ -85,12 +84,16 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-    recording_builder.buildObservationIfPresent(sim, main_methods, config);
     buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
-    buildBoundaryConditionsIfPresent(sim, main_methods, config);
     buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
+    //----------------------------------------------------------------------
+    // Define initial and boundary conditions, 
+    // particle deletion and sorting if present.
+    //----------------------------------------------------------------------
+    buildInitialConditionIfPresent(sim, host_methods, config); // use host kernel
+    buildBoundaryConditionsIfPresent(sim, main_methods, config);
     buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
     //----------------------------------------------------------------------
@@ -98,6 +101,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
+    recording_builder.buildObservationIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     //	Define preparation or initialization step before the main integration.
     //----------------------------------------------------------------------

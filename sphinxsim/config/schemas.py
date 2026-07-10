@@ -67,6 +67,8 @@ class OrientedBoxType(str, Enum):
 class MaterialType(str, Enum):
     WEAKLY_COMPRESSIBLE_FLUID = "weakly_compressible_fluid"
     WEAKLY_COMPRESSIBLE_MIXTURE = "weakly_compressible_mixture"
+    WEAKLY_COMPRESSIBLE_MULTI_SPECIES = "weakly_compressible_multi_species"
+    WEAKLY_COMPRESSIBLE_MULTI_PHASE = "weakly_compressible_multi_phase"
     RIGID_BODY = "rigid_body"
     J2_PLASTICITY = "j2_plasticity"
     PLASTIC_CONTINUUM = "plastic_continuum"
@@ -399,11 +401,18 @@ class ThermalPropertiesConfig(BaseModel):
         return self
 
 
+class MultiSpeciesPhaseMaterialConfig(BaseModel):
+    name: str = Field(..., min_length=1)
+    species: List[MixtureSpeciesConfig] = Field(..., min_length=1)
+
+
 class MaterialConfig(BaseModel):
     type: MaterialType
 
     density: Optional[float] = Field(default=None, gt=0)
     species: List[MixtureSpeciesConfig] = Field(default_factory=list)
+    pure_phases: List[MixtureSpeciesConfig] = Field(default_factory=list)
+    multi_species_phases: List[MultiSpeciesPhaseMaterialConfig] = Field(default_factory=list)
     sound_speed: Optional[float] = Field(default=None, gt=0)
     viscosity: Optional[float | ViscosityConfig] = None
     thermal_properties: Optional[ThermalPropertiesConfig] = None
@@ -426,12 +435,23 @@ class MaterialConfig(BaseModel):
                     "weakly_compressible_fluid does not support sound_speed; "
                     "use solver_parameters.fluid_dynamics.max_velocity_factor"
                 )
-        elif self.type == MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE:
+        elif self.type in (
+            MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
+            MaterialType.WEAKLY_COMPRESSIBLE_MULTI_SPECIES,
+        ):
             if not self.species:
-                raise ValueError("weakly_compressible_mixture requires species")
+                raise ValueError(f"{self.type.value} requires species")
             if self.sound_speed is not None:
                 raise ValueError(
-                    "weakly_compressible_mixture does not support sound_speed; "
+                    f"{self.type.value} does not support sound_speed; "
+                    "use solver_parameters.fluid_dynamics.max_velocity_factor"
+                )
+        elif self.type == MaterialType.WEAKLY_COMPRESSIBLE_MULTI_PHASE:
+            if not self.pure_phases:
+                raise ValueError("weakly_compressible_multi_phase requires pure_phases")
+            if self.sound_speed is not None:
+                raise ValueError(
+                    "weakly_compressible_multi_phase does not support sound_speed; "
                     "use solver_parameters.fluid_dynamics.max_velocity_factor"
                 )
         elif self.type == MaterialType.RIGID_BODY:
@@ -483,9 +503,13 @@ class FluidBodyConfig(BaseModel):
         if self.material.type not in (
             MaterialType.WEAKLY_COMPRESSIBLE_FLUID,
             MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
+            MaterialType.WEAKLY_COMPRESSIBLE_MULTI_SPECIES,
+            MaterialType.WEAKLY_COMPRESSIBLE_MULTI_PHASE,
         ):
             raise ValueError(
-                "fluid body material type must be weakly_compressible_fluid or weakly_compressible_mixture"
+                "fluid body material type must be weakly_compressible_fluid, "
+                "weakly_compressible_mixture, weakly_compressible_multi_species or "
+                "weakly_compressible_multi_phase"
             )
         return self
 
@@ -523,6 +547,19 @@ class FluidBoundaryConditionScheduleConfig(BaseModel):
     duration: float = Field(..., gt=0)
 
 
+class MultiSpeciesPhaseBoundaryConfig(BaseModel):
+    phase_name: str = Field(..., min_length=1)
+    mass_fractions: List[float] = Field(..., min_length=1)
+
+    @model_validator(mode="after")
+    def _validate_mass_fractions(self) -> "MultiSpeciesPhaseBoundaryConfig":
+        if any(fraction < 0.0 or fraction > 1.0 for fraction in self.mass_fractions):
+            raise ValueError("multi_species_phases mass_fractions values must be in [0, 1]")
+        if abs(sum(self.mass_fractions) - 1.0) > 1.0e-6:
+            raise ValueError("multi_species_phases mass_fractions must sum to 1.0")
+        return self
+
+
 class FluidBoundaryConditionConfig(BaseModel):
     body_name: str = Field(..., min_length=1)
     oriented_box: str = Field(..., min_length=1)
@@ -530,6 +567,8 @@ class FluidBoundaryConditionConfig(BaseModel):
     inflow_speed: Optional[float] = Field(default=None, gt=0)
     pressure: Optional[float] = None
     mass_fractions: Optional[List[float]] = None
+    multi_species_phases: Optional[List[MultiSpeciesPhaseBoundaryConfig]] = None
+    volume_fractions: Optional[List[float]] = None
     on_schedule: Optional[FluidBoundaryConditionScheduleConfig] = None
 
     @model_validator(mode="after")
@@ -547,6 +586,20 @@ class FluidBoundaryConditionConfig(BaseModel):
                 raise ValueError("mass_fractions values must be in [0, 1]")
             if abs(sum(self.mass_fractions) - 1.0) > 1.0e-6:
                 raise ValueError("mass_fractions must sum to 1.0")
+        if self.multi_species_phases is not None:
+            if self.type != FluidBoundaryConditionType.EMITTER:
+                raise ValueError("multi_species_phases are only supported for emitter boundary conditions")
+            if not self.multi_species_phases:
+                raise ValueError("multi_species_phases must be non-empty when provided")
+        if self.volume_fractions is not None:
+            if self.type != FluidBoundaryConditionType.EMITTER:
+                raise ValueError("volume_fractions are only supported for emitter boundary conditions")
+            if not self.volume_fractions:
+                raise ValueError("volume_fractions must be non-empty when provided")
+            if any(fraction < 0.0 or fraction > 1.0 for fraction in self.volume_fractions):
+                raise ValueError("volume_fractions values must be in [0, 1]")
+            if abs(sum(self.volume_fractions) - 1.0) > 1.0e-6:
+                raise ValueError("volume_fractions must sum to 1.0")
         return self
 
 
@@ -737,15 +790,51 @@ class SimulationConfig(BaseModel):
                 raise ValueError("fluid_boundary_conditions oriented_box must exist in geometries.oriented_boxes")
             if bc.mass_fractions is not None:
                 fluid_body = fluid_body_map[bc.body_name]
-                if fluid_body.material.type != MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE:
+                if fluid_body.material.type not in (
+                    MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
+                    MaterialType.WEAKLY_COMPRESSIBLE_MULTI_SPECIES,
+                ):
                     raise ValueError(
-                        "mass_fractions require boundary-condition body material type weakly_compressible_mixture"
+                        "mass_fractions require boundary-condition body material type "
+                        "weakly_compressible_mixture or weakly_compressible_multi_species"
                     )
                 species_count = len(fluid_body.material.species)
                 if species_count != len(bc.mass_fractions):
                     raise ValueError(
-                        "mass_fractions length must match number of material species for weakly_compressible_mixture"
+                        "mass_fractions length must match number of material species"
                     )
+            if bc.multi_species_phases is not None or bc.volume_fractions is not None:
+                fluid_body = fluid_body_map[bc.body_name]
+                if fluid_body.material.type != MaterialType.WEAKLY_COMPRESSIBLE_MULTI_PHASE:
+                    raise ValueError(
+                        "multi_species_phases/volume_fractions require boundary-condition body "
+                        "material type weakly_compressible_multi_phase"
+                    )
+                phase_map = {
+                    phase.name: phase for phase in fluid_body.material.multi_species_phases
+                }
+                if bc.multi_species_phases is not None:
+                    for phase_cfg in bc.multi_species_phases:
+                        if phase_cfg.phase_name not in phase_map:
+                            raise ValueError(
+                                "fluid_boundary_conditions multi_species_phases phase_name must reference "
+                                "an existing material multi_species_phases name"
+                            )
+                        if len(phase_cfg.mass_fractions) != len(phase_map[phase_cfg.phase_name].species):
+                            raise ValueError(
+                                "multi_species_phases mass_fractions length must match number of species "
+                                "for the referenced material phase"
+                            )
+                if bc.volume_fractions is not None:
+                    expected_phase_count = (
+                        len(fluid_body.material.pure_phases)
+                        + len(fluid_body.material.multi_species_phases)
+                    )
+                    if expected_phase_count != len(bc.volume_fractions):
+                        raise ValueError(
+                            "volume_fractions length must match number of material pure_phases plus "
+                            "multi_species_phases"
+                        )
 
         # Observer references
         observed_names = fluid_names | {body.name for body in self.continuum_bodies}
