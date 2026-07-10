@@ -170,6 +170,7 @@ class ConfigVisualizer:
         self._vtp_dir: Path | None = None
         self._bounds_sim: Any | None = None
         self._shape_bounds_cache: dict[str, Any] | None = None
+        self._annotation_label_actors: list[dict[str, Any]] = []
 
     def _spatial_dim(self) -> int:
         """Return the spatial dimension (2 or 3) inferred from the config.
@@ -225,6 +226,11 @@ class ConfigVisualizer:
     def used_cpp_bounds(self) -> bool:
         """Whether the most recent preview used live C++ shape bounds."""
         return self._bounds_sim is not None
+
+    @property
+    def annotation_label_actors(self) -> list[dict[str, Any]]:
+        """Label actors created by the latest preview population pass."""
+        return list(self._annotation_label_actors)
 
     # ------------------------------------------------------------------
     # Public API
@@ -480,7 +486,49 @@ class ConfigVisualizer:
         )
 
         config = self.config
+        self._annotation_label_actors = []
         hide_shapes = bool(latest_particle_vtps)
+
+        def _add_annotation_label(
+            points: list[tuple[float, float, float]] | list[Any],
+            labels: list[str],
+            *,
+            font_size: int,
+            text_color: str,
+        ) -> None:
+            normalized_points: list[tuple[float, float, float]] = []
+            for point in points:
+                try:
+                    values = [float(v) for v in point]
+                except Exception:
+                    continue
+                if len(values) == 2:
+                    normalized_points.append((values[0], values[1], 0.0))
+                elif len(values) >= 3:
+                    normalized_points.append((values[0], values[1], values[2]))
+
+            if not normalized_points:
+                return
+
+            text_values = [str(label) for label in labels]
+            actor = plotter.add_point_labels(
+                normalized_points,
+                text_values,
+                point_size=0,
+                font_size=font_size,
+                text_color=text_color,
+                always_visible=True,
+            )
+            if actor is not None:
+                self._annotation_label_actors.append(
+                    {
+                        "actor": actor,
+                        "font_size": int(font_size),
+                        "points": normalized_points,
+                        "labels": text_values,
+                        "text_color": text_color,
+                    }
+                )
 
         # Build a name → colour map for body shapes
         body_names: set[str] = set()
@@ -543,13 +591,11 @@ class ConfigVisualizer:
 
                 label_anchor = _label_anchor_point(mesh)
                 label_text = body_label(shape.name, config) if is_body else shape.name
-                plotter.add_point_labels(
+                _add_annotation_label(
                     [label_anchor],
                     [label_text],
-                    point_size=0,
                     font_size=8,
                     text_color="white",
-                    always_visible=True,
                 )
                 occupied_points.append(
                     (
@@ -580,13 +626,11 @@ class ConfigVisualizer:
             )
 
             step_text = vtp_path.stem.rsplit("_", 1)[-1]
-            plotter.add_point_labels(
+            _add_annotation_label(
                 [particle_mesh.center],
                 [f"Particles: {body_name} (step {step_text})"],
-                point_size=0,
                 font_size=7,
                 text_color="white",
-                always_visible=True,
             )
             _update_scene_bounds(particle_mesh)
             occupied_points.append(
@@ -614,13 +658,11 @@ class ConfigVisualizer:
             )
             _update_scene_bounds(mesh)
             label_text = oriented_box_label(ob, config)
-            plotter.add_point_labels(
+            _add_annotation_label(
                 [mesh.center],
                 [label_text],
-                point_size=0,
                 font_size=7,
                 text_color="yellow",
-                always_visible=True,
             )
             occupied_points.append(
                 (
@@ -653,13 +695,11 @@ class ConfigVisualizer:
                         line_width=3,
                         label=f"Constraint: {constraint.body_name}",
                     )
-                    plotter.add_point_labels(
+                    _add_annotation_label(
                         [mesh.center],
                         [label_text],
-                        point_size=0,
                         font_size=7,
                         text_color="orange",
-                        always_visible=True,
                     )
             else:
                 # No region — try to label at the body shape centroid.
@@ -667,13 +707,11 @@ class ConfigVisualizer:
                 if shape is not None:
                     mesh = self._load_shape_mesh(shape, vtp_dir, config)
                     if mesh is not None:
-                        plotter.add_point_labels(
+                        _add_annotation_label(
                             [mesh.center],
                             [label_text],
-                            point_size=0,
                             font_size=7,
                             text_color="orange",
-                            always_visible=True,
                         )
 
         # --- Domain bounding box ---
@@ -721,13 +759,11 @@ class ConfigVisualizer:
                 render_points_as_spheres=True,
                 label=f"Observer: {observer.name}",
             )
-            plotter.add_point_labels(
+            _add_annotation_label(
                 [points[0]],
                 [observer_label(observer)],
-                point_size=0,
                 font_size=7,
                 text_color="magenta",
-                always_visible=True,
             )
 
         # --- Legend ---
@@ -871,7 +907,7 @@ class ConfigVisualizer:
             label_pos = (start[0], start[1] + label_offset, start[2])
 
         try:
-            plotter.add_point_labels(
+            actor = plotter.add_point_labels(
                 [label_pos],
                 [g_label],
                 point_size=0,
@@ -879,6 +915,16 @@ class ConfigVisualizer:
                 text_color="cyan",
                 always_visible=True,
             )
+            if actor is not None:
+                self._annotation_label_actors.append(
+                    {
+                        "actor": actor,
+                        "font_size": 9,
+                        "points": [label_pos],
+                        "labels": [g_label],
+                        "text_color": "cyan",
+                    }
+                )
         except Exception:
             # Fall back to corner text if point labels are unavailable.
             plotter.add_text(g_label, position="lower_left", font_size=9, color="cyan")

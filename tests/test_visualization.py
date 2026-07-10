@@ -1041,6 +1041,116 @@ class TestShellPreview:
 
         assert rc == 0
 
+    def test_shell_runtime_hover_enlarges_annotation_font(self):
+        from sphinxsim import cli as cli_mod
+
+        class FakeTextProperty:
+            def __init__(self, size=8):
+                self.size = size
+
+            def SetFontSize(self, size):
+                self.size = int(size)
+
+        class FakeMapper:
+            def __init__(self, prop):
+                self.prop = prop
+
+            def GetLabelTextProperty(self):
+                return self.prop
+
+            def Modified(self):
+                return None
+
+        class FakeActor:
+            def __init__(self, size=8):
+                self.prop = FakeTextProperty(size=size)
+                self.mapper = FakeMapper(self.prop)
+
+            def GetMapper(self):
+                return self.mapper
+
+            def Modified(self):
+                return None
+
+        class FakeInteractor:
+            def __init__(self):
+                self._observer = None
+                self._pos = (0, 0)
+
+            def AddObserver(self, event_name, callback):
+                self._observer = callback
+                return 1
+
+            def RemoveObserver(self, tag):
+                return None
+
+            def GetEventPosition(self):
+                return self._pos
+
+            def trigger_mouse_move(self, x, y):
+                self._pos = (x, y)
+                if self._observer is not None:
+                    self._observer(self, "MouseMoveEvent")
+
+        class FakeCoordinate:
+            def __init__(self):
+                self._value = (0.0, 0.0, 0.0)
+
+            def SetCoordinateSystemToWorld(self):
+                return None
+
+            def SetValue(self, x, y, z):
+                self._value = (float(x), float(y), float(z))
+
+            def GetComputedDisplayValue(self, renderer):
+                return (int(self._value[0]), int(self._value[1]))
+
+        class FakeVtkModule:
+            def __init__(self, actor):
+                self.actor = actor
+
+            def vtkCoordinate(self):
+                return FakeCoordinate()
+
+        class FakeIrenWrapper:
+            def __init__(self, interactor):
+                self.interactor = interactor
+
+        class FakePlotter:
+            def __init__(self, interactor):
+                self.iren = FakeIrenWrapper(interactor)
+                self.renderer = object()
+
+            def render(self):
+                return None
+
+        actor = FakeActor(size=8)
+        interactor = FakeInteractor()
+
+        runtime = cli_mod._ShellPreviewRuntime()
+        runtime.plotter = FakePlotter(interactor)
+        runtime._using_background_plotter = True
+
+        class FakeVisualizer:
+            @property
+            def annotation_label_actors(self):
+                return [{
+                    "actor": actor,
+                    "font_size": 8,
+                    "points": [(20.0, 20.0, 0.0)],
+                    "labels": ["demo"],
+                    "text_color": "white",
+                }]
+
+        with patch.dict(sys.modules, {"vtk": FakeVtkModule(actor)}):
+            runtime._install_annotation_hover(FakeVisualizer())
+
+        assert actor.prop.size == 8
+        interactor.trigger_mouse_move(20, 20)
+        assert actor.prop.size == 12
+        interactor.trigger_mouse_move(1, 1)
+        assert actor.prop.size == 8
+
     def test_shell_help_mentions_preview(self, build_temp_path, capsys):
         inputs = ["help", "exit"]
         with patch("builtins.input", side_effect=inputs):
