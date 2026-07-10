@@ -496,6 +496,68 @@ class ConfigVisualizer:
             font_size: int,
             text_color: str,
         ) -> None:
+            def _deconflict_anchor(anchor: tuple[float, float, float]) -> tuple[float, float, float]:
+                if not occupied_points:
+                    return anchor
+
+                if scene_bounds is not None and len(scene_bounds) == 6:
+                    ex = max(scene_bounds[1] - scene_bounds[0], 1e-3)
+                    ey = max(scene_bounds[3] - scene_bounds[2], 1e-3)
+                    ez = max(scene_bounds[5] - scene_bounds[4], 1e-3)
+                    max_extent = max(ex, ey, ez)
+                else:
+                    max_extent = 1.0
+
+                min_clearance = max(0.035 * max_extent, 1e-3)
+                min_clearance_sq = min_clearance * min_clearance
+
+                def _distance_sq(p: tuple[float, float, float], q: tuple[float, float, float]) -> float:
+                    dx = p[0] - q[0]
+                    dy = p[1] - q[1]
+                    dz = p[2] - q[2]
+                    return dx * dx + dy * dy + dz * dz
+
+                current_min_sq = min(_distance_sq(anchor, q) for q in occupied_points)
+                if current_min_sq >= min_clearance_sq:
+                    return anchor
+
+                step = max(0.03 * max_extent, 5e-4)
+                offsets = [
+                    (0.0, 0.0, 0.0),
+                    (step, 0.0, 0.0),
+                    (-step, 0.0, 0.0),
+                    (0.0, step, 0.0),
+                    (0.0, -step, 0.0),
+                    (step, step, 0.0),
+                    (-step, step, 0.0),
+                    (step, -step, 0.0),
+                    (-step, -step, 0.0),
+                    (2.0 * step, 0.0, 0.0),
+                    (0.0, 2.0 * step, 0.0),
+                ]
+
+                best_point = anchor
+                best_score = current_min_sq
+                for ox, oy, oz in offsets:
+                    candidate = (anchor[0] + ox, anchor[1] + oy, anchor[2] + oz)
+
+                    if scene_bounds is not None and len(scene_bounds) == 6:
+                        margin_x = 0.01 * max(scene_bounds[1] - scene_bounds[0], 1.0)
+                        margin_y = 0.01 * max(scene_bounds[3] - scene_bounds[2], 1.0)
+                        margin_z = 0.01 * max(scene_bounds[5] - scene_bounds[4], 1.0)
+                        candidate = (
+                            min(max(candidate[0], scene_bounds[0] + margin_x), scene_bounds[1] - margin_x),
+                            min(max(candidate[1], scene_bounds[2] + margin_y), scene_bounds[3] - margin_y),
+                            min(max(candidate[2], scene_bounds[4] + margin_z), scene_bounds[5] - margin_z),
+                        )
+
+                    candidate_min_sq = min(_distance_sq(candidate, q) for q in occupied_points)
+                    if candidate_min_sq > best_score:
+                        best_score = candidate_min_sq
+                        best_point = candidate
+
+                return best_point
+
             normalized_points: list[tuple[float, float, float]] = []
             for point in points:
                 try:
@@ -509,6 +571,9 @@ class ConfigVisualizer:
 
             if not normalized_points:
                 return
+
+            normalized_points = [_deconflict_anchor(p) for p in normalized_points]
+            occupied_points.extend(normalized_points)
 
             text_values = [str(label) for label in labels]
             actor = plotter.add_point_labels(

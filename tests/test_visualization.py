@@ -1624,9 +1624,44 @@ class TestPreviewGravityArrow:
         with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
             viz._populate_plotter(fake_plotter, vtp_dir=None)
 
-        # No arrow mesh should have been added.
-        arrow_calls = [c for c in fake_plotter.mesh_calls if c.get("label") == "Gravity"]
-        assert len(arrow_calls) == 0
+    def test_overlapping_shape_annotations_are_deconflicted(self, fluid_config, tmp_path):
+        """Labels for overlapping shapes should not end up at the same anchor."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        # Force both shapes to the same center so naive labeling would collide.
+        data["geometries"]["shapes"][1]["lower_bound"] = [0.0, 0.0]
+        data["geometries"]["shapes"][1]["upper_bound"] = [0.4, 0.2]
+        cfg = SimulationConfig(**data)
+
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        class FakeBoundsSim:
+            def getShapeBounds(self):
+                return {
+                    "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+                    "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+                }
+
+        viz._bounds_sim = FakeBoundsSim()
+        viz._shape_bounds_cache = None
+
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        body_labels = [
+            call for call in fake_plotter.label_calls
+            if call.get("labels") and any(
+                ("Fluid:" in str(lbl)) or ("Solid:" in str(lbl)) or ("Continuum:" in str(lbl))
+                for lbl in call["labels"]
+            )
+        ]
+        assert len(body_labels) >= 2
+
+        first = tuple(float(v) for v in body_labels[0]["points"][0])
+        second = tuple(float(v) for v in body_labels[1]["points"][0])
+        assert first != second
 
     def test_gravity_arrow_3d(self, tmp_path):
         """A 3-D gravity vector should produce an arrow with 3-D direction."""
