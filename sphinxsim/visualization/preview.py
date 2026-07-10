@@ -283,7 +283,6 @@ class ConfigVisualizer:
         self._configure_default_view(plotter, ndim)
         plotter.add_axes()
         plotter.show_grid(font_size=10)
-        self._add_view_direction_widgets(plotter, ndim)
 
         if vtp_dir:
             mode_label = "VTP geometry"
@@ -323,77 +322,6 @@ class ConfigVisualizer:
             plotter.view_xy(negative=False)
         except Exception:
             pass
-
-    def _add_view_direction_widgets(self, plotter: Any, ndim: int) -> None:
-        """Add on-screen camera view-direction buttons."""
-
-        def set_plus_x() -> None:
-            plotter.view_yz(negative=False)
-
-        def set_minus_x() -> None:
-            plotter.view_yz(negative=True)
-
-        def set_plus_y() -> None:
-            plotter.view_xz(negative=False)
-
-        def set_minus_y() -> None:
-            plotter.view_xz(negative=True)
-
-        def set_plus_z() -> None:
-            plotter.view_xy(negative=False)
-
-        def set_minus_z() -> None:
-            plotter.view_xy(negative=True)
-
-        def set_isometric() -> None:
-            plotter.view_isometric()
-
-        # Radio buttons are mutually exclusive, so they behave like view presets.
-        if ndim == 2:
-            buttons = [
-                ("+z", set_plus_z, True),
-                ("-z", set_minus_z, False),
-            ]
-        else:
-            buttons = [
-                ("+x", set_plus_x, False),
-                ("-x", set_minus_x, False),
-                ("-y", set_minus_y, False),
-                ("+y", set_plus_y, False),
-                ("+z", set_plus_z, False),
-                ("-z", set_minus_z, False),
-                ("isometric", set_isometric, True),
-            ]
-
-        group = "camera_view_direction"
-        _, height = plotter.window_size
-        size = 9
-        margin_x = 14.0
-        # In 3-D keep the single icon row lower so top-center info text stays clear.
-        margin_top = 76.0 if ndim == 3 else 32.0
-        y0 = max(10.0, float(height) - margin_top)
-
-        plotter.add_text(
-            "Views:",
-            position=(margin_x, y0 + 2.0),
-            font_size=7,
-            color="white",
-        )
-
-        x0 = margin_x + 52.0
-        dx = 62.0
-        for idx, (title, callback, is_default) in enumerate(buttons):
-            plotter.add_radio_button_widget(
-                callback,
-                group,
-                value=is_default,
-                title=title,
-                position=(x0 + dx * idx, y0),
-                size=size,
-                border_size=1,
-                color_on="dodgerblue",
-                color_off="gray",
-            )
 
     def _add_config_info_text(self, plotter: Any, config_info: str, ndim: int) -> None:
         """Add the simulation-info overlay text in a non-overlapping location."""

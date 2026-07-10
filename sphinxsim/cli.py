@@ -690,7 +690,6 @@ class _ShellPreviewRuntime:
             visualizer._configure_default_view(self.plotter, ndim)
             self.plotter.add_axes()
             self.plotter.show_grid(font_size=10)
-            visualizer._add_view_direction_widgets(self.plotter, ndim)
 
             if vtp_dir:
                 mode_label = "VTP geometry"

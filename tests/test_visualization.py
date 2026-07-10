@@ -328,83 +328,6 @@ class TestPreviewViewMode:
         assert "enable_parallel_projection" in calls
         assert "view_xy:False" in calls
 
-    def test_2d_widgets_only_offer_z_views(self, fluid_config, tmp_path):
-        from sphinxsim.visualization.preview import ConfigVisualizer
-
-        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
-
-        class FakePlotter:
-            window_size = (1200, 800)
-
-            def __init__(self):
-                self.titles: list[str] = []
-
-            def add_text(self, *args, **kwargs):
-                return None
-
-            def add_radio_button_widget(self, callback, group, value, title, **kwargs):
-                self.titles.append(title)
-                return None
-
-        fake_plotter = FakePlotter()
-        viz._add_view_direction_widgets(fake_plotter, ndim=2)
-
-        assert fake_plotter.titles == ["+z", "-z"]
-
-    def test_3d_widgets_are_placed_lower_than_2d(self, fluid_config, tmp_path):
-        from sphinxsim.visualization.preview import ConfigVisualizer
-
-        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
-
-        class FakePlotter:
-            window_size = (1200, 800)
-
-            def __init__(self):
-                self.positions: list[tuple[float, float]] = []
-
-            def add_text(self, *args, **kwargs):
-                return None
-
-            def add_radio_button_widget(self, callback, group, value, title, **kwargs):
-                self.positions.append(kwargs.get("position"))
-                return None
-
-        plotter_2d = FakePlotter()
-        viz._add_view_direction_widgets(plotter_2d, ndim=2)
-
-        plotter_3d = FakePlotter()
-        viz._add_view_direction_widgets(plotter_3d, ndim=3)
-
-        assert plotter_2d.positions
-        assert plotter_3d.positions
-        y_2d = plotter_2d.positions[0][1]
-        y_3d = plotter_3d.positions[0][1]
-        assert y_3d < y_2d
-
-    def test_3d_widgets_use_single_row(self, fluid_config, tmp_path):
-        from sphinxsim.visualization.preview import ConfigVisualizer
-
-        viz = ConfigVisualizer(fluid_config, tmp_path, off_screen=True)
-
-        class FakePlotter:
-            window_size = (1200, 800)
-
-            def __init__(self):
-                self.positions: list[tuple[float, float]] = []
-
-            def add_text(self, *args, **kwargs):
-                return None
-
-            def add_radio_button_widget(self, callback, group, value, title, **kwargs):
-                self.positions.append(kwargs.get("position"))
-                return None
-
-        fake_plotter = FakePlotter()
-        viz._add_view_direction_widgets(fake_plotter, ndim=3)
-
-        unique_y = {pos[1] for pos in fake_plotter.positions}
-        assert len(unique_y) == 1
-
     def test_3d_config_info_is_centered_top(self, fluid_config, tmp_path):
         from sphinxsim.visualization.preview import ConfigVisualizer
 
@@ -1061,6 +984,63 @@ class TestShellPreview:
         assert kwargs.get("use_cpp") is True
         assert kwargs.get("with_particles") is True
 
+    def test_shell_runtime_does_not_require_legacy_view_widgets(self, tmp_path, monkeypatch):
+        from sphinxsim import cli as cli_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+        runtime = cli_mod._ShellPreviewRuntime()
+
+        class FakeVisualizer:
+            _bounds_sim = None
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def _spatial_dim(self):
+                return 2
+
+            def _populate_plotter(self, plotter, vtp_dir, latest_particle_vtps):
+                return None
+
+            def _configure_default_view(self, plotter, ndim):
+                return None
+
+            def _add_config_info_text(self, plotter, config_info, ndim):
+                return None
+
+        class FakePlotter:
+            def clear(self):
+                pass
+
+            def add_axes(self):
+                pass
+
+            def show_grid(self, **kwargs):
+                pass
+
+            def show(self, **kwargs):
+                pass
+
+            def render(self):
+                pass
+
+        class FakePyVista:
+            def Plotter(self, **kwargs):
+                return FakePlotter()
+
+        monkeypatch.setitem(sys.modules, "pyvista", FakePyVista())
+        monkeypatch.setattr(cli_mod, "PROJECT_ROOT", tmp_path)
+
+        with patch("sphinxsim.visualization.preview.ConfigVisualizer", FakeVisualizer):
+            rc = runtime.show_or_update(
+                cfg,
+                resolved_config_path=tmp_path / "config.json",
+                use_cpp=False,
+                with_particles=False,
+            )
+
+        assert rc == 0
+
     def test_shell_help_mentions_preview(self, build_temp_path, capsys):
         inputs = ["help", "exit"]
         with patch("builtins.input", side_effect=inputs):
@@ -1075,6 +1055,84 @@ class TestShellPreview:
 
 class TestScreenshot:
     """Tests for the screenshot output feature."""
+
+    def test_preview_does_not_request_legacy_view_widgets(self, tmp_path, monkeypatch):
+        """preview() should rely on the native plotter UI instead of in-canvas view widgets."""
+        import sphinxsim.visualization.preview as pv_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+
+        class WidgetlessPlotter:
+            window_size = (800, 600)
+
+            def add_mesh(self, mesh, **kwargs):
+                pass
+
+            def add_point_labels(self, points, labels, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+            def show(self):
+                pass
+
+            def enable_2d_style(self):
+                pass
+
+            def enable_parallel_projection(self):
+                pass
+
+            def view_xy(self, negative=False):
+                pass
+
+            def __getattr__(self, name):
+                if name == "add_radio_button_widget":
+                    raise AssertionError("legacy in-canvas view widgets should not be requested")
+
+                def _noop(*args, **kwargs):
+                    pass
+
+                return _noop
+
+        class WidgetlessMockPyVista:
+            def Plotter(self, **kwargs):
+                return WidgetlessPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                class MockPolyData:
+                    def __init__(self, pts):
+                        self.points = pts
+                        self.center = [0.5, 0.5, 0.0] if len(pts) > 0 else [0.0, 0.0, 0.0]
+                        self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+                return MockPolyData(points)
+
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
+            @staticmethod
+            def Box(bounds):
+                class MockBox:
+                    def __init__(self):
+                        self.bounds = bounds
+
+                return MockBox()
+
+        monkeypatch.setitem(sys.modules, "pyvista", WidgetlessMockPyVista())
+
+        viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
+        viz.preview(use_cpp=False)
 
     def test_preview_screenshot_calls_plotter_screenshot(self, tmp_path, monkeypatch):
         """preview() with screenshot_path should call plotter.screenshot() instead of plotter.show()."""
