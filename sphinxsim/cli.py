@@ -718,6 +718,21 @@ class _ShellPreviewRuntime:
 
         active_spec_index: int | None = None
 
+        def _estimate_label_bounds(entry: dict[str, Any], dx: float, dy: float) -> tuple[float, float, float, float]:
+            labels = entry.get("labels") or []
+            text = str(labels[0]) if labels else ""
+            lines = text.splitlines() or [text]
+            max_chars = max((len(line) for line in lines), default=1)
+
+            # Approximate VTK text bounds; labels are anchored near lower-left.
+            font_size = int(entry.get("base_size", 8))
+            if active_spec_index is not None and spec_entries[active_spec_index] is entry:
+                font_size = int(entry.get("hover_size", font_size))
+            width = max(12.0, float(max_chars) * float(font_size) * 0.62 + 8.0)
+            height = max(12.0, float(len(lines)) * float(font_size) * 1.35 + 4.0)
+            pad = 6.0
+            return (dx - pad, dy - pad, dx + width + pad, dy + height + pad)
+
         def _on_mouse_move(caller: Any, event: Any) -> None:
             nonlocal active_spec_index
             try:
@@ -726,7 +741,8 @@ class _ShellPreviewRuntime:
                 return
 
             new_spec_index: int | None = None
-            best_distance_sq = float(16 * 16)
+            best_inside_score = float("inf")
+            best_anchor_distance_sq = float(16 * 16)
             for idx, entry in enumerate(spec_entries):
                 points = entry.get("points") or []
                 if not points:
@@ -742,9 +758,23 @@ class _ShellPreviewRuntime:
                 except Exception:
                     continue
 
+                left, bottom, right, top = _estimate_label_bounds(entry, float(dx), float(dy))
+                if left <= float(x) <= right and bottom <= float(y) <= top:
+                    center_x = 0.5 * (left + right)
+                    center_y = 0.5 * (bottom + top)
+                    inside_score = (center_x - float(x)) ** 2 + (center_y - float(y)) ** 2
+                    if inside_score < best_inside_score:
+                        best_inside_score = inside_score
+                        new_spec_index = idx
+                    continue
+
+                if new_spec_index is not None:
+                    continue
+
+                # Fallback around anchor when cursor is close but outside text box.
                 distance_sq = (float(dx) - float(x)) ** 2 + (float(dy) - float(y)) ** 2
-                if distance_sq <= best_distance_sq:
-                    best_distance_sq = distance_sq
+                if distance_sq <= best_anchor_distance_sq:
+                    best_anchor_distance_sq = distance_sq
                     new_spec_index = idx
 
             if new_spec_index == active_spec_index:

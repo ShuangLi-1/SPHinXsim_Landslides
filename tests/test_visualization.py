@@ -1138,7 +1138,7 @@ class TestShellPreview:
                     "actor": actor,
                     "font_size": 8,
                     "points": [(20.0, 20.0, 0.0)],
-                    "labels": ["demo"],
+                    "labels": ["demo annotation"],
                     "text_color": "white",
                 }]
 
@@ -1146,7 +1146,7 @@ class TestShellPreview:
             runtime._install_annotation_hover(FakeVisualizer())
 
         assert actor.prop.size == 8
-        interactor.trigger_mouse_move(20, 20)
+        interactor.trigger_mouse_move(55, 24)
         assert actor.prop.size == 12
         interactor.trigger_mouse_move(1, 1)
         assert actor.prop.size == 8
