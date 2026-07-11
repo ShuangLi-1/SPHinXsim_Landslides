@@ -896,6 +896,8 @@ class _ShellPreviewRuntime:
                 latest_particle_vtps = visualizer._discover_latest_particle_vtps(vtp_dir)
 
         try:
+            if sys.platform.startswith("linux"):
+                os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
             import pyvista as pv
             pyvistaqt_error: Exception | None = None
             try:
