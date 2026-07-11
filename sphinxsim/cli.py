@@ -624,8 +624,11 @@ class _ShellPreviewRuntime:
         self.plotter: Any | None = None
         self.last_signature: str | None = None
         self._using_background_plotter = False
+        self._hover_interactor: Any | None = None
+        self._hover_observer_tag: Any | None = None
 
     def close(self) -> None:
+        self._remove_hover_observer()
         if self.plotter is None:
             return
         try:
@@ -633,6 +636,204 @@ class _ShellPreviewRuntime:
         except Exception:
             pass
         self.plotter = None
+
+    @staticmethod
+    def _set_label_font_size(actor: Any, size: int) -> bool:
+        try:
+            mapper = actor.GetMapper()
+            text_prop = mapper.GetLabelTextProperty()
+            text_prop.SetFontSize(int(size))
+            if hasattr(mapper, "Modified"):
+                mapper.Modified()
+            if hasattr(actor, "Modified"):
+                actor.Modified()
+            return True
+        except Exception:
+            return False
+
+    def _rebuild_label_actor(self, entry: dict[str, Any], font_size: int) -> Any | None:
+        if self.plotter is None:
+            return entry.get("actor")
+
+        actor = entry.get("actor")
+        if actor is not None:
+            try:
+                self.plotter.remove_actor(actor, render=False)
+            except TypeError:
+                try:
+                    self.plotter.remove_actor(actor)
+                except Exception:
+                    pass
+            except Exception:
+                pass
+
+        points = entry.get("points")
+        labels = entry.get("labels")
+        text_color = entry.get("text_color", "white")
+        if not points or not labels:
+            return actor
+
+        try:
+            new_actor = self.plotter.add_point_labels(
+                points,
+                labels,
+                point_size=0,
+                font_size=int(font_size),
+                text_color=text_color,
+                always_visible=True,
+            )
+        except Exception:
+            return actor
+
+        entry["actor"] = new_actor
+        return new_actor
+
+    def _remove_hover_observer(self) -> None:
+        if self._hover_interactor is not None and self._hover_observer_tag is not None:
+            try:
+                self._hover_interactor.RemoveObserver(self._hover_observer_tag)
+            except Exception:
+                pass
+        self._hover_interactor = None
+        self._hover_observer_tag = None
+
+    def _install_annotation_hover(self, visualizer: Any) -> None:
+        self._remove_hover_observer()
+
+        if self.plotter is None:
+            return
+
+        # Hover effects are intended for the persistent Qt-backed preview.
+        # The plain Plotter fallback can become less responsive under extra
+        # interactor callbacks while the shell waits for input.
+        if not self._using_background_plotter:
+            return
+
+        entries = getattr(visualizer, "annotation_label_actors", None) or []
+        if not entries:
+            return
+
+        iren_wrapper = getattr(self.plotter, "iren", None)
+        interactor = getattr(iren_wrapper, "interactor", None)
+        renderer = getattr(self.plotter, "renderer", None)
+        if interactor is None or renderer is None:
+            return
+
+        try:
+            import vtk  # type: ignore[import]
+        except Exception:
+            return
+
+        spec_entries: list[dict[str, Any]] = []
+        hover_coordinate = vtk.vtkCoordinate()
+        hover_coordinate.SetCoordinateSystemToWorld()
+
+        def _apply_size(spec_index: int, font_size: int) -> None:
+            entry = spec_entries[spec_index]
+            actor = entry.get("actor")
+            if actor is not None and self._set_label_font_size(actor, font_size):
+                return
+
+            rebuilt_actor = self._rebuild_label_actor(entry, font_size)
+            if rebuilt_actor is not None:
+                entry["actor"] = rebuilt_actor
+
+        for entry in entries:
+            actor = entry.get("actor") if isinstance(entry, dict) else None
+            if actor is None:
+                continue
+            base_size = int(entry.get("font_size", 8))
+            hover_size = max(base_size + 4, 12)
+            spec_index = len(spec_entries)
+            entry["base_size"] = base_size
+            entry["hover_size"] = hover_size
+            spec_entries.append(entry)
+            _apply_size(spec_index, base_size)
+
+        if not spec_entries:
+            return
+
+        active_spec_index: int | None = None
+
+        def _estimate_label_bounds(entry: dict[str, Any], dx: float, dy: float) -> tuple[float, float, float, float]:
+            labels = entry.get("labels") or []
+            text = str(labels[0]) if labels else ""
+            lines = text.splitlines() or [text]
+            max_chars = max((len(line) for line in lines), default=1)
+
+            # Approximate VTK text bounds; labels are anchored near lower-left.
+            font_size = int(entry.get("base_size", 8))
+            if active_spec_index is not None and spec_entries[active_spec_index] is entry:
+                font_size = int(entry.get("hover_size", font_size))
+            width = max(12.0, float(max_chars) * float(font_size) * 0.62 + 8.0)
+            height = max(12.0, float(len(lines)) * float(font_size) * 1.35 + 4.0)
+            pad = 6.0
+            return (dx - pad, dy - pad, dx + width + pad, dy + height + pad)
+
+        def _on_mouse_move(caller: Any, event: Any) -> None:
+            nonlocal active_spec_index
+            try:
+                x, y = interactor.GetEventPosition()
+            except Exception:
+                return
+
+            new_spec_index: int | None = None
+            best_inside_score = float("inf")
+            best_anchor_distance_sq = float(16 * 16)
+            for idx, entry in enumerate(spec_entries):
+                points = entry.get("points") or []
+                if not points:
+                    continue
+
+                anchor = points[0]
+                try:
+                    if len(anchor) >= 3:
+                        hover_coordinate.SetValue(float(anchor[0]), float(anchor[1]), float(anchor[2]))
+                    else:
+                        hover_coordinate.SetValue(float(anchor[0]), float(anchor[1]), 0.0)
+                    dx, dy = hover_coordinate.GetComputedDisplayValue(renderer)
+                except Exception:
+                    continue
+
+                left, bottom, right, top = _estimate_label_bounds(entry, float(dx), float(dy))
+                if left <= float(x) <= right and bottom <= float(y) <= top:
+                    center_x = 0.5 * (left + right)
+                    center_y = 0.5 * (bottom + top)
+                    inside_score = (center_x - float(x)) ** 2 + (center_y - float(y)) ** 2
+                    if inside_score < best_inside_score:
+                        best_inside_score = inside_score
+                        new_spec_index = idx
+                    continue
+
+                if new_spec_index is not None:
+                    continue
+
+                # Fallback around anchor when cursor is close but outside text box.
+                distance_sq = (float(dx) - float(x)) ** 2 + (float(dy) - float(y)) ** 2
+                if distance_sq <= best_anchor_distance_sq:
+                    best_anchor_distance_sq = distance_sq
+                    new_spec_index = idx
+
+            if new_spec_index == active_spec_index:
+                return
+
+            if active_spec_index is not None:
+                prev_entry = spec_entries[active_spec_index]
+                _apply_size(active_spec_index, int(prev_entry.get("base_size", 8)))
+
+            if new_spec_index is not None:
+                next_entry = spec_entries[new_spec_index]
+                _apply_size(new_spec_index, int(next_entry.get("hover_size", 12)))
+
+            active_spec_index = new_spec_index
+
+        try:
+            tag = interactor.AddObserver("MouseMoveEvent", _on_mouse_move)
+        except Exception:
+            return
+
+        self._hover_interactor = interactor
+        self._hover_observer_tag = tag
 
     def _is_unchanged(
         self,
@@ -696,12 +897,6 @@ class _ShellPreviewRuntime:
 
         try:
             import pyvista as pv
-
-            # On some Windows setups, Qt fails to initialize OpenGL contexts
-            # unless software rendering is requested before Qt is imported.
-            if sys.platform.startswith("win"):
-                os.environ.setdefault("QT_OPENGL", "software")
-
             pyvistaqt_error: Exception | None = None
             try:
                 from pyvistaqt import BackgroundPlotter  # type: ignore[import]
@@ -711,23 +906,11 @@ class _ShellPreviewRuntime:
 
             if self.plotter is None:
                 if BackgroundPlotter is not None:
-                    try:
-                        self.plotter = BackgroundPlotter(
-                            title="SPHinXsim - Configuration Preview",
-                            show=True,
-                        )
-                        self._using_background_plotter = True
-                    except Exception as exc:
-                        pyvistaqt_error = exc
-                        self.plotter = pv.Plotter(title="SPHinXsim - Configuration Preview", off_screen=False)
-                        self._using_background_plotter = False
-                        detail = f" ({pyvistaqt_error})" if pyvistaqt_error is not None else ""
-                        print(
-                            "ℹ️ pyvistaqt background mode could not initialize"
-                            f"{detail}; falling back to standard Plotter.\n"
-                            "   If you see OpenGL init warnings, keep QT_OPENGL=software and update your GPU drivers.",
-                            file=sys.stderr,
-                        )
+                    self.plotter = BackgroundPlotter(
+                        title="SPHinXsim - Configuration Preview",
+                        show=True,
+                    )
+                    self._using_background_plotter = True
                 else:
                     self.plotter = pv.Plotter(title="SPHinXsim - Configuration Preview", off_screen=False)
                     self._using_background_plotter = False
@@ -756,6 +939,7 @@ class _ShellPreviewRuntime:
             sim_type_label = config.simulation_type.value.replace("_", " ").title()
             config_info = f"{dim_label}  •  {sim_type_label}  •  {mode_label}"
             visualizer._add_config_info_text(self.plotter, config_info, ndim)
+            self._install_annotation_hover(visualizer)
 
             if not self._using_background_plotter:
                 try:

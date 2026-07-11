@@ -984,6 +984,173 @@ class TestShellPreview:
         assert kwargs.get("use_cpp") is True
         assert kwargs.get("with_particles") is True
 
+    def test_shell_runtime_does_not_require_legacy_view_widgets(self, tmp_path, monkeypatch):
+        from sphinxsim import cli as cli_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+        runtime = cli_mod._ShellPreviewRuntime()
+
+        class FakeVisualizer:
+            _bounds_sim = None
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def _spatial_dim(self):
+                return 2
+
+            def _populate_plotter(self, plotter, vtp_dir, latest_particle_vtps):
+                return None
+
+            def _configure_default_view(self, plotter, ndim):
+                return None
+
+            def _add_config_info_text(self, plotter, config_info, ndim):
+                return None
+
+        class FakePlotter:
+            def clear(self):
+                pass
+
+            def add_axes(self):
+                pass
+
+            def show_grid(self, **kwargs):
+                pass
+
+            def show(self, **kwargs):
+                pass
+
+            def render(self):
+                pass
+
+        class FakePyVista:
+            def Plotter(self, **kwargs):
+                return FakePlotter()
+
+        monkeypatch.setitem(sys.modules, "pyvista", FakePyVista())
+        monkeypatch.setattr(cli_mod, "PROJECT_ROOT", tmp_path)
+
+        with patch("sphinxsim.visualization.preview.ConfigVisualizer", FakeVisualizer):
+            rc = runtime.show_or_update(
+                cfg,
+                resolved_config_path=tmp_path / "config.json",
+                use_cpp=False,
+                with_particles=False,
+            )
+
+        assert rc == 0
+
+    def test_shell_runtime_hover_enlarges_annotation_font(self):
+        from sphinxsim import cli as cli_mod
+
+        class FakeTextProperty:
+            def __init__(self, size=8):
+                self.size = size
+
+            def SetFontSize(self, size):
+                self.size = int(size)
+
+        class FakeMapper:
+            def __init__(self, prop):
+                self.prop = prop
+
+            def GetLabelTextProperty(self):
+                return self.prop
+
+            def Modified(self):
+                return None
+
+        class FakeActor:
+            def __init__(self, size=8):
+                self.prop = FakeTextProperty(size=size)
+                self.mapper = FakeMapper(self.prop)
+
+            def GetMapper(self):
+                return self.mapper
+
+            def Modified(self):
+                return None
+
+        class FakeInteractor:
+            def __init__(self):
+                self._observer = None
+                self._pos = (0, 0)
+
+            def AddObserver(self, event_name, callback):
+                self._observer = callback
+                return 1
+
+            def RemoveObserver(self, tag):
+                return None
+
+            def GetEventPosition(self):
+                return self._pos
+
+            def trigger_mouse_move(self, x, y):
+                self._pos = (x, y)
+                if self._observer is not None:
+                    self._observer(self, "MouseMoveEvent")
+
+        class FakeCoordinate:
+            def __init__(self):
+                self._value = (0.0, 0.0, 0.0)
+
+            def SetCoordinateSystemToWorld(self):
+                return None
+
+            def SetValue(self, x, y, z):
+                self._value = (float(x), float(y), float(z))
+
+            def GetComputedDisplayValue(self, renderer):
+                return (int(self._value[0]), int(self._value[1]))
+
+        class FakeVtkModule:
+            def __init__(self, actor):
+                self.actor = actor
+
+            def vtkCoordinate(self):
+                return FakeCoordinate()
+
+        class FakeIrenWrapper:
+            def __init__(self, interactor):
+                self.interactor = interactor
+
+        class FakePlotter:
+            def __init__(self, interactor):
+                self.iren = FakeIrenWrapper(interactor)
+                self.renderer = object()
+
+            def render(self):
+                return None
+
+        actor = FakeActor(size=8)
+        interactor = FakeInteractor()
+
+        runtime = cli_mod._ShellPreviewRuntime()
+        runtime.plotter = FakePlotter(interactor)
+        runtime._using_background_plotter = True
+
+        class FakeVisualizer:
+            @property
+            def annotation_label_actors(self):
+                return [{
+                    "actor": actor,
+                    "font_size": 8,
+                    "points": [(20.0, 20.0, 0.0)],
+                    "labels": ["demo annotation"],
+                    "text_color": "white",
+                }]
+
+        with patch.dict(sys.modules, {"vtk": FakeVtkModule(actor)}):
+            runtime._install_annotation_hover(FakeVisualizer())
+
+        assert actor.prop.size == 8
+        interactor.trigger_mouse_move(55, 24)
+        assert actor.prop.size == 12
+        interactor.trigger_mouse_move(1, 1)
+        assert actor.prop.size == 8
+
     def test_shell_help_mentions_preview(self, build_temp_path, capsys):
         inputs = ["help", "exit"]
         with patch("builtins.input", side_effect=inputs):
@@ -998,6 +1165,84 @@ class TestShellPreview:
 
 class TestScreenshot:
     """Tests for the screenshot output feature."""
+
+    def test_preview_does_not_request_legacy_view_widgets(self, tmp_path, monkeypatch):
+        """preview() should rely on the native plotter UI instead of in-canvas view widgets."""
+        import sphinxsim.visualization.preview as pv_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+
+        class WidgetlessPlotter:
+            window_size = (800, 600)
+
+            def add_mesh(self, mesh, **kwargs):
+                pass
+
+            def add_point_labels(self, points, labels, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+            def show(self):
+                pass
+
+            def enable_2d_style(self):
+                pass
+
+            def enable_parallel_projection(self):
+                pass
+
+            def view_xy(self, negative=False):
+                pass
+
+            def __getattr__(self, name):
+                if name == "add_radio_button_widget":
+                    raise AssertionError("legacy in-canvas view widgets should not be requested")
+
+                def _noop(*args, **kwargs):
+                    pass
+
+                return _noop
+
+        class WidgetlessMockPyVista:
+            def Plotter(self, **kwargs):
+                return WidgetlessPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                class MockPolyData:
+                    def __init__(self, pts):
+                        self.points = pts
+                        self.center = [0.5, 0.5, 0.0] if len(pts) > 0 else [0.0, 0.0, 0.0]
+                        self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+                return MockPolyData(points)
+
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
+            @staticmethod
+            def Box(bounds):
+                class MockBox:
+                    def __init__(self):
+                        self.bounds = bounds
+
+                return MockBox()
+
+        monkeypatch.setitem(sys.modules, "pyvista", WidgetlessMockPyVista())
+
+        viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
+        viz.preview(use_cpp=False)
 
     def test_preview_screenshot_calls_plotter_screenshot(self, tmp_path, monkeypatch):
         """preview() with screenshot_path should call plotter.screenshot() instead of plotter.show()."""
@@ -1379,9 +1624,44 @@ class TestPreviewGravityArrow:
         with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
             viz._populate_plotter(fake_plotter, vtp_dir=None)
 
-        # No arrow mesh should have been added.
-        arrow_calls = [c for c in fake_plotter.mesh_calls if c.get("label") == "Gravity"]
-        assert len(arrow_calls) == 0
+    def test_overlapping_shape_annotations_are_deconflicted(self, fluid_config, tmp_path):
+        """Labels for overlapping shapes should not end up at the same anchor."""
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        # Force both shapes to the same center so naive labeling would collide.
+        data["geometries"]["shapes"][1]["lower_bound"] = [0.0, 0.0]
+        data["geometries"]["shapes"][1]["upper_bound"] = [0.4, 0.2]
+        cfg = SimulationConfig(**data)
+
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+
+        class FakeBoundsSim:
+            def getShapeBounds(self):
+                return {
+                    "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+                    "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+                }
+
+        viz._bounds_sim = FakeBoundsSim()
+        viz._shape_bounds_cache = None
+
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        body_labels = [
+            call for call in fake_plotter.label_calls
+            if call.get("labels") and any(
+                ("Fluid:" in str(lbl)) or ("Solid:" in str(lbl)) or ("Continuum:" in str(lbl))
+                for lbl in call["labels"]
+            )
+        ]
+        assert len(body_labels) >= 2
+
+        first = tuple(float(v) for v in body_labels[0]["points"][0])
+        second = tuple(float(v) for v in body_labels[1]["points"][0])
+        assert first != second
 
     def test_gravity_arrow_3d(self, tmp_path):
         """A 3-D gravity vector should produce an arrow with 3-D direction."""
