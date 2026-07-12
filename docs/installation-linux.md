@@ -14,7 +14,7 @@ sudo apt-get install -y \
   ninja-build \
   autoconf automake autoconf-archive \
   libxmu-dev libxi-dev libgl-dev libxt-dev \
-  libvtk9-dev
+  libxcb-cursor0 libvtk9-dev
 ```
 
 ## Clone Repository
