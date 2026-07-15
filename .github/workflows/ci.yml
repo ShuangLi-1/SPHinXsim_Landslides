@@ -63,8 +63,6 @@ jobs:
             pkg-config \
             git \
             ninja-build \
-            python3-dev \
-            pybind11-dev \
             autoconf automake autoconf-archive \
             libxmu-dev libxi-dev libgl-dev libxt-dev \
             libxcb-cursor0 libvtk9-dev
@@ -93,6 +91,7 @@ jobs:
             simbody \
             spdlog \
             gtest \
+            pybind11 \
             nlohmann-json
 
       - name: Configure CMake (integrated build)
