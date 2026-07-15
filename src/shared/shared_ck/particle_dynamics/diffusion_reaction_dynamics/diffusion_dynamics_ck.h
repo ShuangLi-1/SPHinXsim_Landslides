@@ -103,16 +103,17 @@ class DiffusionRelaxationCK<Inner<InteractionOnly, DiffusionType, KernelCorrecti
 
   protected:
     KernelCorrectionType kernel_correction_method_;
-    ConstantArray<InterParticleCoeff> ca_inter_particle_diffusion_coeff_;
+    ComputingKernelArray<DiffusionType, InterParticleCoeff> cka_inter_particle_diffusion_coeff_;
     Real smoothing_length_sq_;
 };
 
-template <class DiffusionType, template <typename...> class BoundaryType, class KernelCorrectionType>
-class DiffusionRelaxationCK<Contact<InteractionOnly, BoundaryType<DiffusionType>, KernelCorrectionType>>
-    : public DiffusionRelaxationCK<DiffusionType, Interaction<Contact<>>>
+template <class DiffusionType, template <typename...> class BoundaryType,
+          class KernelCorrectionType, class... Parameters>
+class DiffusionRelaxationCK<Contact<InteractionOnly, BoundaryType<DiffusionType>, KernelCorrectionType, Parameters...>>
+    : public DiffusionRelaxationCK<DiffusionType, Interaction<Contact<Parameters...>>>
 {
     UniquePtrsKeeper<BoundaryType<DiffusionType>> boundaries_keeper_;
-    using BaseInteraction = DiffusionRelaxationCK<DiffusionType, Interaction<Contact<>>>;
+    using BaseInteraction = DiffusionRelaxationCK<DiffusionType, Interaction<Contact<Parameters...>>>;
     using CorrectionKernel = typename KernelCorrectionType::ComputingKernel;
     using BoundaryKernel = typename BoundaryType<DiffusionType>::ComputingKernel;
 
@@ -180,7 +181,7 @@ class DiffusionRelaxationCK<RelationType<OneLevel, ForwardEuler, InteractionPara
     };
 
   protected:
-    ConstantArray<InverseVolumetricCapacity> ca_inverse_volume_capacity_;
+    ComputingKernelArray<DiffusionType, InverseVolumetricCapacity> cka_inverse_volume_capacity_;
 };
 
 template <template <typename...> class RelationType, class... InteractionParameters>
@@ -261,7 +262,7 @@ class Dirichlet<DiffusionType>
     Real smoothing_length_sq_;
     DiscreteVariable<Real> *dv_species_;
     DiscreteVariable<Real> *dv_contact_species_;
-    ConstantArray<InterParticleCoeff> ca_inter_particle_diffusion_coeff_;
+    ComputingKernelArray<DiffusionType, InterParticleCoeff> cka_inter_particle_diffusion_coeff_;
 };
 
 template <class DiffusionType>

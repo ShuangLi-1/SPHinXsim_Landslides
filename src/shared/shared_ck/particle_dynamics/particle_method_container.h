@@ -49,10 +49,10 @@ class ParticleDynamicsGroup : public BaseDynamics<void>
     StdVec<BaseDynamics<void> *> particle_dynamics_;
 
   public:
-    ParticleDynamicsGroup() : BaseDynamics<void>(){};
+    ParticleDynamicsGroup() : BaseDynamics<void>() {};
     ParticleDynamicsGroup(const StdVec<BaseDynamics<void> *> &particle_dynamics)
         : BaseDynamics<void>(), particle_dynamics_(particle_dynamics) {}
-    ~ParticleDynamicsGroup(){};
+    ~ParticleDynamicsGroup() {};
 
     bool hasDynamics() const
     {
@@ -113,6 +113,11 @@ class ReduceDynamicsGroup : public BaseDynamics<typename Operation::ReturnType>
           operation_(operation), reduce_dynamics_(reduce_dynamics) {}
     ~ReduceDynamicsGroup() = default;
 
+    bool hasDynamics() const
+    {
+        return !reduce_dynamics_.empty();
+    }
+
     ReduceDynamicsGroup<Operation> &add(BaseDynamics<ReturnType> *dynamics)
     {
         reduce_dynamics_.push_back(dynamics);
@@ -168,7 +173,7 @@ class IODynamicsGroup : public BaseIO
     StdVec<BaseIO *> io_dynamics_;
 
   public:
-    IODynamicsGroup(SPHSystem &sph_system) : BaseIO(sph_system){};
+    IODynamicsGroup(SPHSystem &sph_system) : BaseIO(sph_system) {};
     ~IODynamicsGroup() = default;
 
     IODynamicsGroup &add(BaseIO *io_dynamics)
@@ -194,7 +199,7 @@ class IODynamicsGroup : public BaseIO
 class BaseMethodContainer
 {
   public:
-    virtual ~BaseMethodContainer(){};
+    virtual ~BaseMethodContainer() {};
 };
 
 template <typename ExecutionPolicy>
@@ -205,8 +210,9 @@ class ParticleMethodContainer : public BaseMethodContainer
     UniquePtrsKeeper<BaseIO> other_io_keeper_;
 
   public:
-    ParticleMethodContainer(const ExecutionPolicy &ex_policy) : BaseMethodContainer(){};
-    virtual ~ParticleMethodContainer(){};
+    typedef ExecutionPolicy ExPolicy;
+    ParticleMethodContainer(const ExecutionPolicy &ex_policy) : BaseMethodContainer() {};
+    virtual ~ParticleMethodContainer() {};
 
     ParticleDynamicsGroup &addParticleDynamicsGroup()
     {

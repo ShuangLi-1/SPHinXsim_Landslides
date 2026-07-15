@@ -56,7 +56,7 @@ class BaseStateCondition
     DiscreteVariable<Real> *dv_p_, *dv_rho_;
 };
 
-template <class FluidType = WeaklyCompressibleFluid>
+template <class FluidType>
 struct PressurePrescribed
 {
     typedef FluidType Fluid;
@@ -69,7 +69,7 @@ struct PressurePrescribed
     };
 };
 
-template <class FluidType = WeaklyCompressibleFluid>
+template <class FluidType>
 struct VelocityPrescribed
 {
     typedef FluidType Fluid;
@@ -98,7 +98,7 @@ struct StartupToConstantInflowSpeed
     Real getAxisVelocity(const Vecd &, const Real &, Real time)
     {
         return time < startup_time_
-                   ? 0.5 * speed_ * (1.0 - cos(Pi * time / startup_time_))
+                   ? 0.5 * speed_ * (1.0 - math::cos(Pi * time / startup_time_))
                    : speed_;
     };
 };

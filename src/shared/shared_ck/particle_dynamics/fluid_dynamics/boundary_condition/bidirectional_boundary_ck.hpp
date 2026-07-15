@@ -4,6 +4,7 @@
 #include "bidirectional_boundary_ck.h"
 
 #include "complex_geometry.h"
+#include "particle_method_container.h"
 
 namespace SPH
 {
@@ -161,6 +162,42 @@ void PressureVelocityCondition<KernelCorrectionType, ConditionType>::
         frame_velocity[axis_] = condition_.getAxisVelocity(frame_position, frame_velocity[axis_], *physical_time_);
         vel_[index_i] = transform_->xformFrameVecToBase(frame_velocity);
     }
+}
+//=================================================================================================//
+template <typename ConditionType>
+template <typename... Args>
+SupplementaryCondition<ConditionType>::SupplementaryCondition(
+    OrientedBoxByCell &oriented_box_part, Args &&...args)
+    : BaseLocalDynamics<OrientedBoxByCell>(oriented_box_part),
+      sv_oriented_box_(oriented_box_part.svOrientedBox()),
+      condition_method_(this->particles_, std::forward<Args>(args)...),
+      dv_pos_(particles_->getVariableByName<Vecd>("Position")) {}
+//=================================================================================================//
+template <typename ConditionType>
+template <class ExecutionPolicy, class EncloserType>
+SupplementaryCondition<ConditionType>::UpdateKernel::UpdateKernel(
+    const ExecutionPolicy &ex_policy, EncloserType &encloser)
+    : oriented_box_(encloser.sv_oriented_box_->DelegatedData(ex_policy)),
+      condition_(ex_policy, encloser.condition_method_),
+      pos_(encloser.dv_pos_->DelegatedDataView(ex_policy)) {}
+//=================================================================================================//
+template <typename ConditionType>
+void SupplementaryCondition<ConditionType>::UpdateKernel::update(size_t index_i, Real dt)
+{
+    if (oriented_box_->checkContain(pos_[index_i]))
+    {
+        condition_(index_i);
+    }
+}
+//=================================================================================================//
+template <class ConditionType, class MethodContainerType, typename... Args>
+AbstractBidirectionalBoundary &AbstractBidirectionalBoundary::addSupplementaryCondition(
+    MethodContainerType &method_container, OrientedBoxByCell &oriented_box_part, Args &&...args)
+{
+    auto &condition = method_container.template addStateDynamics<
+        SupplementaryCondition<ConditionType>>(oriented_box_part, std::forward<Args>(args)...);
+    supplementary_conditions_.push_back(&condition);
+    return *this;
 }
 //=================================================================================================//
 template <typename ExecutionPolicy, class KernelCorrectionType, class ConditionType>
