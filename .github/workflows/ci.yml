@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
 
 env:
-  VCPKG_VERSION: "dc8d75cfc3281b8e2a4ed8ee4163c891190df932"
+  VCPKG_VERSION: "2026.04.27"
 
 jobs:
   build-and-test-linux:
@@ -63,8 +63,6 @@ jobs:
             pkg-config \
             git \
             ninja-build \
-            python3-dev \
-            pybind11-dev \
             autoconf automake autoconf-archive \
             libxmu-dev libxi-dev libgl-dev libxt-dev \
             libxcb-cursor0 libvtk9-dev
@@ -74,18 +72,11 @@ jobs:
         with:
           key: ${{ github.job }}-${{ runner.os }}
 
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg/downloads
-          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-downloads-
-
       - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: friendlyanon/setup-vcpkg@v1
         with:
-          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
+          committish: ${{ env.VCPKG_VERSION }}
+          cache-version: ${{ env.VCPKG_VERSION }}
 
       - name: Install C++ dependencies via vcpkg
         run: |
@@ -100,6 +91,7 @@ jobs:
             simbody \
             spdlog \
             gtest \
+            pybind11 \
             nlohmann-json
 
       - name: Configure CMake (integrated build)
@@ -150,6 +142,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -170,18 +167,11 @@ jobs:
           & (Join-Path $chocoBin 'ccache.exe') --version
           & (Join-Path $chocoBin 'ninja.exe') --version
 
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg/downloads
-          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-downloads-
-
       - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: friendlyanon/setup-vcpkg@v1
         with:
-          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
+          committish: ${{ env.VCPKG_VERSION }}
+          cache-version: ${{ env.VCPKG_VERSION }}-windows
 
       - name: Install C++ dependencies via vcpkg (Windows)
         shell: pwsh
@@ -269,6 +259,11 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
         with:
@@ -284,18 +279,11 @@ jobs:
         with:
           key: ${{ github.job }}-${{ runner.os }}
 
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg/downloads
-          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-downloads-
-
       - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: friendlyanon/setup-vcpkg@v1
         with:
-          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
+          committish: ${{ env.VCPKG_VERSION }}
+          cache-version: ${{ env.VCPKG_VERSION }}-macos
 
       - name: Install C++ dependencies via vcpkg (macOS)
         run: |
@@ -393,8 +381,6 @@ jobs:
             pkg-config \
             git \
             ninja-build \
-            python3-dev \
-            pybind11-dev \
             autoconf automake autoconf-archive \
             libxmu-dev libxi-dev libgl-dev libxt-dev \
             libvtk9-dev
@@ -414,18 +400,11 @@ jobs:
           $chocoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & (Join-Path $chocoBin 'ninja.exe') --version
 
-      - name: Cache vcpkg downloads
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/vcpkg/downloads
-          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-downloads-
-
       - name: Set up vcpkg
-        uses: lukka/run-vcpkg@v11
+        uses: friendlyanon/setup-vcpkg@v1
         with:
-          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
+          committish: ${{ env.VCPKG_VERSION }}
+          cache-version: ${{ env.VCPKG_VERSION }}-${{ runner.os }}-wheel
 
       - name: Install C++ dependencies via vcpkg (Linux/macOS)
         if: runner.os != 'Windows'
@@ -440,6 +419,7 @@ jobs:
             simbody \
             spdlog \
             gtest \
+            pybind11 \
             nlohmann-json
 
       - name: Install C++ dependencies via vcpkg (Windows)
