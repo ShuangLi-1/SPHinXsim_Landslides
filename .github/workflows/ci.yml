@@ -184,7 +184,6 @@ jobs:
             spdlog `
             gtest `
             pybind11 `
-            vtk `
             nlohmann-json
 
       - name: Set up MSVC developer command prompt
@@ -429,7 +428,6 @@ jobs:
             spdlog `
             gtest `
             pybind11 `
-            vtk `
             nlohmann-json
 
       - name: Set up MSVC developer command prompt
