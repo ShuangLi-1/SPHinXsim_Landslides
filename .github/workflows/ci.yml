@@ -74,11 +74,18 @@ jobs:
         with:
           key: ${{ github.job }}-${{ runner.os }}
 
-      - name: Set up vcpkg
-        uses: friendlyanon/setup-vcpkg@v1
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
         with:
-          committish: ${{ env.VCPKG_VERSION }}
-          cache-version: ${{ env.VCPKG_VERSION }}
+          path: ${{ github.workspace }}/vcpkg/downloads
+          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-downloads-
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
 
       - name: Install C++ dependencies via vcpkg
         run: |
@@ -163,11 +170,18 @@ jobs:
           & (Join-Path $chocoBin 'ccache.exe') --version
           & (Join-Path $chocoBin 'ninja.exe') --version
 
-      - name: Set up vcpkg
-        uses: friendlyanon/setup-vcpkg@v1
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
         with:
-          committish: ${{ env.VCPKG_VERSION }}
-          cache-version: ${{ env.VCPKG_VERSION }}-windows
+          path: ${{ github.workspace }}/vcpkg/downloads
+          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-downloads-
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
 
       - name: Install C++ dependencies via vcpkg (Windows)
         shell: pwsh
@@ -270,11 +284,18 @@ jobs:
         with:
           key: ${{ github.job }}-${{ runner.os }}
 
-      - name: Set up vcpkg
-        uses: friendlyanon/setup-vcpkg@v1
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
         with:
-          committish: ${{ env.VCPKG_VERSION }}
-          cache-version: ${{ env.VCPKG_VERSION }}-macos
+          path: ${{ github.workspace }}/vcpkg/downloads
+          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-downloads-
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
 
       - name: Install C++ dependencies via vcpkg (macOS)
         run: |
@@ -393,11 +414,18 @@ jobs:
           $chocoBin | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           & (Join-Path $chocoBin 'ninja.exe') --version
 
-      - name: Set up vcpkg
-        uses: friendlyanon/setup-vcpkg@v1
+      - name: Cache vcpkg downloads
+        uses: actions/cache@v4
         with:
-          committish: ${{ env.VCPKG_VERSION }}
-          cache-version: ${{ env.VCPKG_VERSION }}-${{ runner.os }}-wheel
+          path: ${{ github.workspace }}/vcpkg/downloads
+          key: ${{ runner.os }}-vcpkg-downloads-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            ${{ runner.os }}-vcpkg-downloads-
+
+      - name: Set up vcpkg
+        uses: lukka/run-vcpkg@v11
+        with:
+          vcpkgGitCommitId: ${{ env.VCPKG_VERSION }}
 
       - name: Install C++ dependencies via vcpkg (Linux/macOS)
         if: runner.os != 'Windows'
