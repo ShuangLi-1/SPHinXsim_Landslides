@@ -288,9 +288,6 @@ jobs:
 
       - name: Install C++ dependencies via vcpkg (macOS)
         run: |
-          # openblas with dynamic-arch avoids -march=native conflicts with ccache
-          ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
-            openblas[dynamic-arch] --allow-unsupported
           ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
             eigen3 \
             tbb \
@@ -412,8 +409,6 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
-            openblas[dynamic-arch] --allow-unsupported
-          ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
             eigen3 \
             tbb \
             boost-program-options \
@@ -429,7 +424,6 @@ jobs:
         shell: pwsh
         run: |
           $vcpkg = "${{ github.workspace }}\vcpkg\vcpkg.exe"
-          & $vcpkg install --clean-after-build openblas[dynamic-arch] --allow-unsupported
           & $vcpkg install --clean-after-build `
             eigen3 `
             tbb `
