@@ -24,7 +24,7 @@ on:
   workflow_dispatch:
 
 env:
-  VCPKG_VERSION: "2026.04.27"
+  VCPKG_VERSION: "dc8d75cfc3281b8e2a4ed8ee4163c891190df932"
 
 jobs:
   build-and-test-linux:
