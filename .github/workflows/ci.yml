@@ -143,10 +143,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -260,10 +260,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
