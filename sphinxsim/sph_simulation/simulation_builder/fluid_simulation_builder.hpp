@@ -292,6 +292,29 @@ void FluidSimulationBuilder::addBoundaryCondition(
             }
         }
 
+        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
+                body_name + "WeaklyCompressibleMultiSpecies"))
+        {
+            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
+                body_name + "WeaklyCompressibleMultiSpecies");
+            if (config.contains("mass_fractions"))
+            {
+                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
+                    scaling_config, config.at("mass_fractions"));
+                inflow_condition.add(
+                    &main_methods.template addStateDynamics<
+                        VariableAssignment,
+                        ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
+                        emitter, mixture, mass_fractions));
+
+                inflow_condition.add(
+                    &main_methods.template addStateDynamics<
+                        VariableAssignment,
+                        UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
+                        emitter, mixture));
+            }
+        }
+
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
             { if(fluid_solver_config.emitter_on_)
