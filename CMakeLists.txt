@@ -29,19 +29,9 @@ if(NOT CMAKE_TOOLCHAIN_FILE)
 endif()
 
 # Find required packages
-# Use the system Python version (3.11)
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
 find_package(pybind11 CONFIG REQUIRED)
-find_package(VTK REQUIRED COMPONENTS CommonCore CommonDataModel IOXML)
-find_package(nlohmann_json CONFIG QUIET)
-if(NOT nlohmann_json_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(
-        nlohmann_json
-        URL https://github.com/nlohmann/json/releases/download/v3.11.3/json.tar.xz
-    )
-    FetchContent_MakeAvailable(nlohmann_json)
-endif()
+find_package(nlohmann_json CONFIG REQUIRED)
 
 # Install extension modules into the package so wheel installers place them
 # directly under site-packages/sphinxsim/bindings/native.
@@ -96,7 +86,6 @@ if(SPHINXSYS_2D)
         ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
         ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
     target_sources(sph_simulation_2d PRIVATE ${SPH_SIMULATION_SOURCES})
-    target_link_libraries(sph_simulation_2d PUBLIC VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
     target_link_libraries(sph_simulation_2d PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sph_simulation_2d PUBLIC sphinxsys_2d)
     target_compile_definitions(sph_simulation_2d PUBLIC SPHINXSYS_2D VERSION_INFO="0.1.0")
@@ -127,7 +116,6 @@ if(SPHINXSYS_3D)
         ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
         ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
     target_sources(sph_simulation_3d PRIVATE ${SPH_SIMULATION_SOURCES})
-    target_link_libraries(sph_simulation_3d PUBLIC VTK::CommonCore VTK::CommonDataModel VTK::IOXML)
     target_link_libraries(sph_simulation_3d PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sph_simulation_3d PUBLIC sphinxsys_3d)
     target_compile_definitions(sph_simulation_3d PUBLIC SPHINXSYS_3D VERSION_INFO="0.1.0")

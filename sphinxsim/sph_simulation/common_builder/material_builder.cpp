@@ -73,17 +73,8 @@ void MaterialBuilder::addMatterMaterial(
         auto &material = sph_body.defineMatterMaterial<WeaklyCompressibleMultiPhase>(sound_speed);
         config_manager.addEntity(sph_body.Name() + "WeaklyCompressibleMultiPhase", &material);
 
-        if (config.contains("pure_phases"))
-        {
-            NamesAndDensities pure_phases = parseNamesAndDensities(
-                scaling_config, config.at("pure_phases"));
-            material.addPurePhases(pure_phases);
-        }
-        else
-        {
-            std::runtime_error(
-                "MaterialBuilder::addMatterMaterial: multi-phase material must contain pure phases");
-        }
+        NamesAndDensities pure_phases = parseNamesAndDensities(scaling_config, config.at("pure_phases"));
+        material.addPurePhases(pure_phases);
 
         if (config.contains("multi_species_phases"))
         {
@@ -99,7 +90,6 @@ void MaterialBuilder::addMatterMaterial(
         }
 
         material.setPhases();
-
         return;
     }
 

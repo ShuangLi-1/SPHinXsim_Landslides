@@ -43,10 +43,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -63,6 +63,7 @@ jobs:
             pkg-config \
             git \
             ninja-build \
+            python3-dev \
             autoconf automake autoconf-archive \
             libxmu-dev libxi-dev libgl-dev libxt-dev \
             libxcb-cursor0 libvtk9-dev
@@ -80,9 +81,6 @@ jobs:
 
       - name: Install C++ dependencies via vcpkg
         run: |
-          # openblas with dynamic-arch avoids -march=native conflicts with ccache
-          ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
-            openblas[dynamic-arch] --allow-unsupported
           ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
             eigen3 \
             tbb \
@@ -142,10 +140,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -177,7 +175,6 @@ jobs:
         shell: pwsh
         run: |
           $vcpkg = "${{ github.workspace }}\\vcpkg\\vcpkg.exe"
-          & $vcpkg install --clean-after-build openblas[dynamic-arch] --allow-unsupported
           & $vcpkg install --clean-after-build `
             eigen3 `
             tbb `
@@ -187,7 +184,6 @@ jobs:
             spdlog `
             gtest `
             pybind11 `
-            vtk `
             nlohmann-json
 
       - name: Set up MSVC developer command prompt
@@ -259,10 +255,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -287,9 +283,6 @@ jobs:
 
       - name: Install C++ dependencies via vcpkg (macOS)
         run: |
-          # openblas with dynamic-arch avoids -march=native conflicts with ccache
-          ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
-            openblas[dynamic-arch] --allow-unsupported
           ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
             eigen3 \
             tbb \
@@ -360,10 +353,10 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Set up Python 3.11
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
       - name: Set up CMake
         uses: jwlawson/actions-setup-cmake@v2
@@ -381,9 +374,10 @@ jobs:
             pkg-config \
             git \
             ninja-build \
+            python3-dev \
             autoconf automake autoconf-archive \
             libxmu-dev libxi-dev libgl-dev libxt-dev \
-            libvtk9-dev
+            libxcb-cursor0 libvtk9-dev
 
       - name: Install macOS system dependencies
         if: runner.os == 'macOS'
@@ -410,8 +404,6 @@ jobs:
         if: runner.os != 'Windows'
         run: |
           ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
-            openblas[dynamic-arch] --allow-unsupported
-          ${{ github.workspace }}/vcpkg/vcpkg install --clean-after-build \
             eigen3 \
             tbb \
             boost-program-options \
@@ -427,7 +419,6 @@ jobs:
         shell: pwsh
         run: |
           $vcpkg = "${{ github.workspace }}\vcpkg\vcpkg.exe"
-          & $vcpkg install --clean-after-build openblas[dynamic-arch] --allow-unsupported
           & $vcpkg install --clean-after-build `
             eigen3 `
             tbb `
@@ -437,7 +428,6 @@ jobs:
             spdlog `
             gtest `
             pybind11 `
-            vtk `
             nlohmann-json
 
       - name: Set up MSVC developer command prompt
