@@ -32,13 +32,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_inner = sph_system.addInnerRelation(continuum_body);
     auto &continuum_solid_contact = sph_system.addContactRelation(continuum_body, solid_bodies);
     //----------------------------------------------------------------------
-    // Define host particle methods and execution policies.
-    // Usually, these methods are used for initialization or
-    // post-processing, and they can run with host kernels.
-    //----------------------------------------------------------------------
-    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
-    buildInitialConditionIfPresent(sim, host_methods, config);
-    //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     // Generally, the configuration dynamics, such as update cell linked list,
@@ -66,6 +59,10 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
     buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
     buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
+    //----------------------------------------------------------------------
+    // Initial condition if present.
+    //----------------------------------------------------------------------
+    buildInitialConditionIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
@@ -106,16 +103,18 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     initialization_pipeline.main_steps.push_back(
         [&]()
         {
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
-
             solid_cell_linked_list.exec();
             continuum_update_configuration.exec();
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             continuum_advection_step_setup.exec();
             continuum_linear_correction_matrix.exec();
+
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialObservation);
             body_state_recorder.writeToFile();
 
             initialization_pipeline.run_hooks(InitializationHookPoint::PreSimulationSanityCheck);
