@@ -71,7 +71,7 @@ class FluidSimulationBuilder : public SimulationBuilder
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addDensityRegularization(
-        EntityManager &config_manager, MethodContainerType &main_methods,
+        SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>

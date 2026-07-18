@@ -80,23 +80,24 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
-    EntityManager &config_manager, MethodContainerType &main_methods,
+    SPHSimulation &sim, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
+    auto &config_manager = sim.getConfigManager();
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     SPHBody &sph_body = inner_relation.getSPHBody();
     std::string body_name = sph_body.Name();
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
 
     if (sph_body.isMatterMaterial<WeaklyCompressibleFluid>())
     {
         return FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleFluid>(
-            main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
+            sim, main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
     }
 
     if (sph_body.isMatterMaterial<WeaklyCompressibleMixture>())
     {
         return FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleMixture>(
-            main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
+            sim, main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
     }
 
     throw std::runtime_error(

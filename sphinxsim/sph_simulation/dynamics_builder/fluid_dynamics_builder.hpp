@@ -3,7 +3,7 @@
 
 #include "fluid_dynamics_builder.h"
 
-#include "density_regularization.hpp"
+#include "sph_simulation.h"
 
 namespace SPH
 {
@@ -12,7 +12,7 @@ using namespace fluid_dynamics;
 //=================================================================================================//
 template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
-    MethodContainerType &method_container, InnerRelationType &inner_relation,
+    SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
     ContactRelationType &contact_relation, const std::string &surface_type)
 {
     auto &density_regularization = method_container.addParticleDynamicsGroup();
@@ -22,6 +22,24 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
              .addPostContactInteraction(contact_relation));
 
     SPHBody &sph_body = inner_relation.getSPHBody();
+
+    auto &minimum_compression =
+        method_container.template addReduceDynamics<QuantityReduce<ReduceMin>>(sph_body, "Compression");
+    auto &maximum_compression =
+        method_container.template addReduceDynamics<QuantityReduce<ReduceMax>>(sph_body, "Compression");
+
+    auto &initialization_pipeline = sim.getInitializationPipeline();
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::PreSimulationSanityCheck, [&]()
+        { 
+            Real lower_limit = minimum_compression.exec();
+            Real upper_limit = maximum_compression.exec();
+            if (lower_limit < 0.95 || upper_limit > 1.05)
+            {
+                std::cout << "\n Error: Compression is out of range!" << std::endl;
+                std::cout << " Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
+                throw std::runtime_error("Compression is out of range!");
+            } });
 
     if (surface_type == "confined")
     {

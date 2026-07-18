@@ -117,6 +117,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
             body_state_recorder.writeToFile();
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::PreSimulationSanityCheck);
         });
     //----------------------------------------------------------------------
     //	Define time-integration method.

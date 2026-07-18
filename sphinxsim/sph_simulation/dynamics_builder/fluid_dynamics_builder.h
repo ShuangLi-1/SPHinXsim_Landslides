@@ -38,7 +38,7 @@ class FluidDynamicsBuilder
   public:
     template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
     static BaseDynamics<void> &buildDensityRegularization(
-        MethodContainerType &method_container, InnerRelationType &inner_relation,
+        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
         ContactRelationType &contact_relation, const std::string &surface_type);
 };
 } // namespace SPH
