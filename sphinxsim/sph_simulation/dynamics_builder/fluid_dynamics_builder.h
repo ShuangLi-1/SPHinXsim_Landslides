@@ -40,16 +40,6 @@ class FluidDynamicsBuilder
     static BaseDynamics<void> &buildDensityRegularization(
         MethodContainerType &method_container, InnerRelationType &inner_relation,
         ContactRelationType &contact_relation, const std::string &surface_type);
-
-  private:
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    static decltype(auto) addDensitySummation(
-        MethodContainerType &method_container, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation);
-
-    template <class FluidType, class FlowType, class... ParticleScopes, class CompressionSummationType>
-    static BaseDynamics<void> &addDensityRegularization(
-        CompressionSummationType &compression_summation, SPHBody &sph_body);
 };
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_H
