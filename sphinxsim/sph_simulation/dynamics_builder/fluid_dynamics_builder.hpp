@@ -15,20 +15,28 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
     SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
     ContactRelationType &contact_relation, const std::string &surface_type)
 {
-    auto &density_regularization = method_container.addParticleDynamicsGroup();
+    auto &density_summation =
+        method_container.template addInteractionDynamics<CompressionSummation>(inner_relation)
+            .addPostContactInteraction(contact_relation);
 
-    density_regularization.add(
-        &method_container.template addInteractionDynamics<CompressionSummation>(inner_relation)
-             .addPostContactInteraction(contact_relation));
-
+    auto &initialization_pipeline = sim.getInitializationPipeline();
     SPHBody &sph_body = inner_relation.getSPHBody();
+
+    auto &average_compression = method_container.template addReduceDynamics<AverageCompression>(sph_body);
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::InitialCondition, [&]()
+        { 
+            density_summation.exec();
+            Real average_compression_value = average_compression.exec();
+            std::cout << "\n------------------------------------------------------------" << std::endl;
+            std::cout << "FluidDynamicsBuilder::buildDensityRegularization : " 
+                      <<" Average compression: " << average_compression_value << std::endl; 
+            std::cout << "\n------------------------------------------------------------" << std::endl; });
 
     auto &minimum_compression =
         method_container.template addReduceDynamics<QuantityReduce<ReduceMin>>(sph_body, "Compression");
     auto &maximum_compression =
         method_container.template addReduceDynamics<QuantityReduce<ReduceMax>>(sph_body, "Compression");
-
-    auto &initialization_pipeline = sim.getInitializationPipeline();
     initialization_pipeline.insert_hook(
         InitializationHookPoint::PreSimulationSanityCheck, [&]()
         { 
@@ -40,6 +48,9 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
                 std::cout << " Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
                 throw std::runtime_error("Compression is out of range!");
             } });
+
+    auto &density_regularization = method_container.addParticleDynamicsGroup();
+    density_regularization.add(&density_summation);
 
     if (surface_type == "confined")
     {
