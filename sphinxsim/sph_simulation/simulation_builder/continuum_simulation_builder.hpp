@@ -222,7 +222,7 @@ void ContinuumSimulationBuilder::buildDensityRegularizationIfPresent(
         ContinuumSolverParameters>("ContinuumSolverParameters");
     auto &density_regularization =
         FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleFluid>(
-            main_methods, inner_relation, contact_relation,
+            sim, main_methods, inner_relation, contact_relation,
             continuum_solver_parameters.surface_type_);
 
     auto *density_regularization_ptr = &density_regularization;

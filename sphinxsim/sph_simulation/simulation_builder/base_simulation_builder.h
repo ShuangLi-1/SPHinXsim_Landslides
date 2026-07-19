@@ -119,6 +119,7 @@ enum class InitializationHookPoint
     InitialObservation,
     InitialParticleIndicationTagging,
     InitialAfterLinearCorrectionMatrix,
+    PreSimulationSanityCheck,
     NumHooks
 };
 

@@ -3,56 +3,82 @@
 
 #include "fluid_dynamics_builder.h"
 
-#include "density_regularization.hpp"
+#include "sph_simulation.h"
 
 namespace SPH
 {
 //=================================================================================================//
+using namespace fluid_dynamics;
+//=================================================================================================//
 template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
-    MethodContainerType &method_container, InnerRelationType &inner_relation,
+    SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
     ContactRelationType &contact_relation, const std::string &surface_type)
 {
-    auto &compression_summation = addDensitySummation(
-        method_container, inner_relation, contact_relation);
+    auto &density_summation =
+        method_container.template addInteractionDynamics<CompressionSummation>(inner_relation)
+            .addPostContactInteraction(contact_relation);
+
+    auto &initialization_pipeline = sim.getInitializationPipeline();
+    SPHBody &sph_body = inner_relation.getSPHBody();
+
+    auto &average_compression = method_container.template addReduceDynamics<AverageCompression>(sph_body);
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::InitialCondition, [&]()
+        { 
+            density_summation.exec();
+            Real average_compression_value = average_compression.exec();
+            std::cout << "\n------------------------------------------------------------" << std::endl;
+            std::cout << "FluidDynamicsBuilder::buildDensityRegularization : " 
+                      << "Initial average compression of FluidBody '" << sph_body.Name() 
+                      << "' is " << average_compression_value << std::endl; 
+            std::cout << "------------------------------------------------------------" << std::endl; });
+
+    auto &minimum_compression =
+        method_container.template addReduceDynamics<QuantityReduce<ReduceMin>>(sph_body, "Compression");
+    auto &maximum_compression =
+        method_container.template addReduceDynamics<QuantityReduce<ReduceMax>>(sph_body, "Compression");
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::PreSimulationSanityCheck, [&]()
+        { 
+            Real lower_limit = minimum_compression.exec();
+            Real upper_limit = maximum_compression.exec();
+            if (lower_limit < 0.95 || upper_limit > 1.05)
+            {
+                std::cout << "\n Error: Compression is out of range!" << std::endl;
+                std::cout << " Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
+                throw std::runtime_error("Compression is out of range!");
+            } });
+
+    auto &density_regularization = method_container.addParticleDynamicsGroup();
+    density_regularization.add(&density_summation);
 
     if (surface_type == "confined")
     {
-        return addDensityRegularization<FluidType, Internal>(
-            compression_summation, inner_relation.getSPHBody());
+        density_regularization.add(
+            &method_container.template addStateDynamics<
+                DensityRegularization, FluidType, Internal>(sph_body));
+        return density_regularization;
     }
 
     if (surface_type == "free_surface")
     {
-        return addDensityRegularization<FluidType, FreeSurface>(
-            compression_summation, inner_relation.getSPHBody());
+        density_regularization.add(
+            &method_container.template addStateDynamics<
+                DensityRegularization, FluidType, FreeSurface>(sph_body));
+        return density_regularization;
     }
 
     if (surface_type == "open_boundary")
     {
-        return addDensityRegularization<FluidType, Internal, ExcludeBufferParticles>(
-            compression_summation, inner_relation.getSPHBody());
+        density_regularization.add(
+            &method_container.template addStateDynamics<
+                DensityRegularization, FluidType, Internal, ExcludeBufferParticles>(sph_body));
+        return density_regularization;
     }
 
     throw std::runtime_error(
         "FluidDynamicsBuilder::buildDensityRegularization: no supported surface type found!");
-}
-//=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-decltype(auto) FluidDynamicsBuilder::addDensitySummation(
-    MethodContainerType &method_container, InnerRelationType &inner_relation,
-    ContactRelationType &contact_relation)
-{
-    return method_container.template addInteractionDynamics<fluid_dynamics::CompressionSummation>(inner_relation)
-        .addPostContactInteraction(contact_relation);
-}
-//=================================================================================================//
-template <class FluidType, class FlowType, class... ParticleScopes, class CompressionSummationType>
-BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
-    CompressionSummationType &compression_summation, SPHBody &sph_body)
-{
-    return compression_summation.template addPostStateDynamics<
-        fluid_dynamics::DensityRegularization, FluidType, FlowType, ParticleScopes...>(sph_body);
 }
 //=================================================================================================//
 } // namespace SPH

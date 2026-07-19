@@ -27,7 +27,7 @@ def _valid_data() -> dict:
         "simulation_type": "fluid_dynamics",
         "geometries": {
             "system_domain": {"lower_bound": [0.0, 0.0], "upper_bound": [1.0, 1.0]},
-            "global_resolution": {"particle_spacing": 0.05},
+            "global_resolution": {"particle_spacing": 0.025},
             "shapes": [
                 {
                     "name": "WaterBody",
@@ -37,10 +37,17 @@ def _valid_data() -> dict:
                 },
                 {
                     "name": "WallBoundary",
-                    "type": "bounding_box",
-                    "lower_bound": [0.0, 0.0],
-                    "upper_bound": [1.0, 1.0],
-                },
+                    "type": "multipolygon",
+                    "polygons": [
+                        {
+                            "operation": "union",
+                            "type": "container_box",
+                            "inner_lower_bound": [0.0, 0.0],
+                            "inner_upper_bound": [1.0, 1.0],
+                            "thickness": 0.1
+                        }
+                    ]
+                }
             ],
             "oriented_boxes": [
                 {

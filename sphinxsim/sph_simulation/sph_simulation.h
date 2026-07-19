@@ -75,6 +75,7 @@ class SPHSimulation
     friend class FluidSimulationBuilder;
     friend class ContinuumSimulationBuilder;
     friend class ConstraintBuilder;
+    friend class FluidDynamicsBuilder;
     friend class ThermalDynamicsBuilder;
     friend class RecordingBuilder;
 

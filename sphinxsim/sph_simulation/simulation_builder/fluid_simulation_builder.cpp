@@ -34,12 +34,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &fluid_inner = sph_system.addInnerRelation(fluid_body);
     auto &fluid_wall_contact = sph_system.addContactRelation(fluid_body, solid_bodies);
     //----------------------------------------------------------------------
-    // Define host particle methods and execution policies.
-    // Usually, these methods are used for initialization or
-    // post-processing, and they can run with host kernels.
-    //----------------------------------------------------------------------
-    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
-    //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     //----------------------------------------------------------------------
@@ -68,7 +62,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     addMainPhysicalTimeStep(sim, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_density_regularization = addDensityRegularization(
-        config_manager, main_methods, fluid_inner, fluid_wall_contact);
+        sim, main_methods, fluid_inner, fluid_wall_contact);
 
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     auto &fluid_advection_time_step = main_methods.addReduceDynamics<
@@ -89,10 +83,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     //----------------------------------------------------------------------
-    // Define initial and boundary conditions, 
+    // Define initial and boundary conditions,
     // particle deletion and sorting if present.
     //----------------------------------------------------------------------
-    buildInitialConditionIfPresent(sim, host_methods, config); // use host kernel
+    buildInitialConditionIfPresent(sim, main_methods, config); // use host kernel
     buildBoundaryConditionsIfPresent(sim, main_methods, config);
     buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
@@ -109,11 +103,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     initialization_pipeline.main_steps.push_back(
         [&]()
         {
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
-
             solid_cell_linked_list.exec();
             fluid_configuration.exec();
 
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
@@ -122,6 +115,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialObservation);
             body_state_recorder.writeToFile();
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::PreSimulationSanityCheck);
         });
     //----------------------------------------------------------------------
     // Define the time integration method.
