@@ -45,9 +45,14 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
             Real upper_limit = maximum_compression.exec();
             if (lower_limit < 0.95 || upper_limit > 1.05)
             {
-                std::cout << "\n Error: Compression is out of range!" << std::endl;
-                std::cout << " Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
-                throw std::runtime_error("Compression is out of range!");
+                std::cout << "\n------------------------------------------------------------" << std::endl;
+                std::cout << "Error: Compression is out of range!" << std::endl;
+                std::cout << "Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
+                std::cout << "The possible issues are the following:" << std::endl;
+                std::cout << "- Too large: overlapped bodies" << std::endl;
+                std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
+                std::cout << "------------------------------------------------------------" << std::endl;
+                exit(1);
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();
