@@ -30,8 +30,9 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
             Real average_compression_value = average_compression.exec();
             std::cout << "\n------------------------------------------------------------" << std::endl;
             std::cout << "FluidDynamicsBuilder::buildDensityRegularization : " 
-                      <<" Average compression: " << average_compression_value << std::endl; 
-            std::cout << "\n------------------------------------------------------------" << std::endl; });
+                      << "Initial average compression of FluidBody '" << sph_body.Name() 
+                      << "' is " << average_compression_value << std::endl; 
+            std::cout << "------------------------------------------------------------" << std::endl; });
 
     auto &minimum_compression =
         method_container.template addReduceDynamics<QuantityReduce<ReduceMin>>(sph_body, "Compression");
