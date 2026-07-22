@@ -78,6 +78,7 @@ class MaterialType(str, Enum):
 class FluidBoundaryConditionType(str, Enum):
     EMITTER = "emitter"
     BI_DIRECTIONAL = "bi_directional"
+    FREE_STREAM = "free_stream"
 
 
 class BodyConstraintType(str, Enum):
@@ -570,9 +571,20 @@ class FluidBoundaryConditionConfig(BaseModel):
     multi_species_phases: Optional[List[MultiSpeciesPhaseBoundaryConfig]] = None
     volume_fractions: Optional[List[float]] = None
     on_schedule: Optional[FluidBoundaryConditionScheduleConfig] = None
+    buffer_box: Optional[str] = Field(default=None, min_length=1)
+    disposer_box: Optional[str] = Field(default=None, min_length=1)
+    target_speed: Optional[float] = Field(default=None, ge=0)
+    t_ref: Optional[float] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _type_specific_requirements(self) -> "FluidBoundaryConditionConfig":
+        if self.type == FluidBoundaryConditionType.FREE_STREAM and (
+            self.buffer_box is None
+            or self.disposer_box is None
+            or self.target_speed is None
+            or self.t_ref is None
+        ):
+            raise ValueError("free_stream boundary condition requires buffer_box, disposer_box, target_speed and t_ref")
         if self.type == FluidBoundaryConditionType.EMITTER and self.inflow_speed is None:
             raise ValueError("emitter boundary condition requires inflow_speed")
         if self.type == FluidBoundaryConditionType.BI_DIRECTIONAL and self.pressure is None:
@@ -626,7 +638,7 @@ class FluidDynamicsSolverConfig(BaseModel):
     acoustic_cfl: float = Field(default=0.6, gt=0)
     advection_cfl: float = Field(default=0.25, gt=0)
     max_velocity_factor: float = Field(default=1.0, gt=0)
-    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
+    surface_type: Literal["free_surface", "confined", "open_boundary", "free_stream"] = "free_surface"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 
 
@@ -749,7 +761,11 @@ class SimulationConfig(BaseModel):
             if self.solver_parameters.continuum_dynamics is None:
                 raise ValueError("continuum_dynamics simulation requires solver_parameters.continuum_dynamics")
 
-        if not self.solid_bodies:
+        free_stream = any(
+            bc.type == FluidBoundaryConditionType.FREE_STREAM
+            for bc in self.fluid_boundary_conditions
+        )
+        if not self.solid_bodies and not free_stream:
             raise ValueError("simulation requires at least one solid body")
 
         # Bodies must reference existing geometry names

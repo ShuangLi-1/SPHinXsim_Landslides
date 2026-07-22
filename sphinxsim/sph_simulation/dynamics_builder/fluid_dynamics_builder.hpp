@@ -77,6 +77,14 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
         return density_regularization;
     }
 
+    if (surface_type == "free_stream")
+    {
+        density_regularization.add(
+            &method_container.template addStateDynamics<
+                DensityRegularization, FluidType, FreeStream>(sph_body));
+        return density_regularization;
+    }
+
     throw std::runtime_error(
         "FluidDynamicsBuilder::buildDensityRegularization: no supported surface type found!");
 }

@@ -173,6 +173,13 @@ void FluidSimulationBuilder::addTransportVelocityCorrection(
             TransportVelocityCorrectionCK, TruncatedLinear, BulkParticles>(sph_body);
         return;
     }
+
+    if (fluid_solver_config.surface_type_ == "free_stream")
+    {
+        kernel_gradient_integral.template addPostStateDynamics<TransportVelocityCorrectionCK, NoLimiter, BulkParticles>(sph_body);
+        return;
+    }
+    
     throw std::runtime_error(
         "FluidSimulationBuilder::addTransportVelocityCorrection: no supported flow type found!");
 }
@@ -383,6 +390,47 @@ void FluidSimulationBuilder::addBoundaryCondition(
         }
         return;
     }
+    if (type == "free_stream")
+    {
+        // Emitter strip injects particles; buffer sponge imposes the inflow ramp and pins the
+        // shift of freshly injected particles; disposer marks outflow particles for deletion.
+        OrientedBox &buffer_box = config_manager.getEntity<OrientedBox>(config.at("buffer_box").get<std::string>());
+        OrientedBox &disposer_box = config_manager.getEntity<OrientedBox>(config.at("disposer_box").get<std::string>());
+
+        auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
+        auto &buffer = fluid_body.addBodyPart<OrientedBoxByCell>(buffer_box);
+        auto &disposer = fluid_body.addBodyPart<OrientedBoxByCell>(disposer_box);
+
+        Real target_speed = scaling_config.jsonToReal(config.at("target_speed"), "Speed");
+        Real t_ref = scaling_config.jsonToReal(config.at("t_ref"), "Time");
+        StartupToConstantInflowSpeed inflow_speed(target_speed, t_ref);
+
+        auto &injection = main_methods.template addStateDynamics<EmitterInflowInjectionCK>(emitter);
+        auto &inflow_condition = main_methods.template addStateDynamics<EmitterInflowConditionCK, StartupToConstantInflowSpeed>(buffer, inflow_speed);
+        auto &free_stream_condition = main_methods.template addStateDynamics<FreeStreamCondition<StartupToConstantInflowSpeed>>(fluid_body, inflow_speed);
+        auto &disposer_indication = main_methods.template addStateDynamics<WithinDisposerIndication>(disposer);
+        auto &shift_pin = main_methods.template addStateDynamics<ConstantConstraintCK, Vecd>(buffer, "Displacement", Vecd::Zero());
+
+        fluid_solver_config.particle_deletion_ = true;
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BoundaryCondition, [&]()
+            { free_stream_condition.exec(); inflow_condition.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ParticleCreation, [&]()
+            { injection.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ParticleDeletionTagging, [&]()
+            { disposer_indication.exec(); });
+
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
+            { shift_pin.exec(); });
+
+        return;
+    }
     throw std::runtime_error(
         "FluidSimulationBuilder::buildBoundaryConditionsIfPresent: unsupported: " + type);
 }
@@ -444,7 +492,7 @@ void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
     auto &config_manager = sim.getConfigManager();
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
 
-    if (fluid_solver_config.surface_type_ == "open_boundary")
+    if (fluid_solver_config.surface_type_ == "open_boundary" || fluid_solver_config.surface_type_ == "free_stream")
     {
         auto &fluid_surface_indication =
             main_methods.template addInteractionDynamicsWithUpdate<
