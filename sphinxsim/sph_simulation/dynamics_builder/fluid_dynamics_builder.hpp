@@ -47,7 +47,6 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
             {
                 std::cout << "\n Error: Compression is out of range!" << std::endl;
                 std::cout << " Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
-                throw std::runtime_error("Compression is out of range!");
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();
