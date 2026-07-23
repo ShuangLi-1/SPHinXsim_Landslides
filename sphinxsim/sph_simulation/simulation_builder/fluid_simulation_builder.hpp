@@ -25,7 +25,7 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
 
     auto &acoustic_step_1st_half = main_methods.addParticleDynamicsGroup();
     auto &acoustic_step_2nd_half = main_methods.addParticleDynamicsGroup();
-    auto &acoustic_time_step = main_methods.template addReduceDynamicsGroup<ReduceMin>();
+    auto &acoustic_time_step = main_methods.template addReduceDynamicsGroup<ReduceMin<Real>>();
 
     std::string body_name = inner_relation.getSPHBody().Name();
     SPHBody &sph_body = inner_relation.getSPHBody();

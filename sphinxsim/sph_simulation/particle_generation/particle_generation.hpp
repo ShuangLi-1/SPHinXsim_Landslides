@@ -106,7 +106,7 @@ BaseDynamics<Real> &ParticleGeneration::addRelaxationScaling(
     RelaxationSystem &relaxation_system, EntityManager &config_manager, MethodContainerType &main_methods)
 {
 
-    auto &relaxation_scaling = main_methods.template addReduceDynamicsGroup<ReduceMin>();
+    auto &relaxation_scaling = main_methods.template addReduceDynamicsGroup<ReduceMin<Real>>();
     for (const auto &body_config : bodies_config_.relaxation_bodies_)
     {
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_config.name_);

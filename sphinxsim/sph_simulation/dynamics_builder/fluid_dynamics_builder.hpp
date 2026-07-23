@@ -35,9 +35,9 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
             std::cout << "------------------------------------------------------------" << std::endl; });
 
     auto &minimum_compression =
-        method_container.template addReduceDynamics<QuantityReduce<ReduceMin>>(sph_body, "Compression");
+        method_container.template addReduceDynamics<QuantityReduce<ReduceMin<Real>>>(sph_body, "Compression");
     auto &maximum_compression =
-        method_container.template addReduceDynamics<QuantityReduce<ReduceMax>>(sph_body, "Compression");
+        method_container.template addReduceDynamics<QuantityReduce<ReduceMax<Real>>>(sph_body, "Compression");
     initialization_pipeline.insert_hook(
         InitializationHookPoint::PreSimulationSanityCheck, [&]()
         { 
