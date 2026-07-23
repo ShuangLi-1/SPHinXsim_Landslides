@@ -44,7 +44,33 @@
       "particle_reserve_factor": 0.8
     }
   ],
-"solid_bodies": [{ "name": "FishBody", "material": { "type": "rigid_body" } }],
+"solid_bodies": [
+  {
+    "name": "FishBody",
+    "material": {
+      "type": "composite_solid",
+      "density": 1050.0,
+      "poisson_ratio": 0.49,
+      "youngs_modulus_active": 800000.0,
+      "youngs_modulus_1": 500000.0,
+      "youngs_modulus_2": 1100000.0,
+      "material_id_regions": {
+        "envelope_coefficients": [
+          0.183,
+          2.3925,
+          -58.9875,
+          410.0625,
+          -989.0625
+        ],
+        "center": [0.24, 0.2],
+        "region_span": 0.2,
+        "tip_span": 0.03,
+        "core_thickness": 0.003,
+        "envelope_offset": 0.004
+      }
+    }
+  }
+],
   "fluid_boundary_conditions": [
     {
       "body_name": "WaterBody",
@@ -54,6 +80,12 @@
       "type": "free_stream",
       "target_speed": 0.0,
       "t_ref": 2.0
+    }
+  ],
+  "extra_state_recording": [
+    {
+      "name": "FishBody",
+      "variables": [{ "int_type": ["MaterialID"] }]
     }
   ],
   "solver_parameters": {

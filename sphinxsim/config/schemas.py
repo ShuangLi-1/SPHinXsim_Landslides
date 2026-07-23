@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -73,6 +73,7 @@ class MaterialType(str, Enum):
     J2_PLASTICITY = "j2_plasticity"
     PLASTIC_CONTINUUM = "plastic_continuum"
     GENERAL_CONTINUUM = "general_continuum"
+    COMPOSITE_SOLID = "composite_solid"
 
 
 class FluidBoundaryConditionType(str, Enum):
@@ -425,6 +426,10 @@ class MaterialConfig(BaseModel):
     friction_angle: Optional[float] = Field(default=None, ge=0)
     cohesion: Optional[float] = Field(default=None, ge=0)
     dilatancy_angle: Optional[float] = Field(default=None, ge=0)
+    youngs_modulus_active: Optional[float] = Field(default=None, gt=0)
+    youngs_modulus_1: Optional[float] = Field(default=None, gt=0)
+    youngs_modulus_2: Optional[float] = Field(default=None, gt=0)
+    material_id_regions: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _validate_material_by_type(self) -> "MaterialConfig":
@@ -521,8 +526,8 @@ class SolidBodyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _material_type(self) -> "SolidBodyConfig":
-        if self.material.type != MaterialType.RIGID_BODY:
-            raise ValueError("solid body material type must be rigid_body")
+        if self.material.type not in (MaterialType.RIGID_BODY, MaterialType.COMPOSITE_SOLID):
+            raise ValueError("solid body material type must be rigid_body or composite_solid")
         return self
 
 

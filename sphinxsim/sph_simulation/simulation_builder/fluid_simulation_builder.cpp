@@ -2,6 +2,7 @@
 
 #include "base_simulation_builder.hpp"
 
+#include "region_material_id.h"
 namespace SPH
 {
 //=================================================================================================//
@@ -48,6 +49,59 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // update body relations, are defined first.
     //----------------------------------------------------------------------
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
+    // Optional per particle material id assignment, driven by the region model
+    // given in each solid body configuration.
+    auto &material_id_assignment = main_methods.addParticleDynamicsGroup();
+    bool has_material_id_assignment = false;
+    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    for (const auto &solid_config : config.at("solid_bodies"))
+    {
+        const json &material_config = solid_config.at("material");
+        if (!material_config.contains("material_id_regions"))
+            continue;
+
+        const json &region_config = material_config.at("material_id_regions");
+        std::string body_name = solid_config.at("name").get<std::string>();
+        SolidBody *target_body = nullptr;
+        for (SolidBody *solid_body : solid_bodies)
+        {
+            if (solid_body->Name() == body_name)
+                target_body = solid_body;
+        }
+        if (target_body == nullptr)
+        {
+            throw std::runtime_error("material id regions refer to an unknown solid body: " + body_name);
+        }
+
+        StdVec<Real> coefficients;
+        for (const auto &coefficient : region_config.at("envelope_coefficients"))
+        {
+            coefficients.push_back(coefficient.get<Real>());
+        }
+
+        Vecd center = Vecd::Zero();
+        const json &center_config = region_config.at("center");
+        for (int k = 0; k != center.size(); ++k)
+        {
+            center[k] = scaling_config.jsonToReal(center_config.at(k), "Length");
+        }
+
+        Real region_span = scaling_config.jsonToReal(region_config.at("region_span"), "Length");
+        Real tip_span = scaling_config.jsonToReal(region_config.at("tip_span"), "Length");
+        Real core_thickness = scaling_config.jsonToReal(region_config.at("core_thickness"), "Length");
+        Real envelope_offset = scaling_config.jsonToReal(region_config.at("envelope_offset"), "Length");
+
+        material_id_assignment.add(&main_methods.addStateDynamics<PolynomialRegionMaterialId>(
+            *target_body, coefficients, center, region_span, tip_span, core_thickness, envelope_offset));
+        has_material_id_assignment = true;
+    }
+
+    if (has_material_id_assignment)
+    {
+        sim.getInitializationPipeline().insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { material_id_assignment.exec(); });
+    }
     auto &fluid_configuration =
         main_methods.addParticleDynamicsGroup()
             .add(&main_methods.addCellLinkedListDynamics(fluid_body))
