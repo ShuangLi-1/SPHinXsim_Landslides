@@ -84,10 +84,10 @@ auto &SolidDynamicsBuilder::buildSolidDynamics(
         SimulationHookPoint::CouplingSynchronization, [&]()
         {
           Real dt = time_stepper.getGlobalTimeStepSize();
-          if (dt <= 0.0)
+          if (!(dt > 0.0))
           {
               throw std::runtime_error(
-                  "SolidDynamicsBuilder: non positive coupling interval, the solid state is degenerate.");
+                  "SolidDynamicsBuilder: coupling interval is not a positive number, the solid state is degenerate.");
           }
           time_stepper.integrateMatchedTimeInterval(solid_relaxation, dt, solid_time_step); 
         });

@@ -430,6 +430,7 @@ class MaterialConfig(BaseModel):
     youngs_modulus_1: Optional[float] = Field(default=None, gt=0)
     youngs_modulus_2: Optional[float] = Field(default=None, gt=0)
     material_id_regions: Optional[Dict[str, Any]] = None
+    active_strain: Optional[Dict[str, Any]] = None
 
     @model_validator(mode="after")
     def _validate_material_by_type(self) -> "MaterialConfig":

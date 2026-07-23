@@ -67,7 +67,13 @@
         "tip_span": 0.03,
         "core_thickness": 0.003,
         "envelope_offset": 0.004
-      }
+      },
+      "active_strain": {
+          "amplitude": 0.12,
+          "frequency": 4.0,
+          "wavelength_factor": 3.0,
+          "start_time": 0.2
+        }
     }
   }
 ],
@@ -85,7 +91,10 @@
   "extra_state_recording": [
     {
       "name": "FishBody",
-      "variables": [{ "int_type": ["MaterialID"] }]
+      "variables": [
+        { "int_type": ["MaterialID"] },
+        { "vector_type": ["Velocity", "Force"] }
+      ]
     }
   ],
   "solver_parameters": {

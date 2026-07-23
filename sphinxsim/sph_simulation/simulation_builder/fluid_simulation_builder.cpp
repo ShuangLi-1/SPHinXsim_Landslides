@@ -5,6 +5,7 @@
 
 #include "region_material_id.h"
 #include "composite_solid.h"
+#include "traveling_wave_active_strain.h"
 namespace SPH
 {
 //=================================================================================================//
@@ -108,7 +109,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Bodies declared rigid are skipped, so purely rigid cases are unaffected.
     for (const auto &solid_config : config.at("solid_bodies"))
     {
-        const std::string material_type = solid_config.at("material").at("type").get<std::string>();
+        const std::string material_type =
+            solid_config.at("material").at("type").get<std::string>();
+
         if (material_type != "composite_solid")
             continue;
 
@@ -120,6 +123,42 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             main_methods.addParticleDynamicsGroup()
                 .add(&main_methods.addCellLinkedListDynamics(elastic_body))
                 .add(&main_methods.addRelationDynamics(elastic_inner));
+
+        const json &material_config = solid_config.at("material");
+        if (material_config.contains("active_strain"))
+        {
+            const json &wave_config = material_config.at("active_strain");
+            const json &region_config = material_config.at("material_id_regions");
+
+            Vecd wave_center = Vecd::Zero();
+            for (int k = 0; k != wave_center.size(); ++k)
+            {
+                wave_center[k] = scaling_config.jsonToReal(region_config.at("center").at(k), "Length");
+            }
+            Real wave_span = scaling_config.jsonToReal(region_config.at("region_span"), "Length");
+            Real wave_core = scaling_config.jsonToReal(region_config.at("core_thickness"), "Length");
+            // Wave parameters are taken as given; they are not unit scaled.
+            Real amplitude = wave_config.at("amplitude").get<Real>();
+            Real frequency = wave_config.at("frequency").get<Real>();
+            Real wavelength_factor = wave_config.at("wavelength_factor").get<Real>();
+            Real start_time = wave_config.at("start_time").get<Real>();
+
+            auto &active_strain = main_methods.addStateDynamics<TravelingWaveActiveStrain>(
+            elastic_body, wave_center, wave_span, wave_core,
+            amplitude, frequency, wavelength_factor, start_time);
+
+        sim.getSimulationPipeline().insert_hook(
+            SimulationHookPoint::CouplingSynchronization, [&]()
+            {
+                active_strain.exec();
+
+                sim.getSimulationPipeline().insert_hook(
+                    SimulationHookPoint::CouplingSynchronization, [&]()
+                    {
+                        active_strain.exec();
+                    });
+            });
+        }
 
         auto &elastic_correction_matrix =
             SolidDynamicsBuilder::buildSolidDynamics<CompositeSolidMaterial>(
@@ -210,11 +249,19 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Note that only in acoustic steps the time integration is carried out.
     //----------------------------------------------------------------------
     auto &simulation_pipeline = sim.getSimulationPipeline();
-    simulation_pipeline.main_steps.push_back( // acoustic or integration step
+
+    simulation_pipeline.main_steps.push_back(
         [&]()
         {
+            simulation_pipeline.run_hooks(
+                SimulationHookPoint::MainPhysicalTimeStep);
+
             simulation_pipeline.run_hooks(SimulationHookPoint::MainPhysicalTimeStep);
+
             simulation_pipeline.run_hooks(SimulationHookPoint::CouplingSynchronization);
+
+            simulation_pipeline.run_hooks(
+                SimulationHookPoint::CouplingSynchronization);
         });
 
     simulation_pipeline.main_steps.push_back( // advection or particle configuration step
@@ -253,6 +300,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletion);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleSort);
 
+                solid_cell_linked_list.exec();
                 fluid_configuration.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 fluid_density_regularization.exec();
