@@ -456,6 +456,21 @@ void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
             InitializationHookPoint::InitialParticleIndicationTagging, [&]()
             { fluid_surface_indication.exec(); });
 
+        SPHBody &sph_body = inner_relation.getSPHBody();
+        auto &surface_particle_count = main_methods.template addReduceDynamics<
+            QuantityReduce<ReduceSum<int>>>(sph_body, "Indicator");
+
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::PreSimulationSanityCheck, [&]()
+            { 
+                if (surface_particle_count.exec() == 0)
+                {
+                    std::cout << "\n------------------------------------------------------------" << std::endl;
+                    std::cout << "Error: there is no surface particles of an open-boundary problem!" << std::endl;
+                    std::cout << "------------------------------------------------------------" << std::endl;
+                    exit(1);
+                } });
+
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleIndicationTagging, [&]()
