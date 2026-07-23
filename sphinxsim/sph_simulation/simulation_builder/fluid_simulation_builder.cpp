@@ -1,8 +1,10 @@
 #include "fluid_simulation_builder.hpp"
 
 #include "base_simulation_builder.hpp"
+#include "solid_dynamics_builder.hpp"
 
 #include "region_material_id.h"
+#include "composite_solid.h"
 namespace SPH
 {
 //=================================================================================================//
@@ -101,6 +103,34 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         sim.getInitializationPipeline().insert_hook(
             InitializationHookPoint::InitialCondition, [&]()
             { material_id_assignment.exec(); });
+    }
+    // Elastic solid bodies get their own configuration and stress relaxation.
+    // Bodies declared rigid are skipped, so purely rigid cases are unaffected.
+    for (const auto &solid_config : config.at("solid_bodies"))
+    {
+        const std::string material_type = solid_config.at("material").at("type").get<std::string>();
+        if (material_type != "composite_solid")
+            continue;
+
+        std::string body_name = solid_config.at("name").get<std::string>();
+        RealBody &elastic_body = sph_system.getBodyByName<RealBody>(body_name);
+
+        auto &elastic_inner = sph_system.addInnerRelation(elastic_body);
+        auto &elastic_configuration =
+            main_methods.addParticleDynamicsGroup()
+                .add(&main_methods.addCellLinkedListDynamics(elastic_body))
+                .add(&main_methods.addRelationDynamics(elastic_inner));
+
+        auto &elastic_correction_matrix =
+            SolidDynamicsBuilder::buildSolidDynamics<CompositeSolidMaterial>(
+                sim, main_methods, elastic_inner);
+
+        sim.getInitializationPipeline().insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            {
+                elastic_configuration.exec();
+                elastic_correction_matrix.exec();
+            });
     }
     auto &fluid_configuration =
         main_methods.addParticleDynamicsGroup()

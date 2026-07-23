@@ -77,6 +77,7 @@ class SPHSimulation
     friend class ConstraintBuilder;
     friend class FluidDynamicsBuilder;
     friend class ThermalDynamicsBuilder;
+    friend class SolidDynamicsBuilder;
     friend class RecordingBuilder;
 
     SPHSystem &defineSPHSystem();
