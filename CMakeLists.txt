@@ -62,16 +62,27 @@ set(SPHINXSYS_USE_SYCL OFF CACHE BOOL "Disable SYCL")
 set(SPHINXSYS_2D ON CACHE BOOL "Build 2D library")
 set(SPHINXSYS_3D ON CACHE BOOL "Build 3D library")
     
+# Include headers and sources for sph simulation library
+file(GLOB_RECURSE SPH_SIMULATION_INCLUDE CONFIGURE_DEPENDS sphinxsim/sph_simulation/*.h sphinxsim/sph_simulation/*.hpp)
+file(GLOB_RECURSE SPH_SIMULATION_SOURCES CONFIGURE_DEPENDS sphinxsim/sph_simulation/*.cpp)
+
+function(get_all_include_dirs result dir)
+    file(GLOB_RECURSE children LIST_DIRECTORIES true "${dir}/*")
+
+    set(dirs "${dir}")
+    foreach(child ${children})
+        if(IS_DIRECTORY "${child}")
+            list(APPEND dirs "${child}")
+        endif()
+    endforeach()
+
+    list(REMOVE_DUPLICATES dirs)
+    set(${result} "${dirs}" PARENT_SCOPE)
+endfunction()
+get_all_include_dirs(SPH_SIMULATION_INCLUDE "sphinxsim/sph_simulation")
+
 # Include SPHinXsys as subdirectory - this will build the sphinxsys libraries
 add_subdirectory(sphinxsim/sphinxsys)
-
-# Include headers and sources for sph simulation library
-set(SPH_SIMULATION_INCLUDE ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation)
-set(SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/simulation_builder)
-set(SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/particle_generation)
-set(SPH_SIMULATION_INCLUDE_COMMON_BUILDER ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/common_builder)
-set(SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER ${CMAKE_SOURCE_DIR}/sphinxsim/sph_simulation/dynamics_builder)
-file(GLOB_RECURSE SPH_SIMULATION_SOURCES CONFIGURE_DEPENDS sphinxsim/sph_simulation/*.cpp)
 
 # Define the source file
 set(BIND_SOURCE_FILES sphinxsim/bindings/sphinxsys_python.cpp)
@@ -79,12 +90,7 @@ set(BIND_SOURCE_FILES sphinxsim/bindings/sphinxsys_python.cpp)
 if(SPHINXSYS_2D)
     add_library(sph_simulation_2d)
     set_target_properties(sph_simulation_2d PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_include_directories(sph_simulation_2d PUBLIC
-        ${SPH_SIMULATION_INCLUDE}
-        ${SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER}
-        ${SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION}
-        ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
-        ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
+    target_include_directories(sph_simulation_2d PUBLIC ${SPH_SIMULATION_INCLUDE})
     target_sources(sph_simulation_2d PRIVATE ${SPH_SIMULATION_SOURCES})
     target_link_libraries(sph_simulation_2d PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sph_simulation_2d PUBLIC sphinxsys_2d)
@@ -109,12 +115,7 @@ endif()
 if(SPHINXSYS_3D)
     add_library(sph_simulation_3d)
     set_target_properties(sph_simulation_3d PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_include_directories(sph_simulation_3d PUBLIC
-        ${SPH_SIMULATION_INCLUDE}
-        ${SPH_SIMULATION_INCLUDE_SIMULATION_BUILDER}
-        ${SPH_SIMULATION_INCLUDE_PARTICLE_GENERATION}
-        ${SPH_SIMULATION_INCLUDE_COMMON_BUILDER}
-        ${SPH_SIMULATION_INCLUDE_DYNAMICS_BUILDER})
+    target_include_directories(sph_simulation_3d PUBLIC ${SPH_SIMULATION_INCLUDE})
     target_sources(sph_simulation_3d PRIVATE ${SPH_SIMULATION_SOURCES})
     target_link_libraries(sph_simulation_3d PRIVATE nlohmann_json::nlohmann_json)
     target_link_libraries(sph_simulation_3d PUBLIC sphinxsys_3d)
