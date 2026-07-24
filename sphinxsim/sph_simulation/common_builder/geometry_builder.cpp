@@ -3,6 +3,23 @@
 namespace SPH
 {
 //=================================================================================================//
+#ifdef SPHINXSYS_2D
+//=================================================================================================//
+Rotation getRotationFromXAxis(const Vecd &direction)
+{
+    Real angle = std::atan2(direction[yAxis], direction[xAxis]);
+    return Rotation(angle);
+}
+//=================================================================================================//
+#else
+Rotation getRotationFromXAxis(const Vecd &direction)
+{
+    Vec3d rotation_axis = Vec3d::UnitX().cross(direction);
+    Real rotation_angle = std::acos(Vec3d::UnitX().dot(direction));
+    return Rotation(rotation_angle, rotation_axis);
+}
+#endif
+//=================================================================================================//
 GeometryBuilder::GeometryBuilder(const fs::path &config_path)
     : config_path_(config_path)
 {

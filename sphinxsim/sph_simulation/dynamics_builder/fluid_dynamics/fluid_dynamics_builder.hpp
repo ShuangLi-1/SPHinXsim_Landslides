@@ -1,8 +1,8 @@
 #ifndef FLUID_DYNAMICS_BUILDER_HPP
 #define FLUID_DYNAMICS_BUILDER_HPP
 
+#include "fluid_boundary_builder.hpp"
 #include "fluid_dynamics_builder.h"
-
 #include "sph_simulation.h"
 
 namespace SPH

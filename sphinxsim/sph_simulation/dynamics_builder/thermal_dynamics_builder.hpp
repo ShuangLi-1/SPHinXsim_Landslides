@@ -10,6 +10,19 @@ namespace SPH
 {
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+void ThermalDynamicsBuilder::buildThermalDynamicsIfPresent(
+    SPHSimulation &sim, MethodContainerType &main_methods,
+    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
+{
+    auto &config_manager = sim.getConfigManager();
+    std::string body_name = inner_relation.getSPHBody().Name();
+    if (config_manager.hasEntity<IsotropicDiffusion>(body_name + "ThermalDiffusion"))
+    {
+        buildThermalDynamics(sim, main_methods, inner_relation, contact_relation);
+    }
+}
+//=================================================================================================//
+template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 void ThermalDynamicsBuilder::buildThermalDynamics(
     SPHSimulation &sim, MethodContainerType &method_container,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
