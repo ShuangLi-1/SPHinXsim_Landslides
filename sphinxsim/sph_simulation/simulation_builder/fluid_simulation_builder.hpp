@@ -229,8 +229,8 @@ void FluidSimulationBuilder::addBoundaryCondition(
 
     const std::string body_name = config.at("body_name").get<std::string>();
     FluidBody &fluid_body = sim.getSPHSystem().getBodyByName<FluidBody>(body_name);
-    OrientedBox &oriented_box = config_manager.getEntity<OrientedBox>(
-        config.at("oriented_box").get<std::string>());
+    const std::string oriented_box_name = config.at("oriented_box").get<std::string>();
+    OrientedBox &oriented_box = config_manager.getEntity<OrientedBox>(oriented_box_name);
     const std::string type = config.at("type").get<std::string>();
 
     if (type == "emitter")
@@ -336,6 +336,15 @@ void FluidSimulationBuilder::addBoundaryCondition(
 
     if (type == "bi_directional")
     {
+        if (fluid_solver_config.surface_type_ != "open_boundary")
+        {
+            std::cout << "\n------------------------------------------------------------" << std::endl;
+            std::cout << "FluidSimulationBuilder::buildBoundaryConditionsIfPresent:" << std::endl;
+            std::cout << "Error: bi_directional condition at OrientBox '" << oriented_box_name
+                      << "' only works for open boundary flow!" << std::endl;
+            std::cout << "------------------------------------------------------------" << std::endl;
+        }
+
         auto &oriented_box_by_cell = fluid_body.addBodyPart<OrientedBoxByCell>(oriented_box);
         auto &bi_directional_bd = createBiDirectionBoundary(
             oriented_box_by_cell, config_manager, main_methods, config);
@@ -343,6 +352,22 @@ void FluidSimulationBuilder::addBoundaryCondition(
         initialization_pipeline.insert_hook(
             InitializationHookPoint::InitialParticleIndicationTagging, [&]()
             { bi_directional_bd.tagBufferParticles(); });
+
+        auto &surface_particle_count = main_methods.template addReduceDynamics<
+            QuantityReduce, ReduceSum<int>>(oriented_box_by_cell, "Indicator");
+
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::PreSimulationSanityCheck, [&]()
+            { 
+                if (surface_particle_count.exec() == 0)
+                {
+                    std::cout << "\n------------------------------------------------------------" << std::endl;
+                    std::cout << "FluidSimulationBuilder::buildBoundaryConditionsIfPresent:" << std::endl;
+                    std::cout << "Error: no surface particles for bi_directional boundary at OrientBox '" 
+                              << oriented_box_name << "' !" << std::endl;
+                    std::cout << "------------------------------------------------------------" << std::endl;
+                    exit(1);
+                } });
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
@@ -455,21 +480,6 @@ void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
         initialization_pipeline.insert_hook(
             InitializationHookPoint::InitialParticleIndicationTagging, [&]()
             { fluid_surface_indication.exec(); });
-
-        SPHBody &sph_body = inner_relation.getSPHBody();
-        auto &surface_particle_count = main_methods.template addReduceDynamics<
-            QuantityReduce<ReduceSum<int>>>(sph_body, "Indicator");
-
-        initialization_pipeline.insert_hook(
-            InitializationHookPoint::PreSimulationSanityCheck, [&]()
-            { 
-                if (surface_particle_count.exec() == 0)
-                {
-                    std::cout << "\n------------------------------------------------------------" << std::endl;
-                    std::cout << "Error: there is no surface particles of an open-boundary problem!" << std::endl;
-                    std::cout << "------------------------------------------------------------" << std::endl;
-                    exit(1);
-                } });
 
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
