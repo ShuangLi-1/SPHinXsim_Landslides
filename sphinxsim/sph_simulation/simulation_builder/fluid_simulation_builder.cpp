@@ -105,9 +105,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         {
             solid_cell_linked_list.exec();
             fluid_configuration.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
             fluid_linear_correction_matrix.exec();
