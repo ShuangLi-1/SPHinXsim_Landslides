@@ -25,7 +25,7 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
 
     auto &acoustic_step_1st_half = main_methods.addParticleDynamicsGroup();
     auto &acoustic_step_2nd_half = main_methods.addParticleDynamicsGroup();
-    auto &acoustic_time_step = main_methods.template addReduceDynamicsGroup<ReduceMin>();
+    auto &acoustic_time_step = main_methods.template addReduceDynamicsGroup<ReduceMin<Real>>();
 
     std::string body_name = inner_relation.getSPHBody().Name();
     SPHBody &sph_body = inner_relation.getSPHBody();
@@ -80,23 +80,24 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
-    EntityManager &config_manager, MethodContainerType &main_methods,
+    SPHSimulation &sim, MethodContainerType &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
+    auto &config_manager = sim.getConfigManager();
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     SPHBody &sph_body = inner_relation.getSPHBody();
     std::string body_name = sph_body.Name();
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
 
     if (sph_body.isMatterMaterial<WeaklyCompressibleFluid>())
     {
         return FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleFluid>(
-            main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
+            sim, main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
     }
 
     if (sph_body.isMatterMaterial<WeaklyCompressibleMixture>())
     {
         return FluidDynamicsBuilder::buildDensityRegularization<WeaklyCompressibleMixture>(
-            main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
+            sim, main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
     }
 
     throw std::runtime_error(
@@ -203,190 +204,6 @@ void FluidSimulationBuilder::buildViscousForceIfPresent(
 }
 //=================================================================================================//
 template <class MethodContainerType>
-void FluidSimulationBuilder::buildBoundaryConditionsIfPresent(
-    SPHSimulation &sim, MethodContainerType &main_methods, const json &config)
-{
-    if (config.contains("fluid_boundary_conditions"))
-    {
-        for (const auto &bd : config.at("fluid_boundary_conditions"))
-        {
-            addBoundaryCondition(sim, main_methods, bd);
-        }
-    }
-}
-//=================================================================================================//
-template <class MethodContainerType>
-void FluidSimulationBuilder::addBoundaryCondition(
-    SPHSimulation &sim, MethodContainerType &main_methods, const json &config)
-{
-    StagePipeline<InitializationHookPoint> &initialization_pipeline = sim.getInitializationPipeline();
-    StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
-    EntityManager &config_manager = sim.getConfigManager();
-    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
-    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-
-    const std::string body_name = config.at("body_name").get<std::string>();
-    FluidBody &fluid_body = sim.getSPHSystem().getBodyByName<FluidBody>(body_name);
-    OrientedBox &oriented_box = config_manager.getEntity<OrientedBox>(
-        config.at("oriented_box").get<std::string>());
-    const std::string type = config.at("type").get<std::string>();
-
-    if (type == "emitter")
-    { // must be oriented box for emitter
-        auto &emitter = fluid_body.addBodyPart<OrientedBoxByParticle>(oriented_box);
-        auto &inflow_condition = main_methods.addParticleDynamicsGroup();
-        inflow_condition.add(&main_methods.template addStateDynamics<
-                              EmitterInflowConditionCK, ConstantInflowSpeed>(
-            emitter, scaling_config.jsonToReal(config.at("inflow_speed"), "Speed")));
-
-        auto &fix_constraint = main_methods.template addStateDynamics<
-            FixConstraintCK>(emitter);
-        auto &injection = main_methods.template addStateDynamics<
-            EmitterInflowInjectionCK>(emitter);
-
-        fluid_solver_config.emitter_on_ = true; // enable emitter
-        if (config.contains("on_schedule"))
-        {
-            parseScheduledEvents(
-                sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
-        }
-
-        if (config_manager.hasEntity<WeaklyCompressibleMultiPhase>(
-                body_name + "WeaklyCompressibleMultiPhase"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
-                body_name + "WeaklyCompressibleMultiPhase");
-
-            if (config.contains("multi_species_phases"))
-            {
-                for (const auto &phase : config.at("multi_species_phases"))
-                {
-                    std::string phase_name = phase.at("phase_name").get<std::string>();
-                    auto &multi_species_phase = mixture.getMultiSpeciesPhaseByName(phase_name);
-                    StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                        scaling_config, phase.at("mass_fractions"));
-
-                    inflow_condition.add(
-                        &main_methods.template addStateDynamics<
-                            VariableAssignment,
-                            ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                            emitter, multi_species_phase, mass_fractions));
-                }
-            }
-
-            if (config.contains("volume_fractions"))
-            {
-                StdVec<Real> volume_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("volume_fractions"));
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        ConstantMixtureFraction<WeaklyCompressibleMultiPhase>>(
-                        emitter, mixture, volume_fractions));
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        UpdateReferenceDensity<WeaklyCompressibleMultiPhase>>(
-                        emitter, mixture));
-            }
-        }
-
-        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies");
-            if (config.contains("mass_fractions"))
-            {
-                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("mass_fractions"));
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                        emitter, mixture, mass_fractions));
-
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
-                        emitter, mixture));
-            }
-        }
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::BoundaryCondition, [&]()
-            { if(fluid_solver_config.emitter_on_)
-                  inflow_condition.exec(); });
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::PositionConstraint, [&]()
-            { if(!fluid_solver_config.emitter_on_)
-                    fix_constraint.exec(); });
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleCreation, [&]()
-            { if(fluid_solver_config.emitter_on_)
-                injection.exec(); });
-
-        return;
-    }
-
-    if (type == "bi_directional")
-    {
-        auto &oriented_box_by_cell = fluid_body.addBodyPart<OrientedBoxByCell>(oriented_box);
-        auto &bi_directional_bd = createBiDirectionBoundary(
-            oriented_box_by_cell, config_manager, main_methods, config);
-
-        initialization_pipeline.insert_hook(
-            InitializationHookPoint::InitialParticleIndicationTagging, [&]()
-            { bi_directional_bd.tagBufferParticles(); });
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::BoundaryCondition, [&]()
-            {   
-                Real dt = time_stepper.getGlobalTimeStepSize();
-                bi_directional_bd.applyBoundaryCondition(dt); });
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleCreation, [&]()
-            { bi_directional_bd.injectParticles(); });
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleDeletionTagging, [&]()
-            { bi_directional_bd.indicateOutFlowParticles(); });
-        fluid_solver_config.particle_deletion_ = true; // enable particle deletion
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleIndicationTagging, [&]()
-            { bi_directional_bd.tagBufferParticles(); });
-
-        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies");
-            if (config.contains("mass_fractions"))
-            {
-                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("mass_fractions"));
-                bi_directional_bd.template addSupplementaryCondition<
-                    ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                    main_methods, oriented_box_by_cell, mixture, mass_fractions);
-
-                bi_directional_bd.template addSupplementaryCondition<
-                    UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
-                    main_methods, oriented_box_by_cell, mixture);
-            }
-        }
-        return;
-    }
-    throw std::runtime_error(
-        "FluidSimulationBuilder::buildBoundaryConditionsIfPresent: unsupported: " + type);
-}
-//=================================================================================================//
-template <class MethodContainerType>
 void FluidSimulationBuilder::buildParticleDeletionIfPresent(
     SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body)
 {
@@ -402,37 +219,6 @@ void FluidSimulationBuilder::buildParticleDeletionIfPresent(
             SimulationHookPoint::ParticleDeletion, [&]()
             { particle_deletion.exec(); });
     }
-}
-//=================================================================================================//
-template <class MethodContainerType>
-AbstractBidirectionalBoundary &FluidSimulationBuilder::createBiDirectionBoundary(
-    OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
-    MethodContainerType &main_methods, const json &config)
-{
-    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
-    if (config.contains("pressure"))
-    {
-        SPHBody &sph_body = oriented_box_by_cell.getSPHBody();
-        std::string body_name = sph_body.Name();
-        if (config_manager.hasEntity<WeaklyCompressibleFluid>(body_name + "WeaklyCompressibleFluid"))
-        {
-            auto &bi_directional_bd = main_methods.template addGeneralDynamics<
-                BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<WeaklyCompressibleFluid>>(
-                oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
-            return bi_directional_bd;
-        }
-
-        if (sph_body.isMatterMaterial<WeaklyCompressibleMixture>())
-        {
-            auto &bi_directional_bd = main_methods.template addGeneralDynamics<
-                BidirectionalBoundaryCK, LinearCorrectionCK, PressurePrescribed<WeaklyCompressibleMixture>>(
-                oriented_box_by_cell, scaling_config.jsonToReal(config.at("pressure"), "Pressure"));
-            return bi_directional_bd;
-        }
-    }
-
-    throw std::runtime_error(
-        "FluidSimulationBuilder::createBiDirectionBoundary: unsupported boundary condition type");
 }
 //=================================================================================================//
 template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
@@ -482,19 +268,6 @@ void FluidSimulationBuilder::buildParticleSortIfPresent(
                 {
                     particle_sort.exec();
                 } });
-    }
-}
-//=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-void FluidSimulationBuilder::buildThermalDynamicsIfPresent(
-    SPHSimulation &sim, MethodContainerType &main_methods,
-    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
-{
-    auto &config_manager = sim.getConfigManager();
-    std::string body_name = inner_relation.getSPHBody().Name();
-    if (config_manager.hasEntity<IsotropicDiffusion>(body_name + "ThermalDiffusion"))
-    {
-        ThermalDynamicsBuilder::buildThermalDynamics(sim, main_methods, inner_relation, contact_relation);
     }
 }
 //=================================================================================================//

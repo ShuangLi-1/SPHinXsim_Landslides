@@ -33,23 +33,48 @@
 
 namespace SPH
 {
+class TimeStepper;
+class OrientedBoxByParticle;
+class OrientedBoxByCell;
+class RealBody;
+namespace fluid_dynamics
+{
+class AbstractBidirectionalBoundary;
+}
+
+struct FluidSolverConfig
+{
+    Real acoustic_cfl_{0.6};
+    Real advection_cfl_{0.25};
+    Real max_velocity_factor_{1.0};
+    std::string surface_type_ = "free_surface";
+    bool particle_deletion_{false};
+    bool particle_sorting_{false};
+    UnsignedInt sort_frequency_{0};
+    bool emitter_on_{false};
+};
+
 class FluidDynamicsBuilder
 {
   public:
     template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
     static BaseDynamics<void> &buildDensityRegularization(
-        MethodContainerType &method_container, InnerRelationType &inner_relation,
+        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
         ContactRelationType &contact_relation, const std::string &surface_type);
 
-  private:
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    static decltype(auto) addDensitySummation(
-        MethodContainerType &method_container, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation);
+    template <class MethodContainerType>
+    static void buildBoundaryConditionsIfPresent(
+        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
 
-    template <class FluidType, class FlowType, class... ParticleScopes, class CompressionSummationType>
-    static BaseDynamics<void> &addDensityRegularization(
-        CompressionSummationType &compression_summation, SPHBody &sph_body);
+  private:
+    template <class MethodContainerType>
+    static void addBoundaryCondition(
+        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+
+    template <class MethodContainerType>
+    static fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
+        OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
+        MethodContainerType &main_methods, const json &config);
 };
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_H

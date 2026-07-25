@@ -30,31 +30,10 @@
 #define FLUID_SIMULATION_BUILDER_H
 
 #include "base_simulation_builder.h"
+#include "fluid_dynamics_builder.h"
 
 namespace SPH
 {
-
-class TimeStepper;
-class OrientedBoxByParticle;
-class OrientedBoxByCell;
-class RealBody;
-namespace fluid_dynamics
-{
-class AbstractBidirectionalBoundary;
-}
-
-struct FluidSolverConfig
-{
-    Real acoustic_cfl_{0.6};
-    Real advection_cfl_{0.25};
-    Real max_velocity_factor_{1.0};
-    std::string surface_type_ = "free_surface";
-    bool particle_deletion_{false};
-    bool particle_sorting_{false};
-    UnsignedInt sort_frequency_{0};
-    bool emitter_on_{false};
-};
-
 class FluidSimulationBuilder : public SimulationBuilder
 {
   public:
@@ -71,7 +50,7 @@ class FluidSimulationBuilder : public SimulationBuilder
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addDensityRegularization(
-        EntityManager &config_manager, MethodContainerType &main_methods,
+        SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
@@ -95,10 +74,6 @@ class FluidSimulationBuilder : public SimulationBuilder
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class MethodContainerType>
-    void buildBoundaryConditionsIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
-
-    template <class MethodContainerType>
     void buildParticleDeletionIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body);
 
@@ -106,22 +81,8 @@ class FluidSimulationBuilder : public SimulationBuilder
     void buildParticleSortIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body);
 
-    template <class MethodContainerType>
-    void addBoundaryCondition(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
-
-    template <class MethodContainerType>
-    fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
-        OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
-        MethodContainerType &main_methods, const json &config);
-
     template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
     void buildSurfaceIndicationIfOpenBoundary(
-        SPHSimulation &sim, MethodContainerType &main_methods,
-        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
-
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    void buildThermalDynamicsIfPresent(
         SPHSimulation &sim, MethodContainerType &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 };
