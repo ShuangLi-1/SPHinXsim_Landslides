@@ -124,6 +124,11 @@ void FluidDynamicsBuilder::addBoundaryCondition(
             }
         }
 
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { if(fluid_solver_config.emitter_on_)
+                  inflow_condition.exec(); });
+
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
             { if(fluid_solver_config.emitter_on_)
@@ -157,9 +162,36 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         auto &bi_directional_bd = createBiDirectionBoundary(
             oriented_box_by_cell, config_manager, main_methods, config);
 
+        auto &supplementary_conditions = main_methods.addParticleDynamicsGroup();
+        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
+                body_name + "WeaklyCompressibleMultiSpecies"))
+        {
+            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
+                body_name + "WeaklyCompressibleMultiSpecies");
+            if (config.contains("mass_fractions"))
+            {
+                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
+                    scaling_config, config.at("mass_fractions"));
+
+                supplementary_conditions.add(
+                    &main_methods.template addStateDynamics<
+                        SupplementaryCondition<ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>>(
+                        oriented_box_by_cell, mixture, mass_fractions));
+
+                supplementary_conditions.add(
+                    &main_methods.template addStateDynamics<
+                        SupplementaryCondition<UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>>(
+                        oriented_box_by_cell, mixture));
+            }
+        }
+        // applied to initialization
         initialization_pipeline.insert_hook(
             InitializationHookPoint::InitialParticleIndicationTagging, [&]()
             { bi_directional_bd.tagBufferParticles(); });
+
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { supplementary_conditions.exec(); });
 
         auto &surface_particle_count = main_methods.template addReduceDynamics<
             QuantityReduce, ReduceSum<int>>(oriented_box_by_cell, "Indicator");
@@ -176,12 +208,13 @@ void FluidDynamicsBuilder::addBoundaryCondition(
                     std::cout << "------------------------------------------------------------" << std::endl;
                     exit(1);
                 } });
-
+        // applied to simulation
         simulation_pipeline.insert_hook(
             SimulationHookPoint::BoundaryCondition, [&]()
             {   
                 Real dt = time_stepper.getGlobalTimeStepSize();
-                bi_directional_bd.applyBoundaryCondition(dt); });
+                bi_directional_bd.applyBoundaryCondition(dt);
+                supplementary_conditions.exec(); });
 
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleCreation, [&]()
@@ -196,24 +229,6 @@ void FluidDynamicsBuilder::addBoundaryCondition(
             SimulationHookPoint::ParticleIndicationTagging, [&]()
             { bi_directional_bd.tagBufferParticles(); });
 
-        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies");
-            if (config.contains("mass_fractions"))
-            {
-                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("mass_fractions"));
-                bi_directional_bd.template addSupplementaryCondition<
-                    ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                    main_methods, oriented_box_by_cell, mixture, mass_fractions);
-
-                bi_directional_bd.template addSupplementaryCondition<
-                    UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
-                    main_methods, oriented_box_by_cell, mixture);
-            }
-        }
         return;
     }
     throw std::runtime_error(
