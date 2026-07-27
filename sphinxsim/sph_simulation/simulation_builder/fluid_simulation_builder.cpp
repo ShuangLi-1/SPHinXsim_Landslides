@@ -121,7 +121,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     }
     // Structure contacts kept for the coupling forces, which can only be built
     // once the fluid has registered its own kinematic variables.
-    StdVec<ParticleDynamicsGroup *> structure_configurations;
+    // StdVec here would be a stack-use-after-return once buildSimulation()
+    // returns and the pipeline starts invoking that lambda from stepTo().
+    StdVec<ParticleDynamicsGroup *> &structure_configurations = *(new StdVec<ParticleDynamicsGroup *>());
     // Elastic solid bodies get their own configuration and stress relaxation.
     // Bodies declared rigid are skipped, so purely rigid cases are unaffected.
     size_t structure_index = 0;
@@ -140,23 +142,23 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         // once in the reference configuration and stay fixed.
         auto &elastic_inner = sph_system.addInnerRelation(elastic_body, ConfigType::Lagrangian);
         Contact<> &elastic_fluid_contact = *structure_fluid_contacts[structure_index++];
-        auto &elastic_configuration =
-        main_methods.addParticleDynamicsGroup()
-            .add(&main_methods.addCellLinkedListDynamics(elastic_body))
-            .add(&main_methods.addRelationDynamics(elastic_inner))
-            .add(&main_methods.addRelationDynamics(elastic_fluid_contact));
-
-        auto &elastic_contact_update =
-            main_methods.addParticleDynamicsGroup()
-                .add(&main_methods.addCellLinkedListDynamics(elastic_body))
-                .add(&main_methods.addRelationDynamics(elastic_fluid_contact));
-
-        structure_configurations.push_back(&elastic_contact_update);
 
         auto &initialize_displacement =
             main_methods.addStateDynamics<InitializeDisplacementCK>(elastic_body);
+
         auto &update_average_velocity =
             main_methods.addStateDynamics<UpdateAverageVelocityAndAccelerationCK>(elastic_body);
+
+        // The structure's reference normals and signed distance, needed by the
+        // coupling forces and by the per step normal update.
+        auto &elastic_initial_normal =
+            main_methods.addStateDynamics<NormalFromBodyShapeCK>(elastic_body);
+
+        auto &elastic_configuration =
+            main_methods.addParticleDynamicsGroup()
+                .add(&main_methods.addCellLinkedListDynamics(elastic_body))
+                .add(&main_methods.addRelationDynamics(elastic_inner))
+                .add(&main_methods.addRelationDynamics(elastic_fluid_contact));
 
         // Snapshot the surface before the structure advances.
         sim.getSimulationPipeline().insert_hook(
@@ -194,20 +196,24 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         auto &elastic_correction_matrix =
             SolidDynamicsBuilder::buildSolidDynamics<CompositeSolidMaterial>(
                 sim, main_methods, elastic_inner);
+                
+        auto &elastic_normal_direction =
+            main_methods.addStateDynamics<solid_dynamics::UpdateElasticNormalDirectionCK>(elastic_body);
 
-        // Recover the surface motion the fluid sees over the interval just integrated.
-        sim.getSimulationPipeline().insert_hook(
-            SimulationHookPoint::CouplingSynchronization, [&]()
-            {
-                update_average_velocity.exec(
-                    sph_solver.getTimeStepper().getGlobalTimeStepSize());
-            });
+        auto &elastic_contact_update =
+            main_methods.addParticleDynamicsGroup()
+                .add(&main_methods.addCellLinkedListDynamics(elastic_body))
+                .add(&main_methods.addRelationDynamics(elastic_fluid_contact));
+
+        structure_configurations.push_back(&elastic_contact_update);
 
         sim.getInitializationPipeline().insert_hook(
             InitializationHookPoint::InitialCondition, [&]()
             {
                 elastic_configuration.exec();
+                elastic_initial_normal.exec();
                 elastic_correction_matrix.exec();
+                elastic_normal_direction.exec();
             });
     }
     auto &fluid_configuration =
@@ -223,21 +229,26 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
 
     addMainPhysicalTimeStep(sim, main_methods, fluid_inner, fluid_wall_contact);
 
-    // // Coupling forces the fluid exerts on each structure.
-    // for (Contact<> *structure_contact : structure_fluid_contacts)
-    // {
-    //     auto &viscous_force_on_structure =
-    //         main_methods.addInteractionDynamics<FSI::ViscousForceOnStructure<fluid_dynamics::ViscousForceCK<Contact<Wall, Viscosity, NoKernelCorrectionCK>>>>(*structure_contact);
-    //     auto &pressure_force_on_structure =
-    //         main_methods.addInteractionDynamics<FSI::PressureForceOnStructure<fluid_dynamics::AcousticStep2ndHalf<Contact<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>>>>(*structure_contact);
+    // Coupling forces the fluid exerts on each structure.
+    for (Contact<> *structure_contact : structure_fluid_contacts)
+    {
+        auto &viscous_force_on_structure =
+            main_methods.addInteractionDynamics<FSI::ViscousForceOnStructure<fluid_dynamics::ViscousForceCK<Contact<Wall, Viscosity, NoKernelCorrectionCK>>>>(*structure_contact);
+        auto &pressure_force_on_structure =
+            main_methods.addInteractionDynamics<FSI::PressureForceOnStructure<fluid_dynamics::AcousticStep2ndHalf<Contact<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>>>>(*structure_contact);
 
-    //     sim.getSimulationPipeline().insert_hook(
-    //         SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
-    //         { 
-    //             viscous_force_on_structure.exec(); 
-    //             pressure_force_on_structure.exec(); 
-    //         });
-    // }
+        sim.getInitializationPipeline().insert_hook(
+            InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [&]()
+            { viscous_force_on_structure.exec(); });
+
+        sim.getSimulationPipeline().insert_hook(
+            SimulationHookPoint::BoundaryCondition, [&]()
+            { pressure_force_on_structure.exec(); });
+
+        sim.getSimulationPipeline().insert_hook(
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
+            { viscous_force_on_structure.exec(); });
+    }
 
     auto &fluid_density_regularization = addDensityRegularization(
         sim, main_methods, fluid_inner, fluid_wall_contact);
@@ -389,6 +400,8 @@ FluidSolverConfig FluidSimulationBuilder::parseFluidSolverConfig(
             config.at("max_velocity_factor"), "Dimensionless");
     if (config.contains("surface_type"))
         params.surface_type_ = config.at("surface_type").get<std::string>();
+    if (config.contains("kernel_correction"))
+        params.kernel_correction_ = config.at("kernel_correction").get<std::string>();
     if (config.contains("particle_sort_frequency"))
     {
         params.particle_sorting_ = true;

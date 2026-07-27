@@ -49,6 +49,7 @@ struct FluidSolverConfig
     Real advection_cfl_{0.25};
     Real max_velocity_factor_{1.0};
     std::string surface_type_ = "free_surface";
+    std::string kernel_correction_{"linear"};
     bool particle_deletion_{false};
     bool particle_sorting_{false};
     UnsignedInt sort_frequency_{0};

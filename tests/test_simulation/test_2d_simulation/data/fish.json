@@ -33,7 +33,17 @@
   "particle_generation": {
     "build_and_run": true,
     "settings": {
-      "bodies": [ { "name": "WaterBody" }, { "name": "FishBody", "solid_body": {}, "relaxation": { "level_set": {} } }],
+      "bodies": [
+        {
+          "name": "WaterBody",
+          "relaxation": { "level_set": {}, "dependent_bodies": ["FishBody"] }
+        },
+        {
+          "name": "FishBody",
+          "solid_body": {},
+          "relaxation": { "level_set": {} }
+        }
+      ],
       "relaxation_parameters": { "total_iterations": 1000 }
     }
   },
@@ -93,7 +103,13 @@
       "name": "FishBody",
       "variables": [
         { "int_type": ["MaterialID"] },
-        { "vector_type": ["Velocity", "Force"] }
+        { "vector_type": ["Velocity", "Force", "ForcePrior"] }
+      ]
+    },
+    {
+      "name": "WaterBody",
+      "variables": [
+        { "real_type": ["Density", "Pressure"] }
       ]
     }
   ],
@@ -105,6 +121,7 @@
       "acoustic_cfl": 0.6,
       "advection_cfl": 0.25,
       "surface_type": "free_stream",
+      "kernel_correction": "none",
       "particle_sort_frequency": 100
     }
   }

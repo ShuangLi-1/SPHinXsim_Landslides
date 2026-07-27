@@ -33,14 +33,31 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
     if (sph_body.isMatterMaterial<WeaklyCompressibleFluid>())
     {
         using RiemannSolverType = RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
-        acoustic_step_1st_half.add(
-            &main_methods.template addInteractionDynamicsOneLevel<
-                             AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-                 .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
-        acoustic_step_2nd_half.add(
-            &main_methods.template addInteractionDynamicsOneLevel<
-                             AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-                 .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+        std::string kernel_correction =
+            config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig").kernel_correction_;
+
+        if (kernel_correction == "none")
+        {
+            acoustic_step_1st_half.add(
+                &main_methods.template addInteractionDynamicsOneLevel<AcousticStep1stHalf, AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
+                    .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(fluid_wall_contact));
+
+            acoustic_step_2nd_half.add(
+                &main_methods.template addInteractionDynamicsOneLevel<AcousticStep2ndHalf, AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
+                    .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(fluid_wall_contact));
+        }
+        else
+        {
+            acoustic_step_1st_half.add(
+                &main_methods.template addInteractionDynamicsOneLevel<
+                                AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                    .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+
+            acoustic_step_2nd_half.add(
+                &main_methods.template addInteractionDynamicsOneLevel<
+                                AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                    .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+        }
         acoustic_time_step.add(
             &main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleFluid>>(sph_body, cfl));
     }

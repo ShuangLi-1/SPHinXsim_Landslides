@@ -645,6 +645,7 @@ class FluidDynamicsSolverConfig(BaseModel):
     advection_cfl: float = Field(default=0.25, gt=0)
     max_velocity_factor: float = Field(default=1.0, gt=0)
     surface_type: Literal["free_surface", "confined", "open_boundary", "free_stream"] = "free_surface"
+    kernel_correction: Literal["linear", "none"] = "linear"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 
 
