@@ -35,19 +35,23 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
             std::cout << "------------------------------------------------------------" << std::endl; });
 
     auto &minimum_compression =
-        method_container.template addReduceDynamics<QuantityReduce, ReduceMin<Real>>(sph_body, "Compression");
+        method_container.template addReduceDynamics<
+            QuantityReduce, IndexedMin, SimpleEvaluation<IndexedValue<Real>>>(sph_body, "Compression");
     auto &maximum_compression =
-        method_container.template addReduceDynamics<QuantityReduce, ReduceMax<Real>>(sph_body, "Compression");
+        method_container.template addReduceDynamics<
+            QuantityReduce, IndexedMax, SimpleEvaluation<IndexedValue<Real>>>(sph_body, "Compression");
+
     initialization_pipeline.insert_hook(
         InitializationHookPoint::PreSimulationSanityCheck, [&]()
         { 
-            Real lower_limit = minimum_compression.exec();
-            Real upper_limit = maximum_compression.exec();
-            if (lower_limit < 0.95 || upper_limit > 1.05)
+            auto lower_limit = minimum_compression.exec();
+            auto upper_limit = maximum_compression.exec();
+            if (lower_limit.first < 0.95 || upper_limit.first > 1.05)
             {
                 std::cout << "\n------------------------------------------------------------" << std::endl;
                 std::cout << "Error: Compression is out of range!" << std::endl;
-                std::cout << "Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
+                std::cout << "Lower limit: " << lower_limit.first << " at particle " << lower_limit.second << std::endl;
+                std::cout << "Upper limit: " << upper_limit.first << " at particle " << upper_limit.second << std::endl;
                 std::cout << "The possible issues are the following:" << std::endl;
                 std::cout << "- Too large: overlapped bodies" << std::endl;
                 std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
