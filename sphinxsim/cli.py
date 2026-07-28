@@ -1293,6 +1293,50 @@ def cmd_shell(args: argparse.Namespace) -> int:
 # Argument parser
 # ---------------------------------------------------------------------------
 
+COMPLETION_SCRIPTS = {
+    "bash": """_sphinxsim_completion() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts="generate validate update run preview explore shell --help --version --generate-completion"
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+complete -F _sphinxsim_completion sphinxsim""",
+
+    "zsh": """#compdef sphinxsim
+_sphinxsim() {
+    local -a subcmds
+    subcmds=(
+        'generate:Generate a simulation config from a natural-language description'
+        'validate:Validate a JSON simulation config against the schema'
+        'update:Update an existing simulation config from an instruction'
+        'run:Run a simulation from a JSON config file'
+        'preview:Render an interactive geometry/BC preview of a JSON config file'
+        'explore:Ask schema/functionality questions using LLM'
+        'shell:Interactive shell for config workflow'
+    )
+    _describe 'sphinxsim commands' subcmds
+}
+_sphinxsim "$@" """,
+
+    "fish": """complete -c sphinxsim -f -a "generate" -d "Generate simulation config"
+complete -c sphinxsim -f -a "validate" -d "Validate JSON simulation config"
+complete -c sphinxsim -f -a "update" -d "Update existing simulation config"
+complete -c sphinxsim -f -a "run" -d "Run simulation from JSON config"
+complete -c sphinxsim -f -a "preview" -d "Render interactive geometry/BC preview"
+complete -c sphinxsim -f -a "explore" -d "Ask schema/functionality questions"
+complete -c sphinxsim -f -a "shell" -d "Interactive shell workflow" """
+}
+
+
+class GenerateCompletionAction(argparse.Action):
+    """Custom argparse action to print shell auto-completion scripts and exit."""
+    def __call__(self, parser, namespace, values, option_string=None):
+        shell = values.lower()
+        if shell in COMPLETION_SCRIPTS:
+            print(COMPLETION_SCRIPTS[shell].strip())
+        parser.exit(0)
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -1300,6 +1344,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Python UI for the SPHinXsys multi-physics C++ library.",
     )
     parser.add_argument("--version", action="version", version=f"sphinxsim {__version__}")
+
+    parser.add_argument(
+        "--generate-completion",
+        choices=["bash", "zsh", "fish"],
+        action=GenerateCompletionAction,
+        help="Generate shell auto-completion script for bash, zsh, or fish.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
