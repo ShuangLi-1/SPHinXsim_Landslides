@@ -9,16 +9,27 @@ from dataclasses import dataclass
 from typing import Any, Dict
 from urllib import error, request
 
+from pydantic import ValidationError
+
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
 from sphinxsim.llm.common import (
     BODY_TYPE_RULES,
     apply_explicit_instruction_overrides,
+    apply_plastic_sound_speed_formula,
+    apply_stl_geometry_overrides,
+    coerce_simulation_type,
     dict_diff,
     example_config,
+    infer_requested_material_type,
+    infer_requested_simulation_type,
+    is_all_plastic_continuum_dict,
+    json_safe_errors,
     merge_dicts,
+    report_llm_repair,
     sanitize_config_dict,
     strip_code_fences,
+    suppress_implicit_plastic_observers,
 )
 
 
@@ -177,8 +188,28 @@ class OllamaLLM:
         return apply_explicit_instruction_overrides(cfg, description)
 
     @staticmethod
+    def _apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
+        return apply_stl_geometry_overrides(cfg, description)
+
+    @staticmethod
     def _sanitize_config_dict(cfg: Dict[str, Any]) -> Dict[str, Any]:
         return sanitize_config_dict(cfg)
+
+    @staticmethod
+    def _infer_requested_simulation_type(description: str) -> str | None:
+        return infer_requested_simulation_type(description)
+
+    @staticmethod
+    def _infer_requested_material_type(description: str) -> str | None:
+        return infer_requested_material_type(description)
+
+    @staticmethod
+    def _coerce_simulation_type(
+        existing: Dict[str, Any],
+        target_type: str,
+        material_type: str | None = None,
+    ) -> Dict[str, Any]:
+        return coerce_simulation_type(existing, target_type, material_type=material_type)
 
     _BODY_TYPE_RULES: str = BODY_TYPE_RULES
 
@@ -206,14 +237,55 @@ class OllamaLLM:
         if not isinstance(data, dict):
             raise ValueError("Ollama returned an invalid generation response")
         merged = self._merge_dicts(example_cfg, data)
+        merged = self._apply_stl_geometry_overrides(merged, description)
+        merged = self._apply_explicit_instruction_overrides(merged, description)
         merged = self._sanitize_config_dict(merged)
+        merged = suppress_implicit_plastic_observers(merged, description)
+        merged = apply_plastic_sound_speed_formula(merged)
         try:
             return SimulationConfig(**merged)
-        except Exception:
-            # If the model corrupts required structures (e.g. domain bounds),
-            # rehydrate from validated example config while preserving valid edits.
-            repaired = self._merge_dicts(merged, example_cfg)
+        except ValidationError as exc:
+            retry_system = (
+                "You are repairing a newly generated simulator config that failed schema or "
+                "physical validation. Return ONLY the full corrected JSON. Preserve valid "
+                "user-requested values and fix every reported error. "
+            ) + self._BODY_TYPE_RULES
+            retry_user = {
+                "description": description,
+                "candidate_config": merged,
+                "validation_errors": json_safe_errors(exc.errors()),
+                "example_output": example_cfg,
+            }
+            retry_data = self._post_chat(
+                messages=[
+                    {"role": "system", "content": retry_system},
+                    {"role": "user", "content": json.dumps(retry_user)},
+                ]
+            )
+            if isinstance(retry_data, dict):
+                retried = self._merge_dicts(example_cfg, retry_data)
+                retried = self._apply_stl_geometry_overrides(retried, description)
+                retried = self._apply_explicit_instruction_overrides(retried, description)
+                retried = self._sanitize_config_dict(retried)
+                retried = suppress_implicit_plastic_observers(retried, description)
+                retried = apply_plastic_sound_speed_formula(retried)
+                try:
+                    validated = SimulationConfig(**retried)
+                    report_llm_repair(merged, retried)
+                    return validated
+                except ValidationError:
+                    pass
+
+            repaired = (
+                example_cfg
+                if is_all_plastic_continuum_dict(example_cfg)
+                else self._merge_dicts(merged, example_cfg)
+            )
+            repaired = self._apply_stl_geometry_overrides(repaired, description)
+            repaired = self._apply_explicit_instruction_overrides(repaired, description)
             repaired = self._sanitize_config_dict(repaired)
+            repaired = suppress_implicit_plastic_observers(repaired, description)
+            repaired = apply_plastic_sound_speed_formula(repaired)
             return SimulationConfig(**repaired)
 
     def update(self, existing: SimulationConfig, description: str) -> SimulationConfig:
@@ -239,6 +311,7 @@ class OllamaLLM:
         if not isinstance(data, dict):
             raise ValueError("Ollama returned an invalid update response")
         merged = self._merge_dicts(existing_dict, data)
+        patch_data = None
         if merged == existing_dict:
             patch_system = (
                 f"You revise simulator configurations. The instruction is: \"{description}\". "
@@ -256,14 +329,23 @@ class OllamaLLM:
                     {"role": "user", "content": json.dumps(patch_user)},
                 ]
             )
-            if isinstance(patch_data, dict):
-                merged = self._merge_dicts(existing_dict, patch_data)
+        if isinstance(patch_data, dict):
+            merged = self._merge_dicts(existing_dict, patch_data)
         merged = self._apply_explicit_instruction_overrides(merged, description)
+        merged = self._apply_stl_geometry_overrides(merged, description)
+        requested_type = self._infer_requested_simulation_type(description)
+        requested_material = self._infer_requested_material_type(description)
+        if requested_type is not None:
+            merged = self._coerce_simulation_type(merged, requested_type, requested_material)
+            merged = self._apply_stl_geometry_overrides(merged, description)
         merged = self._sanitize_config_dict(merged)
         try:
             return SimulationConfig(**merged)
         except Exception:
             repaired = self._merge_dicts(merged, existing_dict)
+            if requested_type is not None:
+                repaired = self._coerce_simulation_type(repaired, requested_type, requested_material)
+            repaired = self._apply_stl_geometry_overrides(repaired, description)
             repaired = self._sanitize_config_dict(repaired)
             return SimulationConfig(**repaired)
 

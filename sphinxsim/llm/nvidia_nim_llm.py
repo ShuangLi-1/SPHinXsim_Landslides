@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import warnings
 from dataclasses import dataclass
 from typing import Any, Dict
 from urllib import error, request
@@ -13,17 +14,80 @@ from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
 from sphinxsim.llm.common import (
     BODY_TYPE_RULES,
+    apply_explicit_instruction_overrides,
+    apply_plastic_sound_speed_formula,
+    apply_stl_geometry_overrides,
     apply_shape_rename,
     coerce_simulation_type,
     dict_diff,
     example_config,
+    infer_requested_material_type,
     infer_requested_shape_rename,
     infer_requested_simulation_type,
+    is_all_plastic_continuum_dict,
     json_safe_errors,
     merge_dicts,
+    report_llm_repair,
     sanitize_config_dict,
     strip_code_fences,
+    suppress_implicit_plastic_observers,
 )
+
+
+GENERATION_SYSTEM_PROMPT = (
+    "You are a simulator configuration generator. "
+    "Return ONLY valid JSON in exactly the same structure as 'example_output', "
+    "with values adapted for the new description. "
+    "Choose the correct simulation type and body/material families for the requested physics. "
+    "Return exactly one JSON object and nothing before or after it: no explanation, "
+    "no duplicate object, and no markdown. Before responding, verify that the complete "
+    "response parses with a strict standard JSON parser, including every required comma, "
+    "quote, bracket, and brace. "
+)
+
+
+def build_generation_messages(
+    description: str,
+    example_cfg: Dict[str, Any] | None,
+    *,
+    body_type_rules: str = BODY_TYPE_RULES,
+) -> list[dict[str, Any]]:
+    """Build the exact messages used by production config generation."""
+    user: Dict[str, Any] = {"description": description}
+    if example_cfg is not None:
+        user["example_output"] = example_cfg
+    return [
+        {"role": "system", "content": GENERATION_SYSTEM_PROMPT + body_type_rules},
+        {"role": "user", "content": json.dumps(user)},
+    ]
+
+
+def build_generation_repair_messages(
+    description: str,
+    candidate: Dict[str, Any],
+    validation_errors: list[dict[str, Any]],
+    example_cfg: Dict[str, Any] | None,
+    *,
+    body_type_rules: str = BODY_TYPE_RULES,
+) -> list[dict[str, Any]]:
+    """Build the exact messages used by production's one repair attempt."""
+    retry_system = (
+        "You are repairing a newly generated simulator config that failed schema validation. "
+        f"Continue to satisfy this original description: \"{description}\". "
+        "Return ONLY full valid JSON. Preserve valid user-requested values and structure. "
+        "Fix all reported validation errors. "
+    ) + body_type_rules
+    retry_user: Dict[str, Any] = {
+        "description": description,
+        "candidate_config": candidate,
+        "validation_errors": validation_errors,
+    }
+    if example_cfg is not None:
+        retry_user["example_output"] = example_cfg
+    return [
+        {"role": "system", "content": retry_system},
+        {"role": "user", "content": json.dumps(retry_user)},
+    ]
 
 
 @dataclass
@@ -156,8 +220,29 @@ class NvidiaNIMLLM:
         return dict_diff(base, updated)
 
     def _load_json_content(self, content: str) -> Dict[str, Any]:
-        cleaned = self._strip_code_fences(content)
-        return json.loads(cleaned)
+        cleaned = self._strip_code_fences(content).strip()
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            if exc.msg != "Extra data":
+                raise
+            # Some chat models append a short explanation after an otherwise
+            # complete response. Accept the first dictionary only when the tail
+            # is prose; a second JSON value is ambiguous and must be regenerated.
+            parsed, end = json.JSONDecoder().raw_decode(cleaned)
+            trailing = cleaned[end:].strip()
+            if (
+                not isinstance(parsed, dict)
+                or not trailing
+                or trailing.startswith(("{", "["))
+            ):
+                raise
+            warnings.warn(
+                "Ignored trailing content after the first complete generated JSON object.",
+                RuntimeWarning,
+                stacklevel=2,
+            )
+            return parsed
 
     @staticmethod
     def _example_config(description: str) -> Dict[str, Any]:
@@ -172,12 +257,24 @@ class NvidiaNIMLLM:
         return sanitize_config_dict(cfg)
 
     @staticmethod
+    def _apply_stl_geometry_overrides(cfg: Dict[str, Any], description: str) -> Dict[str, Any]:
+        return apply_stl_geometry_overrides(cfg, description)
+
+    @staticmethod
     def _infer_requested_simulation_type(description: str) -> str | None:
         return infer_requested_simulation_type(description)
 
     @staticmethod
-    def _coerce_simulation_type(existing: Dict[str, Any], target_type: str) -> Dict[str, Any]:
-        return coerce_simulation_type(existing, target_type)
+    def _infer_requested_material_type(description: str) -> str | None:
+        return infer_requested_material_type(description)
+
+    @staticmethod
+    def _coerce_simulation_type(
+        existing: Dict[str, Any],
+        target_type: str,
+        material_type: str | None = None,
+    ) -> Dict[str, Any]:
+        return coerce_simulation_type(existing, target_type, material_type=material_type)
 
     @staticmethod
     def _infer_requested_shape_rename(description: str) -> tuple[str, str] | None:
@@ -191,23 +288,14 @@ class NvidiaNIMLLM:
         if not description or not description.strip():
             raise ValueError("description must not be empty")
 
-        system = (
-            "You are a simulator configuration generator. "
-            "Return ONLY valid JSON in exactly the same structure as 'example_output', "
-            "with values adapted for the new description. "
-            "Choose the correct simulation type and body/material families for the requested physics. "
-        ) + self._BODY_TYPE_RULES
         example_cfg = self._example_config(description)
-        user = {
-            "description": description,
-            "example_output": example_cfg,
-        }
 
         content = self._post_chat(
-            messages=[
-                {"role": "system", "content": system},
-                {"role": "user", "content": json.dumps(user)},
-            ],
+            messages=build_generation_messages(
+                description,
+                example_cfg,
+                body_type_rules=self._BODY_TYPE_RULES,
+            ),
             temperature=0.0,
         )
 
@@ -216,12 +304,52 @@ class NvidiaNIMLLM:
             raise ValueError("NVIDIA NIM returned an invalid generation response")
 
         merged = self._merge_dicts(example_cfg, data)
+        merged = self._apply_stl_geometry_overrides(merged, description)
+        merged = apply_explicit_instruction_overrides(merged, description)
         merged = self._sanitize_config_dict(merged)
+        merged = suppress_implicit_plastic_observers(merged, description)
+        merged = apply_plastic_sound_speed_formula(merged)
         try:
             return SimulationConfig(**merged)
-        except Exception:
-            repaired = self._merge_dicts(merged, example_cfg)
+        except ValidationError as exc:
+            safe_validation_errors = json_safe_errors(exc.errors())
+            retry_content = self._post_chat(
+                messages=build_generation_repair_messages(
+                    description,
+                    merged,
+                    safe_validation_errors,
+                    example_cfg,
+                    body_type_rules=self._BODY_TYPE_RULES,
+                ),
+                temperature=0.0,
+            )
+            retry_data = self._load_json_content(retry_content)
+            if isinstance(retry_data, dict):
+                retried = self._merge_dicts(example_cfg, retry_data)
+                retried = self._apply_stl_geometry_overrides(retried, description)
+                retried = apply_explicit_instruction_overrides(retried, description)
+                retried = self._sanitize_config_dict(retried)
+                retried = suppress_implicit_plastic_observers(retried, description)
+                retried = apply_plastic_sound_speed_formula(retried)
+                try:
+                    validated = SimulationConfig(**retried)
+                    report_llm_repair(merged, retried)
+                    return validated
+                except ValidationError:
+                    pass
+
+            # The single LLM repair attempt also failed schema validation.
+            # Restore the validated example structure as the final deterministic fallback.
+            repaired = (
+                example_cfg
+                if is_all_plastic_continuum_dict(example_cfg)
+                else self._merge_dicts(merged, example_cfg)
+            )
+            repaired = self._apply_stl_geometry_overrides(repaired, description)
+            repaired = apply_explicit_instruction_overrides(repaired, description)
             repaired = self._sanitize_config_dict(repaired)
+            repaired = suppress_implicit_plastic_observers(repaired, description)
+            repaired = apply_plastic_sound_speed_formula(repaired)
             return SimulationConfig(**repaired)
 
     def update(self, existing: SimulationConfig, description: str) -> SimulationConfig:
@@ -253,9 +381,11 @@ class NvidiaNIMLLM:
 
         merged = self._merge_dicts(existing_dict, data)
         requested_type = self._infer_requested_simulation_type(description)
+        requested_material = self._infer_requested_material_type(description)
         requested_shape_rename = self._infer_requested_shape_rename(description)
         if requested_type is not None:
-            merged = self._coerce_simulation_type(merged, requested_type)
+            merged = self._coerce_simulation_type(merged, requested_type, requested_material)
+        merged = self._apply_stl_geometry_overrides(merged, description)
         if requested_shape_rename is not None:
             merged = self._apply_shape_rename(merged, requested_shape_rename[0], requested_shape_rename[1])
         merged = self._sanitize_config_dict(merged)
@@ -287,7 +417,8 @@ class NvidiaNIMLLM:
             if isinstance(retry_data, dict):
                 retried = self._merge_dicts(existing_dict, retry_data)
                 if requested_type is not None:
-                    retried = self._coerce_simulation_type(retried, requested_type)
+                    retried = self._coerce_simulation_type(retried, requested_type, requested_material)
+                retried = self._apply_stl_geometry_overrides(retried, description)
                 if requested_shape_rename is not None:
                     retried = self._apply_shape_rename(retried, requested_shape_rename[0], requested_shape_rename[1])
                 retried = self._sanitize_config_dict(retried)
@@ -297,7 +428,8 @@ class NvidiaNIMLLM:
                     pass
 
             if requested_type is not None:
-                coerced = self._coerce_simulation_type(existing_dict, requested_type)
+                coerced = self._coerce_simulation_type(existing_dict, requested_type, requested_material)
+                coerced = self._apply_stl_geometry_overrides(coerced, description)
                 if requested_shape_rename is not None:
                     coerced = self._apply_shape_rename(coerced, requested_shape_rename[0], requested_shape_rename[1])
                 coerced = self._sanitize_config_dict(coerced)
