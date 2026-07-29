@@ -673,6 +673,7 @@ class SolverParametersConfig(BaseModel):
     end_time: Optional[float] = Field(default=None, gt=0)
     output_interval: Optional[float] = Field(default=None, gt=0)
     screen_interval: Optional[int] = Field(default=None, gt=0)
+    observation_interval: int = Field(default=200, gt=0)
     restart: Optional[RestartConfig] = None
     fluid_dynamics: Optional[FluidDynamicsSolverConfig] = None
     continuum_dynamics: Optional[ContinuumDynamicsSolverConfig] = None

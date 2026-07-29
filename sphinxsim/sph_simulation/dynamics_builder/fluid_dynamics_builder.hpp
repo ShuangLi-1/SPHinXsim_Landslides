@@ -39,14 +39,18 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
     auto &maximum_compression =
         method_container.template addReduceDynamics<QuantityReduce<ReduceMax>>(sph_body, "Compression");
     initialization_pipeline.insert_hook(
-        InitializationHookPoint::PreSimulationSanityCheck, [&]()
-        { 
+        InitializationHookPoint::PreSimulationSanityCheck, [&, surface_type]()
+        {
             Real lower_limit = minimum_compression.exec();
             Real upper_limit = maximum_compression.exec();
             if (lower_limit < 0.95 || upper_limit > 1.05)
             {
                 std::cout << "\n Error: Compression is out of range!" << std::endl;
                 std::cout << " Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
+                if (surface_type != "free_stream")
+                {
+                    throw std::runtime_error("Compression is out of range!");
+                }
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();

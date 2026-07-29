@@ -127,6 +127,7 @@
     "end_time": 1.7,
     "output_interval": 0.01,
     "screen_interval": 100,
+    "observation_interval": 100,
     "fluid_dynamics": {
       "acoustic_cfl": 0.6,
       "advection_cfl": 0.25,

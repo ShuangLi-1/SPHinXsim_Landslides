@@ -166,6 +166,7 @@ struct SolverCommonConfig
     Real end_time_{0.0};
     Real output_interval_{0.1};
     UnsignedInt screen_interval_{100};
+    UnsignedInt observation_interval_{200};
 };
 
 struct RestartConfig

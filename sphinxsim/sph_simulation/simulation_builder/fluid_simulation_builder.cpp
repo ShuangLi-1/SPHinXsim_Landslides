@@ -273,13 +273,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &advection_step = time_stepper.addTriggerByInterval(fluid_advection_time_step.exec());
     auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
     time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
-    // SPHSolver's observation cadence (which drives energy_recording and
-    // observers) defaults to every 200 advection steps, double SYCL's
-    // screen_output_interval=100 (2d_flow_stream_around_fish_sycl.cpp:214).
-    // At the coarser default we miss the early transient entirely, making a
-    // genuinely spike-then-settle energy curve look like a plain monotonic
-    // rise. Match SYCL's cadence so the recorded shape is comparable.
-    time_stepper.setObservationInterval(100);
+    time_stepper.setObservationInterval(solver_common_config.observation_interval_);
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
@@ -376,7 +370,13 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletion);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleSort);
 
-                solid_cell_linked_list.exec();
+                // Rigid solid bodies never move, so their cell-linked list stays
+                // valid from initialization; only rebuild per step when moving
+                // (composite/elastic) structures are present.
+                if (!structure_configurations.empty())
+                {
+                    solid_cell_linked_list.exec();
+                }
 
                 for (ParticleDynamicsGroup *structure_configuration : structure_configurations)
                     structure_configuration->exec();

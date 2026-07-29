@@ -506,6 +506,9 @@ SolverCommonConfig SimulationBuilder::parseSolverCommonConfig(
 
     if (config.contains("screen_interval"))
         solver_common_config.screen_interval_ = config.at("screen_interval").get<UnsignedInt>();
+
+    if (config.contains("observation_interval"))
+        solver_common_config.observation_interval_ = config.at("observation_interval").get<UnsignedInt>();
     return solver_common_config;
 }
 //=================================================================================================//
