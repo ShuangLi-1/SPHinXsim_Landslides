@@ -278,16 +278,16 @@ def example_config(description: str) -> Dict[str, Any]:
     return suppress_implicit_plastic_observers(config, description)
 
 
+_OBSERVER_REQUEST_TERMS = (
+    r"(?:observer|observers|probe|probes|sensor|sensors|monitor|monitors)"
+)
 _EXPLICIT_OBSERVER_REQUEST_RE = re.compile(
-    r"\b(observer|observers|probe|probes|sensor|sensors|monitor|monitors)\b|"
-    r"观测|观察点|监测点|传感器",
+    rf"\b{_OBSERVER_REQUEST_TERMS}\b",
     re.IGNORECASE,
 )
 _NEGATIVE_OBSERVER_REQUEST_RE = re.compile(
-    r"\b(no|without|不要|没有|无)\b[^.!?;，。；]{0,24}\b"
-    r"(observer|observers|probe|probes|sensor|sensors|monitor|monitors)\b|"
-    r"(observer|observers|probe|probes|sensor|sensors|monitor|monitors)\b[^.!?;，。；]{0,12}"
-    r"\b(no|without)\b",
+    rf"\b(?:no|without)\b[^.!?;,:]{{0,24}}\b{_OBSERVER_REQUEST_TERMS}\b|"
+    rf"\b{_OBSERVER_REQUEST_TERMS}\b[^.!?;,:]{{0,12}}\b(?:no|without)\b",
     re.IGNORECASE,
 )
 

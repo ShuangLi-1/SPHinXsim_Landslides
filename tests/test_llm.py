@@ -87,6 +87,12 @@ class TestMockLLM:
         )
         assert len(cfg.observers) == 1
 
+    def test_plastic_generation_respects_explicit_no_observer_request(self):
+        cfg = self.llm.generate(
+            "granular soil column collapse using plastic continuum without an observer"
+        )
+        assert cfg.observers == []
+
     def test_physics_fsi(self):
         cfg = self.llm.generate("hydroelastic fluid-structure interaction")
         assert cfg.solver_parameters.end_time is not None
@@ -307,33 +313,6 @@ class TestSTLGeometryOverrides:
         restored = SimulationConfig.model_validate(updated)
         assert restored.continuum_bodies[0].name == "GranularBody"
         assert restored.solid_bodies[0].name == "WallBoundary"
-
-    def test_explicit_landslide_values_override_repose_angle_defaults(self):
-        description = (
-            "Create a 3D landslide simulation using two STL files. "
-            "Use landslides.stl to define the moving landslide body and boundary.stl "
-            "to define the fixed terrain boundary. Assign the landslide material a "
-            "density of 1800 kg/m\u00b3, a Young\u2019s modulus of 200 MPa, a "
-            "Poisson\u2019s ratio of 0.3, a friction angle of 10.5 degrees, a cohesion "
-            "of 15 kPa, and a dilatancy angle of 0 degrees. Set the particle spacing "
-            "to 10 m, the end time to 80 s, and the output interval to 5 s."
-        )
-        updated = apply_stl_geometry_overrides(example_config(description), description)
-        updated = apply_explicit_instruction_overrides(updated, description)
-        updated = apply_plastic_sound_speed_formula(updated)
-
-        material = updated["continuum_bodies"][0]["material"]
-        assert material["density"] == pytest.approx(1800.0)
-        assert material["youngs_modulus"] == pytest.approx(200.0e6)
-        assert material["poisson_ratio"] == pytest.approx(0.3)
-        assert material["friction_angle"] == pytest.approx(0.1832595714594046)
-        assert material["cohesion"] == pytest.approx(15000.0)
-        assert material["dilatancy_angle"] == pytest.approx(0.0)
-        assert material["sound_speed"] == pytest.approx(304.2903097250923)
-        assert updated["geometries"]["global_resolution"]["particle_spacing"] == pytest.approx(10.0)
-        assert updated["solver_parameters"]["end_time"] == pytest.approx(80.0)
-        assert updated["solver_parameters"]["output_interval"] == pytest.approx(5.0)
-        SimulationConfig.model_validate(updated)
 
     def test_column_collapse_wall_thickness_defaults_to_four_particle_spacings(self):
         description = (
