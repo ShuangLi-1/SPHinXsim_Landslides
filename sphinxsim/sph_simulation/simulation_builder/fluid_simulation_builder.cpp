@@ -280,13 +280,13 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
-    buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
+    ThermalDynamicsBuilder::buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     //----------------------------------------------------------------------
     // Define initial and boundary conditions,
     // particle deletion and sorting if present.
     //----------------------------------------------------------------------
-    buildInitialConditionIfPresent(sim, main_methods, config); // use host kernel
-    buildBoundaryConditionsIfPresent(sim, main_methods, config);
+    buildInitialConditionIfPresent(sim, main_methods, config);
+    FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(sim, main_methods, config);
     buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
     buildParticleSortIfPresent(sim, main_methods, fluid_body);
     //----------------------------------------------------------------------
@@ -305,9 +305,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         {
             solid_cell_linked_list.exec();
             fluid_configuration.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
             fluid_linear_correction_matrix.exec();

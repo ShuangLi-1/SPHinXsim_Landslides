@@ -1,6 +1,6 @@
 #include "material_builder.h"
 
-#include "fluid_simulation_builder.h"
+#include "fluid_dynamics_builder.h"
 #include "sphinxsys.h"
 #include "composite_solid.h"
 
