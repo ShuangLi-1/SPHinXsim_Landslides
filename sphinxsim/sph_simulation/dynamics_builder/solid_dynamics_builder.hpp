@@ -41,7 +41,8 @@ namespace SPH
 template <class MaterialType, class MethodContainerType, class InnerRelationType>
 auto &SolidDynamicsBuilder::buildSolidDynamics(
     SPHSimulation &sim, MethodContainerType &method_container,
-    InnerRelationType &inner_relation)
+    InnerRelationType &inner_relation,
+    std::function<void()> pre_substep_hook)
 {
     auto &sph_system = sim.getSPHSystem();
     auto &time_stepper = sim.getSPHSolver().getTimeStepper();
@@ -81,7 +82,7 @@ auto &SolidDynamicsBuilder::buildSolidDynamics(
     // fill each coupling interval with as many solid sub-steps as it takes
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
-        SimulationHookPoint::CouplingSynchronization, [&]()
+        SimulationHookPoint::CouplingSynchronization, [&, pre_substep_hook]()
         {
             Real dt = time_stepper.getGlobalTimeStepSize();
             if (!(dt > 0.0))
@@ -95,7 +96,17 @@ auto &SolidDynamicsBuilder::buildSolidDynamics(
                 throw std::runtime_error(
                     "SolidDynamicsBuilder: structure time step is not a positive number.");
             }
-            time_stepper.integrateMatchedTimeInterval(solid_relaxation, dt, solid_time_step);
+            // Matches SYCL: re-run the pre-substep hook (active strain) before
+            // every solid sub-step, not once for the whole coupling interval.
+            time_stepper.integrateMatchedTimeInterval(
+                dt, solid_time_step, [&](Real dt_s)
+                {
+                    if (pre_substep_hook)
+                    {
+                        pre_substep_hook();
+                    }
+                    solid_relaxation.exec(dt_s);
+                });
         });
     return correction_matrix;
 }

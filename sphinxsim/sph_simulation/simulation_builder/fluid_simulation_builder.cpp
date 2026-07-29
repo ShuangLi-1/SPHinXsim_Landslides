@@ -3,7 +3,7 @@
 #include "base_simulation_builder.hpp"
 #include "solid_dynamics_builder.hpp"
 
-#include "region_material_id.h"
+#include "region_shape_material_id.h"
 #include "composite_solid.h"
 #include "traveling_wave_active_strain.h"
 #include "structure_surface_motion.h"
@@ -90,26 +90,18 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             throw std::runtime_error("material id regions refer to an unknown solid body: " + body_name);
         }
 
-        StdVec<Real> coefficients;
-        for (const auto &coefficient : region_config.at("envelope_coefficients"))
+        StdVec<Shape *> region_shapes;
+        StdVec<int> region_ids;
+        for (const auto &region : region_config.at("regions"))
         {
-            coefficients.push_back(coefficient.get<Real>());
+            std::string shape_name = region.at("shape").get<std::string>();
+            region_shapes.push_back(&config_manager.getEntity<Shape>(shape_name));
+            region_ids.push_back(region.at("id").get<int>());
         }
+        int default_id = region_config.at("default_id").get<int>();
 
-        Vecd center = Vecd::Zero();
-        const json &center_config = region_config.at("center");
-        for (int k = 0; k != center.size(); ++k)
-        {
-            center[k] = scaling_config.jsonToReal(center_config.at(k), "Length");
-        }
-
-        Real region_span = scaling_config.jsonToReal(region_config.at("region_span"), "Length");
-        Real tip_span = scaling_config.jsonToReal(region_config.at("tip_span"), "Length");
-        Real core_thickness = scaling_config.jsonToReal(region_config.at("core_thickness"), "Length");
-        Real envelope_offset = scaling_config.jsonToReal(region_config.at("envelope_offset"), "Length");
-
-        material_id_assignment.add(&main_methods.addStateDynamics<PolynomialRegionMaterialId>(
-            *target_body, coefficients, center, region_span, tip_span, core_thickness, envelope_offset));
+        material_id_assignment.add(&main_methods.addStateDynamics<RegionShapeMaterialId>(
+            *target_body, region_shapes, region_ids, default_id));
         has_material_id_assignment = true;
     }
 
@@ -166,18 +158,18 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             { initialize_displacement.exec(); });
 
         const json &material_config = solid_config.at("material");
+        std::function<void()> active_strain_pre_substep_hook = nullptr;
         if (material_config.contains("active_strain"))
         {
             const json &wave_config = material_config.at("active_strain");
-            const json &region_config = material_config.at("material_id_regions");
 
             Vecd wave_center = Vecd::Zero();
             for (int k = 0; k != wave_center.size(); ++k)
             {
-                wave_center[k] = scaling_config.jsonToReal(region_config.at("center").at(k), "Length");
+                wave_center[k] = scaling_config.jsonToReal(wave_config.at("center").at(k), "Length");
             }
-            Real wave_span = scaling_config.jsonToReal(region_config.at("region_span"), "Length");
-            Real wave_core = scaling_config.jsonToReal(region_config.at("core_thickness"), "Length");
+            Real wave_span = scaling_config.jsonToReal(wave_config.at("region_span"), "Length");
+            Real wave_core = scaling_config.jsonToReal(wave_config.at("core_thickness"), "Length");
             // Wave parameters are taken as given; they are not unit scaled.
             Real amplitude = wave_config.at("amplitude").get<Real>();
             Real frequency = wave_config.at("frequency").get<Real>();
@@ -188,17 +180,34 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             elastic_body, wave_center, wave_span, wave_core,
             amplitude, frequency, wavelength_factor, start_time);
 
-            sim.getSimulationPipeline().insert_hook(
-                SimulationHookPoint::CouplingSynchronization, [&]()
-                { active_strain.exec(); });
+            // SYCL reference imposes the active strain once per solid sub-step
+            // (2d_flow_stream_around_fish_sycl.cpp:309), not once per coupling
+            // interval, so the traveling wave phase stays current across
+            // sub-steps. Passed to buildSolidDynamics below.
+            active_strain_pre_substep_hook = [&active_strain]()
+            { active_strain.exec(); };
         }
 
         auto &elastic_correction_matrix =
             SolidDynamicsBuilder::buildSolidDynamics<CompositeSolidMaterial>(
-                sim, main_methods, elastic_inner);
+                sim, main_methods, elastic_inner, active_strain_pre_substep_hook);
+
+        // Recover the averaged surface motion the fluid sees over the interval,
+        // after the structure sub loop has advanced.
+        sim.getSimulationPipeline().insert_hook(
+            SimulationHookPoint::CouplingSynchronization, [&]()
+            { update_average_velocity.exec(sph_solver.getTimeStepper().getGlobalTimeStepSize()); });
                 
         auto &elastic_normal_direction =
             main_methods.addStateDynamics<solid_dynamics::UpdateElasticNormalDirectionCK>(elastic_body);
+
+        // SYCL reference refreshes the elastic normal every advection step
+        // (2d_flow_stream_around_fish_sycl.cpp:332); without this the normal
+        // stays frozen at its t=0 value while the surface deforms, which
+        // distorts the pressure force most where the motion is largest (tail).
+        sim.getSimulationPipeline().insert_hook(
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
+            { elastic_normal_direction.exec(); });
 
         auto &elastic_contact_update =
             main_methods.addParticleDynamicsGroup()
@@ -264,6 +273,13 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &advection_step = time_stepper.addTriggerByInterval(fluid_advection_time_step.exec());
     auto &state_recording_trigger = time_stepper.addTriggerByInterval(solver_common_config.output_interval_);
     time_stepper.setScreeningInterval(solver_common_config.screen_interval_);
+    // SPHSolver's observation cadence (which drives energy_recording and
+    // observers) defaults to every 200 advection steps, double SYCL's
+    // screen_output_interval=100 (2d_flow_stream_around_fish_sycl.cpp:214).
+    // At the coarser default we miss the early transient entirely, making a
+    // genuinely spike-then-settle energy curve look like a plain monotonic
+    // rise. Match SYCL's cadence so the recorded shape is comparable.
+    time_stepper.setObservationInterval(100);
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
@@ -285,6 +301,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
+    recording_builder.buildEnergyRecordingIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     //	Define preparation or initialization step before the main integration.
     //----------------------------------------------------------------------

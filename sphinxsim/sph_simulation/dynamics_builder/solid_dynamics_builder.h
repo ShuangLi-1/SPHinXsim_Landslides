@@ -33,6 +33,8 @@
 
 #include "base_simulation_builder.h"
 
+#include <functional>
+
 namespace SPH
 {
 class RealBody;
@@ -40,10 +42,15 @@ class RealBody;
 class SolidDynamicsBuilder
 {
   public:
+    // pre_substep_hook, if given, runs once before every solid sub-step
+    // (e.g. imposing an active strain), matching the SYCL reference which
+    // re-samples the active strain at each solid sub-step rather than once
+    // per coupling interval.
     template <class MaterialType, class MethodContainerType, class InnerRelationType>
     static auto &buildSolidDynamics(
         SPHSimulation &sim, MethodContainerType &method_container,
-        InnerRelationType &inner_relation);
+        InnerRelationType &inner_relation,
+        std::function<void()> pre_substep_hook = nullptr);
 
   private:
 };

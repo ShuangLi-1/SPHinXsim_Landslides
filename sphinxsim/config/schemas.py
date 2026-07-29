@@ -371,6 +371,15 @@ class ExtraStateRecordingConfig(BaseModel):
     variables: List[StateRecordingVariableConfig] = Field(..., min_length=1)
 
 
+class EnergyRecordingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
+    quantity: Literal["TotalMechanicalEnergy"] = "TotalMechanicalEnergy"
+    gravity: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
+
+
 class ViscosityConfig(BaseModel):
     Reynolds_number: float = Field(..., gt=0)
 
@@ -707,6 +716,7 @@ class SimulationConfig(BaseModel):
     body_constraints: List[BodyConstraintConfig] = Field(default_factory=list)
     initial_conditions: List[InitialConditionConfig] = Field(default_factory=list)
     extra_state_recording: List[ExtraStateRecordingConfig] = Field(default_factory=list)
+    energy_recording: List[EnergyRecordingConfig] = Field(default_factory=list)
 
     solver_parameters: SolverParametersConfig
 

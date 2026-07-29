@@ -22,7 +22,13 @@
         "polygons": [
           { "operation": "union", "type": "data_file", "file_name": "fish_outline.dat" }
         ]
-      }
+      },
+      { "name": "MuscleUpper", "type": "multipolygon",
+        "polygons": [ { "operation": "union", "type": "data_file", "file_name": "muscle_upper.dat" } ] },
+      { "name": "MuscleLower", "type": "multipolygon",
+        "polygons": [ { "operation": "union", "type": "data_file", "file_name": "muscle_lower.dat" } ] },
+      { "name": "Bone", "type": "multipolygon",
+        "polygons": [ { "operation": "union", "type": "data_file", "file_name": "bone.dat" } ] }
     ],
     "oriented_boxes": [
       { "name": "Emitter",  "type": "region", "half_size": [0.005, 0.2], "transform": { "translation": [-0.045, 0.2], "rotation_angle": 0.0 } },
@@ -65,24 +71,21 @@
       "youngs_modulus_1": 500000.0,
       "youngs_modulus_2": 1100000.0,
       "material_id_regions": {
-        "envelope_coefficients": [
-          0.183,
-          2.3925,
-          -58.9875,
-          410.0625,
-          -989.0625
-        ],
-        "center": [0.24, 0.2],
-        "region_span": 0.2,
-        "tip_span": 0.03,
-        "core_thickness": 0.003,
-        "envelope_offset": 0.004
-      },
+          "regions": [
+            { "shape": "MuscleUpper", "id": 0 },
+            { "shape": "MuscleLower", "id": 0 },
+            { "shape": "Bone",        "id": 2 }
+          ],
+          "default_id": 1
+        },
       "active_strain": {
           "amplitude": 0.12,
           "frequency": 4.0,
           "wavelength_factor": 3.0,
-          "start_time": 0.2
+          "start_time": 0.2,
+          "center": [0.24, 0.2],
+          "region_span": 0.2,
+          "core_thickness": 0.003
         }
     }
   }
@@ -111,6 +114,13 @@
       "variables": [
         { "real_type": ["Density", "Pressure"] }
       ]
+    }
+  ],
+  "energy_recording": [
+    {
+      "name": "WaterMechanicalEnergy",
+      "body": "WaterBody",
+      "quantity": "TotalMechanicalEnergy"
     }
   ],
   "solver_parameters": {
