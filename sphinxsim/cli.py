@@ -911,10 +911,19 @@ class _ShellPreviewRuntime:
                     self.plotter = BackgroundPlotter(
                         title="SPHinXsim - Configuration Preview",
                         show=True,
+                        shape=(1, 2),
+                        border=False,
+                        window_size=(1400, 800),
                     )
                     self._using_background_plotter = True
                 else:
-                    self.plotter = pv.Plotter(title="SPHinXsim - Configuration Preview", off_screen=False)
+                    self.plotter = pv.Plotter(
+                        title="SPHinXsim - Configuration Preview",
+                        off_screen=False,
+                        shape=(1, 2),
+                        border=False,
+                        window_size=(1400, 800),
+                    )
                     self._using_background_plotter = False
                     detail = f" ({pyvistaqt_error})" if pyvistaqt_error is not None else ""
                     print(
@@ -926,10 +935,18 @@ class _ShellPreviewRuntime:
                     )
 
             self.plotter.clear()
+            configure_layout = getattr(visualizer, "_configure_layout", None)
+            if configure_layout is not None:
+                configure_layout(self.plotter)
+            draw_sidebar = getattr(visualizer, "_draw_preview_sidebar", None)
+            if draw_sidebar is not None:
+                draw_sidebar(self.plotter)
             visualizer._populate_plotter(self.plotter, vtp_dir, latest_particle_vtps)
+            if configure_layout is not None:
+                configure_layout(self.plotter)
             visualizer._configure_default_view(self.plotter, ndim)
             self.plotter.add_axes()
-            self.plotter.show_grid(font_size=10)
+            self.plotter.show_grid(font_size=10, color=(0.25, 0.25, 0.25), bold=False)
 
             if vtp_dir:
                 mode_label = "VTP geometry"

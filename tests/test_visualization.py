@@ -8,11 +8,13 @@ library is not installed.
 from __future__ import annotations
 
 import json
+import math
 import sys
 from pathlib import Path
 
 from typing import Any
 import copy
+from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -122,6 +124,7 @@ class TestBodyLabel:
         assert "Fluid: WaterBody" in label
         assert "1000.0" in label
 
+
     def test_fluid_body_label_omits_sound_speed(self, fluid_config):
         from sphinxsim.visualization.annotations import body_label
 
@@ -147,6 +150,117 @@ class TestBodyLabel:
         # WaterBody in heat_transfer has thermal_properties
         label = body_label("WaterBody", heat_config)
         assert "Fluid: WaterBody" in label
+
+
+class TestPreviewMaterialInformation:
+    def _config(self, *materials):
+        bodies = [
+            SimpleNamespace(name=f"GranularBody{index}", material=material)
+            for index, material in enumerate(materials, start=1)
+        ]
+        return SimpleNamespace(continuum_bodies=bodies)
+
+    def test_formats_continuum_material_units_and_angle(self):
+        from sphinxsim.config.schemas import MaterialConfig, MaterialType
+        from sphinxsim.visualization.annotations import collect_preview_body_information
+
+        material = MaterialConfig(
+            type=MaterialType.GENERAL_CONTINUUM,
+            density=2040.0,
+            sound_speed=100.0,
+            youngs_modulus=1.0e6,
+            poisson_ratio=0.3,
+            friction_angle=math.radians(30.0),
+            cohesion=1500.0,
+        )
+        info = collect_preview_body_information(self._config(material))[0]
+
+        assert info["density"] == "2040 kg/m³"
+        assert info["friction_angle"] == "30.0°"
+        assert info["cohesion"] == "1.5 kPa"
+
+    def test_missing_friction_angle_and_cohesion_are_safe(self):
+        from sphinxsim.config.schemas import MaterialConfig, MaterialType
+        from sphinxsim.visualization.annotations import collect_preview_body_information
+
+        material = MaterialConfig(
+            type=MaterialType.GENERAL_CONTINUUM,
+            density=2040.0,
+            sound_speed=100.0,
+            youngs_modulus=1.0e6,
+            poisson_ratio=0.3,
+        )
+        info = collect_preview_body_information(self._config(material))[0]
+
+        assert info["friction_angle"] == "—"
+        assert info["cohesion"] == "—"
+
+    def test_multiple_continuum_bodies_remain_separate(self):
+        from sphinxsim.config.schemas import MaterialConfig, MaterialType
+        from sphinxsim.visualization.annotations import collect_preview_body_information
+
+        materials = [
+            MaterialConfig(
+                type=MaterialType.GENERAL_CONTINUUM,
+                density=1800.0,
+                sound_speed=100.0,
+                youngs_modulus=1.0e6,
+                poisson_ratio=0.3,
+            ),
+            MaterialConfig(
+                type=MaterialType.GENERAL_CONTINUUM,
+                density=2200.0,
+                sound_speed=100.0,
+                youngs_modulus=1.0e6,
+                poisson_ratio=0.3,
+            ),
+        ]
+        info = collect_preview_body_information(self._config(*materials))
+
+        assert [item["name"] for item in info] == ["GranularBody1", "GranularBody2"]
+        assert [item["density"] for item in info] == ["1800 kg/m³", "2200 kg/m³"]
+
+    def test_plastic_continuum_shows_dilatancy_but_j2_does_not(self):
+        from sphinxsim.config.schemas import MaterialConfig, MaterialType
+        from sphinxsim.visualization.annotations import collect_preview_body_information
+
+        plastic = MaterialConfig(
+            type=MaterialType.PLASTIC_CONTINUUM,
+            density=2040.0,
+            sound_speed=48.0,
+            youngs_modulus=5.8e6,
+            poisson_ratio=0.3,
+            friction_angle=math.radians(30.0),
+            dilatancy_angle=math.radians(8.0),
+            cohesion=0.0,
+        )
+        j2 = MaterialConfig(
+            type=MaterialType.J2_PLASTICITY,
+            density=2040.0,
+            sound_speed=48.0,
+            youngs_modulus=5.8e6,
+            poisson_ratio=0.3,
+            yield_stress=1000.0,
+            hardening_modulus=200.0,
+        )
+        plastic_rows = dict(collect_preview_body_information(self._config(plastic))[0]["rows"])
+        j2_rows = dict(collect_preview_body_information(self._config(j2))[0]["rows"])
+
+        assert plastic_rows["Dilatancy angle"] == "8.0°"
+        assert "Yield stress" not in plastic_rows
+        assert "Dilatancy angle" not in j2_rows
+        assert "Friction angle" not in j2_rows
+        assert j2_rows["Yield stress"] == "1 kPa" or j2_rows["Yield stress"] == "1000 Pa"
+
+    def test_particle_spacing_is_displayed_from_global_resolution(self):
+        from sphinxsim.visualization.annotations import particle_resolution_label
+
+        config = SimpleNamespace(
+            geometries=SimpleNamespace(
+                global_resolution=SimpleNamespace(particle_spacing=0.002)
+            )
+        )
+        assert particle_resolution_label(config) == ("Particle spacing", "0.002 m")
 
 
 class TestOrientedBoxLabel:
@@ -415,7 +529,7 @@ class TestPreviewObservers:
         observer_label_calls = [
             call
             for call in fake_plotter.point_label_calls
-            if call["labels"] and "Observer: ProbeA" in call["labels"][0]
+            if call["labels"] and "Observer 1" in call["labels"][0]
         ]
         assert len(observer_label_calls) == 1
 
@@ -516,7 +630,7 @@ class TestPreviewGeneratedParticles:
             for call in fake_plotter.point_label_calls
             if call["labels"] and str(call["labels"][0]).startswith("Particles: ")
         ]
-        assert len(particle_label_calls) == 2
+        assert particle_label_calls == []
 
     def test_populate_plotter_hides_shapes_when_particles_present(self, fluid_config, tmp_path):
         from sphinxsim.visualization.preview import ConfigVisualizer
@@ -1602,7 +1716,7 @@ class TestPreviewGravityArrow:
         # An arrow mesh should have been added with the gravity colour and label.
         arrow_calls = [c for c in fake_plotter.mesh_calls if c.get("label") == "Gravity"]
         assert len(arrow_calls) == 1
-        assert arrow_calls[0]["color"] == (0.10, 0.90, 0.90)
+        assert arrow_calls[0]["color"] == (0.00, 0.48, 0.50)
 
         # The arrow direction should match the gravity direction (normalised).
         arrow = arrow_calls[0]["mesh"]
@@ -1653,15 +1767,11 @@ class TestPreviewGravityArrow:
         body_labels = [
             call for call in fake_plotter.label_calls
             if call.get("labels") and any(
-                ("Fluid:" in str(lbl)) or ("Solid:" in str(lbl)) or ("Continuum:" in str(lbl))
+                str(lbl) in {"WaterBody", "WallBoundary"}
                 for lbl in call["labels"]
             )
         ]
-        assert len(body_labels) >= 2
-
-        first = tuple(float(v) for v in body_labels[0]["points"][0])
-        second = tuple(float(v) for v in body_labels[1]["points"][0])
-        assert first != second
+        assert body_labels == []
 
     def test_gravity_arrow_3d(self, tmp_path):
         """A 3-D gravity vector should produce an arrow with 3-D direction."""
@@ -1698,3 +1808,35 @@ class TestPreviewGravityArrow:
         assert len(arrow_calls) == 1
         arrow = arrow_calls[0]["mesh"]
         assert arrow["direction"] == (0.0, 0.0, -1.0)
+
+    def test_zero_gravity_skips_arrow(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["gravity"] = [0.0, 0.0]
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        assert not [call for call in fake_plotter.mesh_calls if call.get("label") == "Gravity"]
+
+    def test_non_vertical_gravity_uses_normalized_direction_and_y_scale(self, fluid_config, tmp_path):
+        from sphinxsim.visualization.preview import ConfigVisualizer
+
+        data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
+        data["geometries"]["system_domain"] = {
+            "lower_bound": [0.0, 0.0],
+            "upper_bound": [2.0, 4.0],
+        }
+        data["gravity"] = [3.0, -4.0]
+        cfg = SimulationConfig(**data)
+        viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
+        fake_plotter = _FakePlotter()
+        with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
+            viz._populate_plotter(fake_plotter, vtp_dir=None)
+
+        arrow = next(call["mesh"] for call in fake_plotter.mesh_calls if call.get("label") == "Gravity")
+        assert arrow["direction"] == (0.6, -0.8, 0.0)
+        assert arrow["scale"] == pytest.approx(0.8)
