@@ -21,61 +21,38 @@
  *                                                                           *
  * ------------------------------------------------------------------------- */
 /**
- * @file    fluid_dynamics_builder.h
- * @brief   Shared builders for fluid-like auxiliary dynamics.
- * @author  Xiangyu Hu
+ * @file    solid_dynamics_builder.h
+ * @brief   Assembles the elastic-solid stress relaxation loop for the
+ *          simulator, driving the solid sub-stepping through the time
+ *          stepper's matched-interval integrator.
+ * @author  Pruthvik Arasikere Mallikarjuna and Xiangyu Hu
  */
 
-#ifndef FLUID_DYNAMICS_BUILDER_H
-#define FLUID_DYNAMICS_BUILDER_H
+#ifndef SOLID_DYNAMICS_BUILDER_H
+#define SOLID_DYNAMICS_BUILDER_H
 
 #include "base_simulation_builder.h"
 
+#include <functional>
+
 namespace SPH
 {
-class TimeStepper;
-class OrientedBoxByParticle;
-class OrientedBoxByCell;
 class RealBody;
-namespace fluid_dynamics
-{
-class AbstractBidirectionalBoundary;
-}
 
-struct FluidSolverConfig
-{
-    Real acoustic_cfl_{0.6};
-    Real advection_cfl_{0.25};
-    Real max_velocity_factor_{1.0};
-    std::string surface_type_ = "free_surface";
-    std::string kernel_correction_{"linear"};
-    bool particle_deletion_{false};
-    bool particle_sorting_{false};
-    UnsignedInt sort_frequency_{0};
-    bool emitter_on_{false};
-};
-
-class FluidDynamicsBuilder
+class SolidDynamicsBuilder
 {
   public:
-    template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
-    static BaseDynamics<void> &buildDensityRegularization(
-        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation, const std::string &surface_type);
-
-    template <class MethodContainerType>
-    static void buildBoundaryConditionsIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+    // pre_substep_hook, if given, runs once before every solid sub-step
+    // (e.g. imposing an active strain), matching the SYCL reference which
+    // re-samples the active strain at each solid sub-step rather than once
+    // per coupling interval.
+    template <class MaterialType, class MethodContainerType, class InnerRelationType>
+    static auto &buildSolidDynamics(
+        SPHSimulation &sim, MethodContainerType &method_container,
+        InnerRelationType &inner_relation,
+        std::function<void()> pre_substep_hook = nullptr);
 
   private:
-    template <class MethodContainerType>
-    static void addBoundaryCondition(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
-
-    template <class MethodContainerType>
-    static fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
-        OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
-        MethodContainerType &main_methods, const json &config);
 };
 } // namespace SPH
-#endif // FLUID_DYNAMICS_BUILDER_H
+#endif // SOLID_DYNAMICS_BUILDER_H

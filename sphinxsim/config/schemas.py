@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from enum import Enum
 import math
-from typing import List, Literal, Optional
 import warnings
+from typing import Any, Dict, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -79,11 +79,13 @@ class MaterialType(str, Enum):
     J2_PLASTICITY = "j2_plasticity"
     PLASTIC_CONTINUUM = "plastic_continuum"
     GENERAL_CONTINUUM = "general_continuum"
+    COMPOSITE_SOLID = "composite_solid"
 
 
 class FluidBoundaryConditionType(str, Enum):
     EMITTER = "emitter"
     BI_DIRECTIONAL = "bi_directional"
+    FREE_STREAM = "free_stream"
 
 
 class BodyConstraintType(str, Enum):
@@ -375,6 +377,15 @@ class ExtraStateRecordingConfig(BaseModel):
     variables: List[StateRecordingVariableConfig] = Field(..., min_length=1)
 
 
+class EnergyRecordingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
+    quantity: Literal["TotalMechanicalEnergy"] = "TotalMechanicalEnergy"
+    gravity: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
+
+
 class ViscosityConfig(BaseModel):
     Reynolds_number: float = Field(..., gt=0)
 
@@ -430,6 +441,11 @@ class MaterialConfig(BaseModel):
     friction_angle: Optional[float] = Field(default=None, ge=0)
     cohesion: Optional[float] = Field(default=None, ge=0)
     dilatancy_angle: Optional[float] = Field(default=None, ge=0)
+    youngs_modulus_active: Optional[float] = Field(default=None, gt=0)
+    youngs_modulus_1: Optional[float] = Field(default=None, gt=0)
+    youngs_modulus_2: Optional[float] = Field(default=None, gt=0)
+    material_id_regions: Optional[Dict[str, Any]] = None
+    active_strain: Optional[Dict[str, Any]] = None
 
     @field_validator("friction_angle", "dilatancy_angle", mode="before")
     @classmethod
@@ -567,8 +583,8 @@ class SolidBodyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _material_type(self) -> "SolidBodyConfig":
-        if self.material.type != MaterialType.RIGID_BODY:
-            raise ValueError("solid body material type must be rigid_body")
+        if self.material.type not in (MaterialType.RIGID_BODY, MaterialType.COMPOSITE_SOLID):
+            raise ValueError("solid body material type must be rigid_body or composite_solid")
         return self
 
 
@@ -617,9 +633,20 @@ class FluidBoundaryConditionConfig(BaseModel):
     multi_species_phases: Optional[List[MultiSpeciesPhaseBoundaryConfig]] = None
     volume_fractions: Optional[List[float]] = None
     on_schedule: Optional[FluidBoundaryConditionScheduleConfig] = None
+    buffer_box: Optional[str] = Field(default=None, min_length=1)
+    disposer_box: Optional[str] = Field(default=None, min_length=1)
+    target_speed: Optional[float] = Field(default=None, ge=0)
+    t_ref: Optional[float] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _type_specific_requirements(self) -> "FluidBoundaryConditionConfig":
+        if self.type == FluidBoundaryConditionType.FREE_STREAM and (
+            self.buffer_box is None
+            or self.disposer_box is None
+            or self.target_speed is None
+            or self.t_ref is None
+        ):
+            raise ValueError("free_stream boundary condition requires buffer_box, disposer_box, target_speed and t_ref")
         if self.type == FluidBoundaryConditionType.EMITTER and self.inflow_speed is None:
             raise ValueError("emitter boundary condition requires inflow_speed")
         if self.type == FluidBoundaryConditionType.BI_DIRECTIONAL and self.pressure is None:
@@ -673,7 +700,8 @@ class FluidDynamicsSolverConfig(BaseModel):
     acoustic_cfl: float = Field(default=0.6, gt=0)
     advection_cfl: float = Field(default=0.25, gt=0)
     max_velocity_factor: float = Field(default=1.0, gt=0)
-    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
+    surface_type: Literal["free_surface", "confined", "open_boundary", "free_stream"] = "free_surface"
+    kernel_correction: Literal["linear", "none"] = "linear"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 
 
@@ -695,6 +723,7 @@ class SolverParametersConfig(BaseModel):
     end_time: Optional[float] = Field(default=None, gt=0)
     output_interval: Optional[float] = Field(default=None, gt=0)
     screen_interval: Optional[int] = Field(default=None, gt=0)
+    observation_interval: int = Field(default=200, gt=0)
     restart: Optional[RestartConfig] = None
     fluid_dynamics: Optional[FluidDynamicsSolverConfig] = None
     continuum_dynamics: Optional[ContinuumDynamicsSolverConfig] = None
@@ -738,6 +767,7 @@ class SimulationConfig(BaseModel):
     body_constraints: List[BodyConstraintConfig] = Field(default_factory=list)
     initial_conditions: List[InitialConditionConfig] = Field(default_factory=list)
     extra_state_recording: List[ExtraStateRecordingConfig] = Field(default_factory=list)
+    energy_recording: List[EnergyRecordingConfig] = Field(default_factory=list)
 
     solver_parameters: SolverParametersConfig
 
@@ -839,7 +869,11 @@ class SimulationConfig(BaseModel):
             if self.solver_parameters.continuum_dynamics is None:
                 raise ValueError("continuum_dynamics simulation requires solver_parameters.continuum_dynamics")
 
-        if not self.solid_bodies:
+        free_stream = any(
+            bc.type == FluidBoundaryConditionType.FREE_STREAM
+            for bc in self.fluid_boundary_conditions
+        )
+        if not self.solid_bodies and not free_stream:
             raise ValueError("simulation requires at least one solid body")
 
         # Bodies must reference existing geometry names
