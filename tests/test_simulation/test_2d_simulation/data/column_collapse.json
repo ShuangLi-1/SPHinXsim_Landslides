@@ -87,11 +87,11 @@
   "extra_state_recording": [
     {
       "name": "GranularBody",
-      "variables": [{ "real_type": ["Density", "Pressure"] }]
-    },
-    {
-      "name": "WallBoundary",
-      "variables": [{ "vector_type": ["NormalDirection"] }]
+      "variables": [
+        {
+          "vector_type": ["Velocity"]
+        }
+      ]
     }
   ],
 

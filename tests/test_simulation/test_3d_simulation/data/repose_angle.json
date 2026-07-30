@@ -88,7 +88,11 @@
   "extra_state_recording": [
     {
       "name": "GranularBody",
-      "variables": [{ "real_type": ["Velocity", "VerticaleStress"] }]
+      "variables": [
+        {
+          "vector_type": ["Velocity"]
+        }
+      ]
     }
   ],
 
