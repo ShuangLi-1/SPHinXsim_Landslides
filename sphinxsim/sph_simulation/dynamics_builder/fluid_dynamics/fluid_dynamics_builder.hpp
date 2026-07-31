@@ -1,7 +1,6 @@
 #ifndef FLUID_DYNAMICS_BUILDER_HPP
 #define FLUID_DYNAMICS_BUILDER_HPP
 
-#include "fluid_boundary_builder.hpp"
 #include "fluid_dynamics_builder.h"
 #include "sph_simulation.h"
 
@@ -10,9 +9,9 @@ namespace SPH
 //=================================================================================================//
 using namespace fluid_dynamics;
 //=================================================================================================//
-template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class FluidType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
-    SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
+    SPHSimulation &sim, MainMethods &method_container, InnerRelationType &inner_relation,
     ContactRelationType &contact_relation, const std::string &surface_type)
 {
     auto &density_summation =
