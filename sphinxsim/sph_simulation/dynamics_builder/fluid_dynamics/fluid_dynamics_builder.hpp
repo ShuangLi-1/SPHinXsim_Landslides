@@ -39,7 +39,7 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
     auto &maximum_compression =
         method_container.template addReduceDynamics<QuantityReduce, ReduceMax<Real>>(sph_body, "Compression");
     initialization_pipeline.insert_hook(
-        InitializationHookPoint::PreSimulationSanityCheck, [&, surface_type]()
+        InitializationHookPoint::PreSimulationSanityCheck, [&]()
         {
             Real lower_limit = minimum_compression.exec();
             Real upper_limit = maximum_compression.exec();
@@ -52,10 +52,6 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
                 std::cout << "- Too large: overlapped bodies" << std::endl;
                 std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
                 std::cout << "------------------------------------------------------------" << std::endl;
-                if (surface_type != "free_stream")
-                {
-                    throw std::runtime_error("Compression is out of range!");
-                }
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();
