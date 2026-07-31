@@ -37,7 +37,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    auto &main_methods = sph_solver.getMainMethodContainer();
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
     auto &continuum_update_configuration =
         main_methods.addParticleDynamicsGroup()

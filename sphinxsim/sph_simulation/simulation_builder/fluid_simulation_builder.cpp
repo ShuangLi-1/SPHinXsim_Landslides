@@ -3,11 +3,11 @@
 #include "base_simulation_builder.hpp"
 #include "solid_dynamics_builder.hpp"
 
-#include "region_shape_material_id.h"
 #include "composite_solid.h"
-#include "traveling_wave_active_strain.h"
-#include "structure_surface_motion.h"
 #include "force_on_structure.h"
+#include "region_shape_material_id.h"
+#include "structure_surface_motion.h"
+#include "traveling_wave_active_strain.h"
 namespace SPH
 {
 //=================================================================================================//
@@ -55,7 +55,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    auto &main_methods = sph_solver.getMainMethodContainer();
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
@@ -177,8 +177,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             Real start_time = wave_config.at("start_time").get<Real>();
 
             auto &active_strain = main_methods.addStateDynamics<TravelingWaveActiveStrain>(
-            elastic_body, wave_center, wave_span, wave_core,
-            amplitude, frequency, wavelength_factor, start_time);
+                elastic_body, wave_center, wave_span, wave_core,
+                amplitude, frequency, wavelength_factor, start_time);
 
             // SYCL reference imposes the active strain once per solid sub-step
             // (2d_flow_stream_around_fish_sycl.cpp:309), not once per coupling
@@ -197,7 +197,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         sim.getSimulationPipeline().insert_hook(
             SimulationHookPoint::CouplingSynchronization, [&]()
             { update_average_velocity.exec(sph_solver.getTimeStepper().getGlobalTimeStepSize()); });
-                
+
         auto &elastic_normal_direction =
             main_methods.addStateDynamics<solid_dynamics::UpdateElasticNormalDirectionCK>(elastic_body);
 
@@ -222,8 +222,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 elastic_configuration.exec();
                 elastic_initial_normal.exec();
                 elastic_correction_matrix.exec();
-                elastic_normal_direction.exec();
-            });
+                elastic_normal_direction.exec(); });
     }
     auto &fluid_configuration =
         main_methods.addParticleDynamicsGroup()

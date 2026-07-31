@@ -27,10 +27,10 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
     // Generally, the host methods should be able to run immediately.
     //----------------------------------------------------------------------
     SPHSolver &sph_solver = defineSPHSolver(relaxation_system, config);
-    auto &host_methods = sph_solver.addParticleMethodContainer(par_host);
+    auto &host_methods = sph_solver.getHostMethodContainer();
     auto &randomize_particle_position = randomizeParticlePositions(relaxation_system, host_methods);
 
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    auto &main_methods = sph_solver.getMainMethodContainer();
     auto &body_update_configuration = addConfigurationDynamics(relaxation_system, main_methods);
     auto &relaxation_residual = addRelaxationResidue(relaxation_system, config_manager, main_methods);
     auto &relaxation_scaling = addRelaxationScaling(relaxation_system, config_manager, main_methods);
