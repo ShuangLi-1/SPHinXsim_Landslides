@@ -77,13 +77,6 @@
           "relaxation": { "dependent_bodies": ["WaterBody"] }
         }
       ],
-      "relaxation_constraints": [
-        {
-          "body_name": "WaterBody",
-          "oriented_box": "Emitter",
-          "type": "normal"
-        }
-      ],
       "relaxation_parameters": { "total_iterations": 1000 }
     }
   },
