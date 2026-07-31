@@ -10,6 +10,7 @@ import pytest
 
 import sphinxsim
 from sphinxsim.cli import _config_spatial_dim, _load_config, main
+from sphinxsim.cli import _build_parser
 from sphinxsim.llm.common import LLMRepairWarning
 
 
@@ -574,3 +575,37 @@ class TestCLIVersion:
         assert exc_info.value.code == 0
         out = capsys.readouterr().out
         assert sphinxsim.__version__ in out
+
+class TestCLIGenerateCompletion:
+    def test_generate_completion_bash(self, capsys):
+        """Test bash shell completion generation."""
+        parser = _build_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--generate-completion", "bash"])
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "_sphinxsim_completion" in captured.out
+        assert "generate" in captured.out
+
+    def test_generate_completion_zsh(self, capsys):
+        """Test zsh shell completion generation."""
+        parser = _build_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--generate-completion", "zsh"])
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "#compdef sphinxsim" in captured.out
+        assert "generate" in captured.out
+
+    def test_generate_completion_fish(self, capsys):
+        """Test fish shell completion generation."""
+        parser = _build_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--generate-completion", "fish"])
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "complete -c sphinxsim" in captured.out
+        assert "generate" in captured.out
