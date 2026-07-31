@@ -12,6 +12,7 @@ import pytest
 from pydantic import ValidationError
 
 from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.llm.common import example_config
 from sphinxsim.llm.mock_llm import MockLLM
 from sphinxsim.llm.ollama_llm import OllamaLLM
 
@@ -148,6 +149,35 @@ class TestOllamaLLMGenerate:
         assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
         assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
 
+    def test_3d_plastic_request_uses_repose_angle_example_output(self):
+        resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
+        with patch("urllib.request.urlopen", return_value=resp) as mock_open:
+            self.llm.generate("3d column collapse using plastic material")
+
+        body = json.loads(mock_open.call_args[0][0].data.decode("utf-8"))
+        user_content = json.loads(body["messages"][1]["content"])
+        example_output = user_content["example_output"]
+        assert example_output["simulation_type"] == "continuum_dynamics"
+        assert len(example_output["geometries"]["system_domain"]["lower_bound"]) == 3
+        assert example_output["continuum_bodies"][0]["material"]["type"] == "plastic_continuum"
+        assert all(shape["type"] != "multipolygon" for shape in example_output["geometries"]["shapes"])
+
+    def test_stl_landslide_request_generates_triangle_mesh_shapes(self):
+        resp = _make_response({"message": {"role": "assistant", "content": "{}"}})
+        description = (
+            "Create a runnable 3D landslide simulation from two STL files: "
+            "./input/SlideBody.stl is the moving landslide soil body, and "
+            "./input/Channel.stl is the fixed terrain boundary."
+        )
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.generate(description)
+
+        shapes = {shape.name: shape for shape in cfg.geometries.shapes}
+        assert shapes["GranularBody"].type.value == "triangle_mesh"
+        assert shapes["GranularBody"].file_name == "./input/SlideBody.stl"
+        assert shapes["WallBoundary"].type.value == "triangle_mesh"
+        assert shapes["WallBoundary"].file_name == "./input/Channel.stl"
+
     def test_plastic_continuum_request_uses_soil_example_output(self):
         resp = _make_response(_mock_raw(MockLLM().generate("granular soil column collapse")))
         with patch("urllib.request.urlopen", return_value=resp) as mock_open:
@@ -158,6 +188,26 @@ class TestOllamaLLMGenerate:
         example_material = user_content["example_output"]["continuum_bodies"][0]["material"]
         assert example_material["type"] == "plastic_continuum"
         assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+
+    def test_plastic_continuum_physical_error_is_returned_for_one_retry(self):
+        description = "granular soil column collapse with plastic continuum"
+        invalid = example_config(description)
+        invalid["continuum_bodies"][0]["material"]["poisson_ratio"] = 0.6
+        repaired = example_config(description)
+        responses = [
+            _make_response({"message": {"role": "assistant", "content": json.dumps(invalid)}}),
+            _make_response({"message": {"role": "assistant", "content": json.dumps(repaired)}}),
+        ]
+
+        with patch("urllib.request.urlopen", side_effect=responses) as mock_open:
+            with pytest.warns(UserWarning, match="poisson_ratio: 0.6 -> 0.3"):
+                cfg = self.llm.generate(description)
+
+        assert cfg.continuum_bodies[0].material.poisson_ratio == pytest.approx(0.3)
+        assert mock_open.call_count == 2
+        retry_body = json.loads(mock_open.call_args_list[1][0][0].data.decode("utf-8"))
+        retry_user = json.loads(retry_body["messages"][1]["content"])
+        assert "0 <= poisson_ratio < 0.5" in json.dumps(retry_user["validation_errors"])
 
     def test_network_error_raises_runtime_error(self):
         with patch(
@@ -276,6 +326,33 @@ class TestOllamaLLMUpdate:
         assert isinstance(cfg, SimulationConfig)
         assert cfg.simulation_type.value == "fluid_dynamics"
         assert all(isinstance(shape, type(cfg.geometries.shapes[0])) for shape in cfg.geometries.shapes)
+
+    def test_update_plastic_continuum_intent_creates_continuum_body(self):
+        resp = _make_response(_mock_raw(_FLUID_CONFIG))
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.update(
+                _FLUID_CONFIG,
+                "I want a 3d column collapse case, matertialtype is plastic_continuum",
+            )
+
+        assert cfg.simulation_type.value == "continuum_dynamics"
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert not cfg.fluid_bodies
+
+    def test_update_stl_landslide_request_replaces_shapes(self):
+        base = SimulationConfig.model_validate(example_config("3d landslide case"))
+        resp = _make_response({"message": {"role": "assistant", "content": "{}"}})
+        with patch("urllib.request.urlopen", return_value=resp):
+            cfg = self.llm.update(
+                base,
+                "Use ./input/SlideBody.stl as the landslide body and ./input/Channel.stl as the terrain.",
+            )
+
+        shapes = {shape.name: shape for shape in cfg.geometries.shapes}
+        assert shapes["GranularBody"].type.value == "triangle_mesh"
+        assert shapes["GranularBody"].file_name == "./input/SlideBody.stl"
+        assert shapes["WallBoundary"].type.value == "triangle_mesh"
+        assert shapes["WallBoundary"].file_name == "./input/Channel.stl"
 
 
 class TestOllamaLLMUpdatePatch:
