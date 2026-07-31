@@ -332,6 +332,7 @@ def _apply_overrides(template: Dict[str, Any], description: str) -> Dict[str, An
     import copy
 
     cfg = copy.deepcopy(template)
+    geometry_changed = False
 
     # Velocity override
     vel_match = re.search(r"(\d+(?:\.\d+)?)\s*m/s", description, re.IGNORECASE)
@@ -362,6 +363,7 @@ def _apply_overrides(template: Dict[str, Any], description: str) -> Dict[str, An
             dim = len(lower_bound) if isinstance(lower_bound, list) and lower_bound else 2
         system_domain.setdefault("lower_bound", [0.0] * dim)
         system_domain["upper_bound"] = [size] * dim
+        geometry_changed = True
 
     # Resolution override (e.g. "5 mm resolution")
     res_match = re.search(r"(\d+(?:\.\d+)?)\s*mm\s+resolution", description, re.IGNORECASE)
@@ -370,7 +372,8 @@ def _apply_overrides(template: Dict[str, Any], description: str) -> Dict[str, An
             float(res_match.group(1)) / 1000.0
         )
 
-    _sync_geometry(cfg)
+    if geometry_changed:
+        _sync_geometry(cfg)
 
     return cfg
 
@@ -473,13 +476,20 @@ def _dict_diff(base: Any, updated: Any) -> Any:
     return None
 
 
-def _fixture_template_for_physics(physics: PhysicsType) -> Dict[str, Any] | None:
+def _fixture_template_for_physics(
+    physics: PhysicsType, description: str = ""
+) -> Dict[str, Any] | None:
     """Load a validated fixture template for the given physics type when available."""
     root = Path(__file__).resolve().parents[2]
+    is_3d = bool(re.search(r"\b3[\s-]*d(?:imensional)?\b", description, re.IGNORECASE))
     fixture_rel = {
         PhysicsType.FLUID: Path("tests/test_simulation/test_2d_simulation/data/dambreak.json"),
         PhysicsType.SOLID: Path("tests/test_simulation/test_2d_simulation/data/milling.json"),
-        PhysicsType.PLASTIC_CONTINUUM: Path("tests/test_simulation/test_2d_simulation/data/column_collapse.json"),
+        PhysicsType.PLASTIC_CONTINUUM: Path(
+            "tests/test_simulation/test_3d_simulation/data/repose_angle.json"
+            if is_3d
+            else "tests/test_simulation/test_2d_simulation/data/column_collapse.json"
+        ),
     }.get(physics)
 
     if fixture_rel is None:
@@ -536,8 +546,19 @@ class MockLLM:
             raise ValueError("description must not be empty")
 
         physics = _detect_physics(description)
-        base_template = _fixture_template_for_physics(physics) or _TEMPLATES[physics]
+        base_template = _fixture_template_for_physics(physics, description) or _TEMPLATES[physics]
         template = _apply_overrides(base_template, description)
+        from sphinxsim.llm.common import (
+            apply_explicit_instruction_overrides,
+            apply_plastic_sound_speed_formula,
+            apply_stl_geometry_overrides,
+            suppress_implicit_plastic_observers,
+        )
+
+        template = apply_stl_geometry_overrides(template, description)
+        template = apply_explicit_instruction_overrides(template, description)
+        template = suppress_implicit_plastic_observers(template, description)
+        template = apply_plastic_sound_speed_formula(template)
 
         return SimulationConfig(**template)
 

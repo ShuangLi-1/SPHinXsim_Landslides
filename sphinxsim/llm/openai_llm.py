@@ -5,12 +5,27 @@ import json
 from dataclasses import dataclass
 from typing import Any, Dict, Optional
 
+from pydantic import ValidationError
+
 from sphinxsim.config.schemas import SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch
-from sphinxsim.llm.common import dict_diff, strip_code_fences
+from sphinxsim.llm.common import (
+    BODY_TYPE_RULES,
+    apply_explicit_instruction_overrides,
+    apply_plastic_sound_speed_formula,
+    apply_stl_geometry_overrides,
+    dict_diff,
+    json_safe_errors,
+    report_llm_repair,
+    strip_code_fences,
+    suppress_implicit_plastic_observers,
+)
 
-# OpenAI SDK (new-style)
-from openai import OpenAI
+# OpenAI SDK is optional until this provider is selected.
+try:
+    from openai import OpenAI
+except ImportError:  # pragma: no cover - exercised through provider construction
+    OpenAI = None  # type: ignore[assignment]
 
 
 @dataclass
@@ -19,6 +34,10 @@ class OpenAILLM:
     api_key: Optional[str] = None
 
     def __post_init__(self) -> None:
+        if OpenAI is None:
+            raise RuntimeError(
+                "The OpenAI provider requires the optional 'openai' package."
+            )
         self.client = OpenAI(api_key=self.api_key)
 
     def generate(self, description: str) -> SimulationConfig:
@@ -38,7 +57,7 @@ class OpenAILLM:
             "youngs_modulus, poisson_ratio, and friction_angle; cohesion and "
             "dilatancy_angle are optional. "
             "Do not include markdown, comments, or extra keys."
-        )
+        ) + BODY_TYPE_RULES
 
         user = {
             "description": description,
@@ -56,9 +75,45 @@ class OpenAILLM:
 
         content = resp.choices[0].message.content or ""
         data: Dict[str, Any] = json.loads(strip_code_fences(content))
+        data = apply_stl_geometry_overrides(data, description)
+        data = apply_explicit_instruction_overrides(data, description)
+        data = suppress_implicit_plastic_observers(data, description)
+        data = apply_plastic_sound_speed_formula(data)
 
-        # Final safety: schema validation on your side
-        return SimulationConfig(**data)
+        try:
+            return SimulationConfig(**data)
+        except ValidationError as exc:
+            retry_user = {
+                "description": description,
+                "candidate_config": data,
+                "validation_errors": json_safe_errors(exc.errors()),
+                "json_schema": schema,
+            }
+            retry_resp = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {
+                        "role": "system",
+                        "content": (
+                            "Repair the generated simulator config using the reported schema or "
+                            "physical validation errors. Return ONLY full valid JSON and preserve "
+                            "all valid user-requested values. "
+                        )
+                        + BODY_TYPE_RULES,
+                    },
+                    {"role": "user", "content": json.dumps(retry_user)},
+                ],
+                temperature=0,
+            )
+            retry_content = retry_resp.choices[0].message.content or ""
+            retry_data: Dict[str, Any] = json.loads(strip_code_fences(retry_content))
+            retry_data = apply_stl_geometry_overrides(retry_data, description)
+            retry_data = apply_explicit_instruction_overrides(retry_data, description)
+            retry_data = suppress_implicit_plastic_observers(retry_data, description)
+            retry_data = apply_plastic_sound_speed_formula(retry_data)
+            validated = SimulationConfig(**retry_data)
+            report_llm_repair(data, retry_data)
+            return validated
 
     def update(self, existing: SimulationConfig, description: str) -> SimulationConfig:
         if not description or not description.strip():

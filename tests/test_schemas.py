@@ -1,6 +1,7 @@
 """Tests for sphinxsim.config.schemas (Pydantic validation)."""
 
 import json
+import math
 from pathlib import Path
 
 import pytest
@@ -160,6 +161,59 @@ class TestDomainConfig:
 
 
 class TestSimulationConfig:
+
+    def test_nonplastic_solver_keeps_historical_continuum_defaults(self):
+        cfg = _make_minimal_continuum_config()
+
+        solver = cfg.model_dump(exclude_none=True)["solver_parameters"]["continuum_dynamics"]
+        assert solver["linear_correction_matrix_coeff"] == pytest.approx(0.5)
+        assert solver["contact_numerical_damping"] == pytest.approx(0.5)
+        assert solver["shear_stress_damping"] == pytest.approx(0.0)
+        assert solver["hourglass_factor"] == pytest.approx(2.0)
+
+    def test_plastic_solver_removes_explicitly_supplied_irrelevant_controls(self):
+        data = _make_minimal_continuum_config().model_dump(exclude_none=True)
+        data["continuum_bodies"][0]["material"].update(
+            {
+                "type": "plastic_continuum",
+                "friction_angle": math.radians(30.0),
+            }
+        )
+        data["solver_parameters"]["continuum_dynamics"].update(
+            {
+                "linear_correction_matrix_coeff": 0.6,
+                "contact_numerical_damping": 0.7,
+                "shear_stress_damping": 0.8,
+                "hourglass_factor": 1.5,
+            }
+        )
+
+        cfg = SimulationConfig.model_validate(data)
+        solver = cfg.model_dump(exclude_none=True)["solver_parameters"]["continuum_dynamics"]
+        assert "linear_correction_matrix_coeff" not in solver
+        assert "contact_numerical_damping" not in solver
+        assert "shear_stress_damping" not in solver
+        assert "hourglass_factor" not in solver
+
+    def test_other_continuum_solver_controls_remain_explicitly_configurable(self):
+        data = _make_minimal_continuum_config().model_dump(exclude_none=True)
+        solver = data["solver_parameters"]["continuum_dynamics"]
+        solver.update(
+            {
+                "linear_correction_matrix_coeff": 0.6,
+                "contact_numerical_damping": 0.7,
+                "shear_stress_damping": 0.8,
+                "hourglass_factor": 1.5,
+            }
+        )
+
+        cfg = SimulationConfig.model_validate(data)
+        parsed = cfg.solver_parameters.continuum_dynamics
+        assert parsed is not None
+        assert parsed.linear_correction_matrix_coeff == pytest.approx(0.6)
+        assert parsed.contact_numerical_damping == pytest.approx(0.7)
+        assert parsed.shear_stress_damping == pytest.approx(0.8)
+        assert parsed.hourglass_factor == pytest.approx(1.5)
 
     def test_minimal_fluid_config(self):
         cfg = _make_minimal_fluid_config()
@@ -417,6 +471,17 @@ class TestSimulationConfig:
         assert len(cfg.geometries.system_domain.lower_bound) == 3
         assert all(shape.type.value != "multipolygon" for shape in cfg.geometries.shapes)
 
+    def test_3d_repose_angle_fixture_uses_plastic_continuum(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/repose_angle.json")
+        data = json.loads(data_path.read_text())
+
+        cfg = SimulationConfig.model_validate(data)
+
+        assert cfg.simulation_type.value == "continuum_dynamics"
+        assert len(cfg.geometries.system_domain.lower_bound) == 3
+        assert cfg.continuum_bodies[0].material.type.value == "plastic_continuum"
+        assert all(shape.type.value != "multipolygon" for shape in cfg.geometries.shapes)
+
     def test_3d_config_rejects_multipolygon_shape(self):
         data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
         data = json.loads(data_path.read_text())
@@ -471,6 +536,32 @@ class TestSimulationConfig:
         }
         with pytest.raises(ValidationError, match="duplicate shape name"):
             _make_minimal_fluid_config(geometries=geometries)
+
+    def test_duplicate_body_name_rejected(self):
+        cfg = _make_minimal_fluid_config()
+        data = cfg.model_dump(mode="json", exclude_none=True)
+        data["fluid_bodies"].append(json.loads(json.dumps(data["fluid_bodies"][0])))
+
+        with pytest.raises(ValidationError, match="fluid_bodies must use unique body names"):
+            SimulationConfig.model_validate(data)
+
+    def test_duplicate_particle_generation_body_name_rejected(self):
+        cfg = _make_minimal_fluid_config()
+        data = cfg.model_dump(mode="json", exclude_none=True)
+        duplicate = json.loads(json.dumps(data["particle_generation"]["settings"]["bodies"][0]))
+        data["particle_generation"]["settings"]["bodies"].append(duplicate)
+
+        with pytest.raises(ValidationError, match="settings.bodies must use unique body names"):
+            SimulationConfig.model_validate(data)
+
+    @pytest.mark.parametrize("non_finite", [math.nan, math.inf, -math.inf])
+    def test_non_finite_numeric_value_rejected(self, non_finite):
+        cfg = _make_minimal_fluid_config()
+        data = cfg.model_dump(mode="json", exclude_none=True)
+        data["gravity"][1] = non_finite
+
+        with pytest.raises(ValidationError, match="all numeric configuration values must be finite"):
+            SimulationConfig.model_validate(data)
 
     def test_shape_reference_must_be_previously_defined(self):
         geometries = {
@@ -800,27 +891,72 @@ class TestSimulationConfig:
         assert material.cohesion is not None
         assert material.dilatancy_angle is not None
 
-    def test_plastic_continuum_accepts_optional_cohesion_and_dilatancy(self):
-        cfg = _make_minimal_continuum_config(
-            continuum_bodies=[
-                {
-                    "name": "ContinuumBody",
-                    "material": {
-                        "type": "plastic_continuum",
-                        "density": 1000.0,
-                        "sound_speed": 20.0,
-                        "youngs_modulus": 1.0e6,
-                        "poisson_ratio": 0.3,
-                        "friction_angle": 30.0,
-                    },
-                }
-            ]
-        )
+    def test_plastic_continuum_converts_degree_angles_to_radians(self):
+        with pytest.warns(UserWarning, match="Corrected friction_angle from 30 degrees"):
+            cfg = _make_minimal_continuum_config(
+                continuum_bodies=[
+                    {
+                        "name": "ContinuumBody",
+                        "material": {
+                            "type": "plastic_continuum",
+                            "density": 1000.0,
+                            "sound_speed": 20.0,
+                            "youngs_modulus": 1.0e6,
+                            "poisson_ratio": 0.3,
+                            "friction_angle": 30.0,
+                        },
+                    }
+                ]
+            )
         material = cfg.continuum_bodies[0].material
         assert material.type.value == "plastic_continuum"
-        assert material.friction_angle == pytest.approx(30.0)
+        assert material.friction_angle == pytest.approx(math.pi / 6)
         assert material.cohesion is None
         assert material.dilatancy_angle is None
+
+    @pytest.mark.parametrize(
+        ("updates", "message"),
+        [
+            ({"poisson_ratio": 0.5}, "0 <= poisson_ratio < 0.5"),
+            ({"friction_angle": math.pi / 2}, "friction_angle in radians"),
+            (
+                {"friction_angle": math.radians(30), "dilatancy_angle": math.radians(35)},
+                "dilatancy_angle <= friction_angle",
+            ),
+        ],
+    )
+    def test_plastic_continuum_rejects_unphysical_parameters(self, updates, message):
+        material = {
+            "type": "plastic_continuum",
+            "density": 1000.0,
+            "sound_speed": 20.0,
+            "youngs_modulus": 1.0e6,
+            "poisson_ratio": 0.3,
+            "friction_angle": math.radians(30),
+        }
+        material.update(updates)
+        with pytest.raises(ValidationError, match=message):
+            _make_minimal_continuum_config(
+                continuum_bodies=[{"name": "ContinuumBody", "material": material}]
+            )
+
+    def test_plastic_continuum_converts_dilatancy_degrees(self):
+        material = {
+            "type": "plastic_continuum",
+            "density": 1000.0,
+            "sound_speed": 20.0,
+            "youngs_modulus": 1.0e6,
+            "poisson_ratio": 0.3,
+            "friction_angle": 30.0,
+            "dilatancy_angle": 10.0,
+        }
+        with pytest.warns(UserWarning) as caught:
+            cfg = _make_minimal_continuum_config(
+                continuum_bodies=[{"name": "ContinuumBody", "material": material}]
+            )
+        assert len(caught) == 2
+        assert cfg.continuum_bodies[0].material.friction_angle == pytest.approx(math.pi / 6)
+        assert cfg.continuum_bodies[0].material.dilatancy_angle == pytest.approx(math.radians(10))
 
     def test_plastic_continuum_requires_friction_angle(self):
         with pytest.raises(ValidationError, match="plastic_continuum requires"):

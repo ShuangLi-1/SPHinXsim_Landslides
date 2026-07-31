@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 from enum import Enum
-from typing import List, Literal, Optional
+import math
+import warnings
+from typing import Any, Dict, List, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+class PhysicalCorrectionWarning(UserWarning):
+    """A physically unambiguous input correction applied during validation."""
 
 
 class SimulationType(str, Enum):
@@ -73,11 +79,13 @@ class MaterialType(str, Enum):
     J2_PLASTICITY = "j2_plasticity"
     PLASTIC_CONTINUUM = "plastic_continuum"
     GENERAL_CONTINUUM = "general_continuum"
+    COMPOSITE_SOLID = "composite_solid"
 
 
 class FluidBoundaryConditionType(str, Enum):
     EMITTER = "emitter"
     BI_DIRECTIONAL = "bi_directional"
+    FREE_STREAM = "free_stream"
 
 
 class BodyConstraintType(str, Enum):
@@ -369,6 +377,15 @@ class ExtraStateRecordingConfig(BaseModel):
     variables: List[StateRecordingVariableConfig] = Field(..., min_length=1)
 
 
+class EnergyRecordingConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(..., min_length=1)
+    body: str = Field(..., min_length=1)
+    quantity: Literal["TotalMechanicalEnergy"] = "TotalMechanicalEnergy"
+    gravity: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
+
+
 class ViscosityConfig(BaseModel):
     Reynolds_number: float = Field(..., gt=0)
 
@@ -424,6 +441,33 @@ class MaterialConfig(BaseModel):
     friction_angle: Optional[float] = Field(default=None, ge=0)
     cohesion: Optional[float] = Field(default=None, ge=0)
     dilatancy_angle: Optional[float] = Field(default=None, ge=0)
+    youngs_modulus_active: Optional[float] = Field(default=None, gt=0)
+    youngs_modulus_1: Optional[float] = Field(default=None, gt=0)
+    youngs_modulus_2: Optional[float] = Field(default=None, gt=0)
+    material_id_regions: Optional[Dict[str, Any]] = None
+    active_strain: Optional[Dict[str, Any]] = None
+
+    @field_validator("friction_angle", "dilatancy_angle", mode="before")
+    @classmethod
+    def _normalize_angle_to_radians(cls, value: object, info: object) -> object:
+        if value is None or isinstance(value, bool):
+            return value
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return value
+
+        if math.pi / 2 < numeric <= 90.0:
+            corrected = math.radians(numeric)
+            field_name = getattr(info, "field_name", "material_angle")
+            warnings.warn(
+                f"Corrected {field_name} from {numeric:g} degrees to "
+                f"{corrected:.12g} radians; SPHinXsim JSON stores material angles in radians.",
+                PhysicalCorrectionWarning,
+                stacklevel=2,
+            )
+            return corrected
+        return value
 
     @model_validator(mode="after")
     def _validate_material_by_type(self) -> "MaterialConfig":
@@ -484,6 +528,25 @@ class MaterialConfig(BaseModel):
                     "plastic_continuum requires density, sound_speed, youngs_modulus, "
                     "poisson_ratio and friction_angle"
                 )
+            assert self.poisson_ratio is not None
+            assert self.friction_angle is not None
+            if not 0.0 <= self.poisson_ratio < 0.5:
+                raise ValueError("plastic_continuum requires 0 <= poisson_ratio < 0.5")
+            if not 0.0 <= self.friction_angle < math.pi / 2:
+                raise ValueError(
+                    "plastic_continuum requires friction_angle in radians with "
+                    "0 <= friction_angle < pi/2"
+                )
+            if self.dilatancy_angle is not None:
+                if not 0.0 <= self.dilatancy_angle < math.pi / 2:
+                    raise ValueError(
+                        "plastic_continuum requires dilatancy_angle in radians with "
+                        "0 <= dilatancy_angle < pi/2"
+                    )
+                if self.dilatancy_angle > self.friction_angle:
+                    raise ValueError(
+                        "plastic_continuum requires dilatancy_angle <= friction_angle"
+                    )
         elif self.type == MaterialType.GENERAL_CONTINUUM:
             required = (self.density, self.sound_speed, self.youngs_modulus, self.poisson_ratio)
             if any(v is None for v in required):
@@ -520,8 +583,8 @@ class SolidBodyConfig(BaseModel):
 
     @model_validator(mode="after")
     def _material_type(self) -> "SolidBodyConfig":
-        if self.material.type != MaterialType.RIGID_BODY:
-            raise ValueError("solid body material type must be rigid_body")
+        if self.material.type not in (MaterialType.RIGID_BODY, MaterialType.COMPOSITE_SOLID):
+            raise ValueError("solid body material type must be rigid_body or composite_solid")
         return self
 
 
@@ -570,9 +633,20 @@ class FluidBoundaryConditionConfig(BaseModel):
     multi_species_phases: Optional[List[MultiSpeciesPhaseBoundaryConfig]] = None
     volume_fractions: Optional[List[float]] = None
     on_schedule: Optional[FluidBoundaryConditionScheduleConfig] = None
+    buffer_box: Optional[str] = Field(default=None, min_length=1)
+    disposer_box: Optional[str] = Field(default=None, min_length=1)
+    target_speed: Optional[float] = Field(default=None, ge=0)
+    t_ref: Optional[float] = Field(default=None, gt=0)
 
     @model_validator(mode="after")
     def _type_specific_requirements(self) -> "FluidBoundaryConditionConfig":
+        if self.type == FluidBoundaryConditionType.FREE_STREAM and (
+            self.buffer_box is None
+            or self.disposer_box is None
+            or self.target_speed is None
+            or self.t_ref is None
+        ):
+            raise ValueError("free_stream boundary condition requires buffer_box, disposer_box, target_speed and t_ref")
         if self.type == FluidBoundaryConditionType.EMITTER and self.inflow_speed is None:
             raise ValueError("emitter boundary condition requires inflow_speed")
         if self.type == FluidBoundaryConditionType.BI_DIRECTIONAL and self.pressure is None:
@@ -626,17 +700,21 @@ class FluidDynamicsSolverConfig(BaseModel):
     acoustic_cfl: float = Field(default=0.6, gt=0)
     advection_cfl: float = Field(default=0.25, gt=0)
     max_velocity_factor: float = Field(default=1.0, gt=0)
-    surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
+    surface_type: Literal["free_surface", "confined", "open_boundary", "free_stream"] = "free_surface"
+    kernel_correction: Literal["linear", "none"] = "linear"
     particle_sort_frequency: Optional[int] = Field(default=None, gt=0)
 
 
 class ContinuumDynamicsSolverConfig(BaseModel):
     acoustic_cfl: float = Field(default=0.4, gt=0)
     advection_cfl: float = Field(default=0.2, gt=0)
-    linear_correction_matrix_coeff: float = 0.5
-    contact_numerical_damping: float = 0.5
-    shear_stress_damping: float = 0.0
-    hourglass_factor: float = 2.0
+    # These controls apply to GeneralContinuum/J2Plasticity. PlasticContinuum
+    # removes them during cross-validation because it does not build the
+    # corresponding correction, repulsion, shear, or hourglass dynamics.
+    linear_correction_matrix_coeff: Optional[float] = 0.5
+    contact_numerical_damping: Optional[float] = 0.5
+    shear_stress_damping: Optional[float] = 0.0
+    hourglass_factor: Optional[float] = 2.0
     plastic_riemann_dissipation_factor: Optional[float] = Field(default=None, gt=0)
     surface_type: Literal["free_surface", "confined", "open_boundary"] = "free_surface"
 
@@ -645,6 +723,7 @@ class SolverParametersConfig(BaseModel):
     end_time: Optional[float] = Field(default=None, gt=0)
     output_interval: Optional[float] = Field(default=None, gt=0)
     screen_interval: Optional[int] = Field(default=None, gt=0)
+    observation_interval: int = Field(default=200, gt=0)
     restart: Optional[RestartConfig] = None
     fluid_dynamics: Optional[FluidDynamicsSolverConfig] = None
     continuum_dynamics: Optional[ContinuumDynamicsSolverConfig] = None
@@ -688,6 +767,7 @@ class SimulationConfig(BaseModel):
     body_constraints: List[BodyConstraintConfig] = Field(default_factory=list)
     initial_conditions: List[InitialConditionConfig] = Field(default_factory=list)
     extra_state_recording: List[ExtraStateRecordingConfig] = Field(default_factory=list)
+    energy_recording: List[EnergyRecordingConfig] = Field(default_factory=list)
 
     solver_parameters: SolverParametersConfig
 
@@ -728,8 +808,48 @@ class SimulationConfig(BaseModel):
 
     @model_validator(mode="after")
     def _cross_validate(self) -> "SimulationConfig":
+        def _find_non_finite(value: object, path: str) -> str | None:
+            if isinstance(value, float):
+                return path if not math.isfinite(value) else None
+            if isinstance(value, dict):
+                for key, child in value.items():
+                    found = _find_non_finite(child, f"{path}.{key}")
+                    if found is not None:
+                        return found
+            elif isinstance(value, (list, tuple)):
+                for index, child in enumerate(value):
+                    found = _find_non_finite(child, f"{path}[{index}]")
+                    if found is not None:
+                        return found
+            return None
+
+        non_finite_path = _find_non_finite(self.model_dump(mode="python"), "config")
+        if non_finite_path is not None:
+            raise ValueError(
+                "all numeric configuration values must be finite; "
+                f"found non-finite value at {non_finite_path}"
+            )
+
         shape_names = {shape.name for shape in self.geometries.shapes}
         oriented_box_names = {ab.name for ab in self.geometries.oriented_boxes}
+
+        for section_name, bodies in (
+            ("fluid_bodies", self.fluid_bodies),
+            ("continuum_bodies", self.continuum_bodies),
+            ("solid_bodies", self.solid_bodies),
+        ):
+            body_names = [body.name for body in bodies]
+            if len(body_names) != len(set(body_names)):
+                raise ValueError(f"{section_name} must use unique body names")
+
+        if self.particle_generation.settings is not None:
+            particle_body_names = [
+                body.name for body in self.particle_generation.settings.bodies
+            ]
+            if len(particle_body_names) != len(set(particle_body_names)):
+                raise ValueError(
+                    "particle_generation.settings.bodies must use unique body names"
+                )
 
         # Scaling: if characteristic_dimensions provided, Length must be among them
         if self.characteristic_dimensions is not None:
@@ -749,7 +869,11 @@ class SimulationConfig(BaseModel):
             if self.solver_parameters.continuum_dynamics is None:
                 raise ValueError("continuum_dynamics simulation requires solver_parameters.continuum_dynamics")
 
-        if not self.solid_bodies:
+        free_stream = any(
+            bc.type == FluidBoundaryConditionType.FREE_STREAM
+            for bc in self.fluid_boundary_conditions
+        )
+        if not self.solid_bodies and not free_stream:
             raise ValueError("simulation requires at least one solid body")
 
         # Bodies must reference existing geometry names
@@ -886,5 +1010,16 @@ class SimulationConfig(BaseModel):
         elif dim == 2:
             if any(shape.type == BodyShapeType.TRIANGLE_MESH for shape in self.geometries.shapes):
                 raise ValueError("triangle_mesh shapes are 3D-only; use 2D shapes for 2D configurations")
+
+        all_plastic_continuum = bool(self.continuum_bodies) and all(
+            body.material.type == MaterialType.PLASTIC_CONTINUUM
+            for body in self.continuum_bodies
+        )
+        continuum_solver = self.solver_parameters.continuum_dynamics
+        if all_plastic_continuum and continuum_solver is not None:
+            continuum_solver.linear_correction_matrix_coeff = None
+            continuum_solver.contact_numerical_damping = None
+            continuum_solver.shear_stress_damping = None
+            continuum_solver.hourglass_factor = None
 
         return self

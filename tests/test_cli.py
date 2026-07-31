@@ -11,6 +11,7 @@ import pytest
 import sphinxsim
 from sphinxsim.cli import _config_spatial_dim, _load_config, main
 from sphinxsim.cli import _build_parser
+from sphinxsim.llm.common import LLMRepairWarning
 
 
 def _has_native_extension() -> bool:
@@ -243,6 +244,50 @@ class TestCLIGenerate:
     def test_generate_empty_description_returns_nonzero(self):
         rc = main(["generate", ""])
         assert rc != 0
+
+    def test_generate_reports_post_llm_angle_correction(self, capsys):
+        payload = json.loads(
+            Path("tests/test_simulation/test_3d_simulation/data/repose_angle.json").read_text()
+        )
+        payload["continuum_bodies"][0]["material"]["friction_angle"] = 30.0
+
+        class DegreeAngleLLM:
+            def generate(self, description):
+                return sphinxsim.SimulationConfig.model_validate(payload)
+
+        with patch("sphinxsim.cli.get_llm", return_value=DegreeAngleLLM()):
+            rc = main(["generate", "landslide with friction angle 30 degrees"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "Physical correction applied" in captured.err
+        assert "friction_angle from 30 degrees" in captured.err
+        generated = json.loads(captured.out)
+        assert generated["continuum_bodies"][0]["material"]["friction_angle"] == pytest.approx(
+            0.5235987755982988
+        )
+
+    def test_generate_reports_llm_repair_changes(self, capsys):
+        config = sphinxsim.SimulationConfig.model_validate(_valid_data())
+
+        class RepairingLLM:
+            def generate(self, description):
+                import warnings
+
+                warnings.warn(
+                    "LLM repaired the generated config after validation failed: "
+                    "continuum_bodies[0].material.poisson_ratio: 0.6 -> 0.3",
+                    LLMRepairWarning,
+                )
+                return config
+
+        with patch("sphinxsim.cli.get_llm", return_value=RepairingLLM()):
+            rc = main(["generate", "landslide"])
+
+        captured = capsys.readouterr()
+        assert rc == 0
+        assert "LLM repair applied" in captured.err
+        assert "poisson_ratio: 0.6 -> 0.3" in captured.err
 
 
 class TestCLIValidate:
