@@ -7,6 +7,46 @@
 
 namespace SPH
 {
+// SPHinXsim runs all internal dynamics in ScalingConfig's nondimensional
+// units (e.g. Mass is scaled by the "Density"/"Mass" characteristic
+// dimension, see base_simulation_builder.cpp jsonToReal(..., "Density")).
+// The shared ReducedQuantityRecording writes whatever unit the reduce method
+// produces, which is correct for plain (unscaled) SPHinXsys use, such as the
+// SYCL reference, but wrong here unless converted back to physical units at
+// write time - the same conversion createBodyStatesRecording and the
+// observer recorder already apply via DiscreteVariable::setScalingRef.
+template <class ExecutionPolicy, class LocalReduceMethodType>
+class ScaledReducedQuantityRecording : public ReducedQuantityRecording<ExecutionPolicy, LocalReduceMethodType>
+{
+    using Base = ReducedQuantityRecording<ExecutionPolicy, LocalReduceMethodType>;
+    Real physical_scaling_ref_;
+
+  public:
+    template <class DynamicsIdentifier, typename... Args>
+    ScaledReducedQuantityRecording(Real physical_scaling_ref, DynamicsIdentifier &identifier, Args &&...args)
+        : Base(identifier, std::forward<Args>(args)...),
+          physical_scaling_ref_(physical_scaling_ref) {}
+
+    virtual void writeToFile(size_t iteration_step = 0) override
+    {
+        if (!this->header_written_)
+        {
+            std::ofstream out_file(this->filefullpath_output_.c_str(), std::ios::out);
+            out_file << "\"run_time\""
+                     << "   ";
+            this->plt_engine_.writeAQuantityHeader(out_file, this->reduced_quantity_, this->quantity_name_);
+            out_file << "\n";
+            out_file.close();
+            this->header_written_ = true;
+        }
+        std::ofstream out_file(this->filefullpath_output_.c_str(), std::ios::app);
+        out_file << this->sv_physical_time_->getValue() << "   ";
+        this->reduced_quantity_ = this->reduce_method_.exec() * physical_scaling_ref_;
+        this->plt_engine_.writeAQuantity(out_file, this->reduced_quantity_);
+        out_file << "\n";
+        out_file.close();
+    }
+};
 //=================================================================================================//
 template <class MethodContainerType>
 BodyStatesRecording &RecordingBuilder::createBodyStatesRecording(
@@ -89,6 +129,71 @@ void RecordingBuilder::buildObservationIfPresent(
                     observer_config_dynamics.exec();
                     observer_io.writeToFile(time_stepper.getIterationStep()); });
     }
+}
+//=================================================================================================//
+template <class MethodContainerType>
+void RecordingBuilder::buildEnergyRecordingIfPresent(
+    SPHSimulation &sim, MethodContainerType &main_methods, const json &config)
+{
+    if (!config.contains("energy_recording"))
+    {
+        return;
+    }
+
+    auto &sph_system = sim.getSPHSystem();
+    auto &config_manager = sim.getConfigManager();
+    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    auto &time_stepper = sim.getSPHSolver().getTimeStepper();
+
+    auto &energy_io = main_methods.addIODynamicsGroup(sph_system);
+    bool has_entries = false;
+
+    for (const auto &entry : config.at("energy_recording"))
+    {
+        std::string name = entry.at("name").get<std::string>();
+        std::string body_name = entry.at("body").get<std::string>();
+        std::string quantity = entry.value("quantity", std::string("TotalMechanicalEnergy"));
+        RealBody &body = sph_system.getBodyByName<RealBody>(body_name);
+
+        Vecd gravity_vector = Vecd::Zero();
+        if (entry.contains("gravity"))
+        {
+            gravity_vector = scaling_config.jsonToVecd(entry.at("gravity"), "Acceleration");
+        }
+        Gravity *gravity = config_manager.emplaceEntity<Gravity>(name + "_Gravity", gravity_vector);
+
+        if (quantity == "TotalMechanicalEnergy")
+        {
+            // Converts the reduced quantity (computed from internally-scaled
+            // Mass/Velocity/Acceleration) back to physical Joules.
+            Real energy_scaling_ref = scaling_config.getScalingRef("Energy");
+            auto &recorder = main_methods.template addIODynamics<
+                ScaledReducedQuantityRecording, TotalMechanicalEnergyCK>(
+                energy_scaling_ref, body, *gravity);
+            energy_io.add(&recorder);
+            has_entries = true;
+        }
+        else
+        {
+            throw std::runtime_error(
+                "RecordingBuilder::buildEnergyRecordingIfPresent: unsupported quantity: " + quantity);
+        }
+    }
+
+    if (!has_entries)
+    {
+        return;
+    }
+
+    auto &initialization_pipeline = sim.getInitializationPipeline();
+    initialization_pipeline.insert_hook(
+        InitializationHookPoint::InitialObservation, [&]()
+        { energy_io.writeToFile(time_stepper.getIterationStep()); });
+
+    auto &simulation_pipeline = sim.getSimulationPipeline();
+    simulation_pipeline.insert_hook(
+        SimulationHookPoint::Observation, [&]()
+        { energy_io.writeToFile(time_stepper.getIterationStep()); });
 }
 //=================================================================================================//
 template <class MethodContainerType>
