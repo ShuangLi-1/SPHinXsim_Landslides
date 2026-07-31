@@ -243,6 +243,8 @@ UnitMetrics ScalingConfig::getUnitMetrics(std::string unit_name, bool is_require
         return UnitMetrics{-1, 1, -3, -1, 0, 0, 0};
     if (unit_name == "VolumetricHeatCapacity")
         return UnitMetrics{0, 1, -2, -1, 0, 0, 0};
+    if (unit_name == "Energy")
+        return UnitMetrics{2, 1, -2, 0, 0, 0, 0};
 
     if (is_required)
     {

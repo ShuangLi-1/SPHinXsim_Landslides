@@ -51,6 +51,11 @@ class RecordingBuilder
     template <class MethodContainerType>
     void buildObservationIfPresent(SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
 
+    // Reduced-quantity recording (e.g. total mechanical energy) driven from a
+    // JSON "energy_recording" list, generic over body and quantity type.
+    template <class MethodContainerType>
+    void buildEnergyRecordingIfPresent(SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+
     template <class MethodContainerType>
     BodyStatesRecording &createBodyStatesRecording(
         SPHSystem &sph_system, EntityManager &config_manager,

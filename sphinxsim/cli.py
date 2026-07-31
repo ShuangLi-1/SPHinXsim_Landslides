@@ -23,6 +23,7 @@ import os
 import shlex
 import sys
 import tempfile
+import warnings
 from pathlib import Path
 from typing import Any, Tuple
 
@@ -44,9 +45,10 @@ sys.path.insert(0, os.path.join(PROJECT_ROOT, "sphinxsim", "bindings", "native")
 from pydantic import ValidationError
 
 from sphinxsim.bindings.loader import load_sphinxsys_core_nd
-from sphinxsim.config.schemas import SimulationConfig
+from sphinxsim.config.schemas import PhysicalCorrectionWarning, SimulationConfig
 from sphinxsim.config.update_patch import UpdatePatch, apply_update_patch
 from sphinxsim.llm import get_llm
+from sphinxsim.llm.common import LLMRepairWarning, dump_simulation_config_json
 
 # Convert PROJECT_ROOT to Path after imports
 PROJECT_ROOT = Path(PROJECT_ROOT)
@@ -173,16 +175,38 @@ def _config_spatial_dim(config: SimulationConfig) -> int:
 # ---------------------------------------------------------------------------
 
 
+def _generate_with_physical_correction_feedback(llm: Any, description: str) -> Any:
+    """Generate a config and report deterministic corrections and LLM repairs."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always", PhysicalCorrectionWarning)
+        warnings.simplefilter("always", LLMRepairWarning)
+        config = llm.generate(description)
+
+    for warning in caught:
+        if issubclass(warning.category, PhysicalCorrectionWarning):
+            print(f"Physical correction applied: {warning.message}", file=sys.stderr)
+        elif issubclass(warning.category, LLMRepairWarning):
+            print(f"LLM repair applied: {warning.message}", file=sys.stderr)
+        else:
+            warnings.showwarning(
+                warning.message,
+                warning.category,
+                warning.filename,
+                warning.lineno,
+            )
+    return config
+
+
 def cmd_generate(args: argparse.Namespace) -> int:
     """Generate a SimulationConfig from a natural-language *description*."""
     llm = get_llm()
     try:
-        config = llm.generate(args.description)
+        config = _generate_with_physical_correction_feedback(llm, args.description)
     except (ValueError, ValidationError) as exc:
         print(f"Error generating config: {exc}", file=sys.stderr)
         return 1
 
-    output = config.model_dump_json(indent=2, exclude_none=True)
+    output = dump_simulation_config_json(config, indent=2)
     if args.output:
         output_path = Path(args.output)
         try:
@@ -1068,9 +1092,9 @@ def cmd_shell(args: argparse.Namespace) -> int:
             config_path = _shell_resolve_config_path(file_arg)
             llm = get_llm()
             try:
-                config = llm.generate(description)
+                config = _generate_with_physical_correction_feedback(llm, description)
                 config_path.parent.mkdir(parents=True, exist_ok=True)
-                config_path.write_text(config.model_dump_json(indent=2, exclude_none=True))
+                config_path.write_text(dump_simulation_config_json(config, indent=2))
                 print(f"✅ Config generated and written to {config_path}")
                 geometry_locked = False
                 shell_sim = None
@@ -1293,6 +1317,50 @@ def cmd_shell(args: argparse.Namespace) -> int:
 # Argument parser
 # ---------------------------------------------------------------------------
 
+COMPLETION_SCRIPTS = {
+    "bash": """_sphinxsim_completion() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts="generate validate update run preview explore shell --help --version --generate-completion"
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+complete -F _sphinxsim_completion sphinxsim""",
+
+    "zsh": """#compdef sphinxsim
+_sphinxsim() {
+    local -a subcmds
+    subcmds=(
+        'generate:Generate a simulation config from a natural-language description'
+        'validate:Validate a JSON simulation config against the schema'
+        'update:Update an existing simulation config from an instruction'
+        'run:Run a simulation from a JSON config file'
+        'preview:Render an interactive geometry/BC preview of a JSON config file'
+        'explore:Ask schema/functionality questions using LLM'
+        'shell:Interactive shell for config workflow'
+    )
+    _describe 'sphinxsim commands' subcmds
+}
+_sphinxsim "$@" """,
+
+    "fish": """complete -c sphinxsim -f -a "generate" -d "Generate simulation config"
+complete -c sphinxsim -f -a "validate" -d "Validate JSON simulation config"
+complete -c sphinxsim -f -a "update" -d "Update existing simulation config"
+complete -c sphinxsim -f -a "run" -d "Run simulation from JSON config"
+complete -c sphinxsim -f -a "preview" -d "Render interactive geometry/BC preview"
+complete -c sphinxsim -f -a "explore" -d "Ask schema/functionality questions"
+complete -c sphinxsim -f -a "shell" -d "Interactive shell workflow" """
+}
+
+
+class GenerateCompletionAction(argparse.Action):
+    """Custom argparse action to print shell auto-completion scripts and exit."""
+    def __call__(self, parser, namespace, values, option_string=None):
+        shell = values.lower()
+        if shell in COMPLETION_SCRIPTS:
+            print(COMPLETION_SCRIPTS[shell].strip())
+        parser.exit(0)
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -1300,6 +1368,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Python UI for the SPHinXsys multi-physics C++ library.",
     )
     parser.add_argument("--version", action="version", version=f"sphinxsim {__version__}")
+
+    parser.add_argument(
+        "--generate-completion",
+        choices=["bash", "zsh", "fish"],
+        action=GenerateCompletionAction,
+        help="Generate shell auto-completion script for bash, zsh, or fish.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 

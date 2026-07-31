@@ -56,7 +56,6 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
                 std::cout << "- Too large: overlapped bodies" << std::endl;
                 std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
                 std::cout << "------------------------------------------------------------" << std::endl;
-                exit(1);
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();
@@ -83,6 +82,14 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
         density_regularization.add(
             &method_container.template addStateDynamics<
                 DensityRegularization, FluidType, Internal, ExcludeBufferParticles>(sph_body));
+        return density_regularization;
+    }
+
+    if (surface_type == "free_stream")
+    {
+        density_regularization.add(
+            &method_container.template addStateDynamics<
+                DensityRegularization, FluidType, FreeStream>(sph_body));
         return density_regularization;
     }
 
