@@ -30,6 +30,7 @@
 #define CONSTRAINT_BUILDER_H
 
 #include "base_simulation_builder.h"
+#include "sph_solver.h"
 
 namespace SPH
 {
@@ -38,12 +39,10 @@ class RealBody;
 class ConstraintBuilder
 {
   public:
-    template <class MethodContainerType>
-    void addConstraints(SPHSimulation &sim, MethodContainerType &method_container, const json &config);
+    void addConstraints(SPHSimulation &sim, MainMethods &method_container, const json &config);
 
   private:
-    template <class MethodContainerType>
-    void addConstraint(SPHSimulation &sim, MethodContainerType &method_container, RealBody &real_body, const json &config);
+    void addConstraint(SPHSimulation &sim, MainMethods &method_container, RealBody &real_body, const json &config);
 };
 } // namespace SPH
 #endif // CONSTRAINT_BUILDER_H
