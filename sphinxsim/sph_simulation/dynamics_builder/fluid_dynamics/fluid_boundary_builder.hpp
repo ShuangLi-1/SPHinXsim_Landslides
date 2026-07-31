@@ -194,7 +194,7 @@ void FluidDynamicsBuilder::addBoundaryCondition(
             { supplementary_conditions.exec(); });
 
         auto &surface_particle_count = main_methods.template addReduceDynamics<
-            QuantityReduce, ReduceSum<int>>(oriented_box_by_cell, "Indicator");
+            QuantityReduce, ReduceSum<int>, SimpleEvaluation<DirectValue<int>>>(oriented_box_by_cell, "Indicator");
 
         initialization_pipeline.insert_hook(
             InitializationHookPoint::PreSimulationSanityCheck, [&]()
