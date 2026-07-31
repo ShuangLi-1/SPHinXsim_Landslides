@@ -43,24 +43,24 @@ class FluidSimulationBuilder : public SimulationBuilder
   private:
     FluidSolverConfig parseFluidSolverConfig(const ScalingConfig &scaling_config, const json &config);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     void addMainPhysicalTimeStep(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addDensityRegularization(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     void buildTransportVelocityFormulationIfNotFreeSurface(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addLinearCorrectionMatrixWithScope(
-        EntityManager &config_manager, MethodContainerType &main_methods,
+        EntityManager &config_manager, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
     template <class KernelGradientIntegralType>
@@ -68,22 +68,20 @@ class FluidSimulationBuilder : public SimulationBuilder
         KernelGradientIntegralType &kernel_gradient_integral,
         SPHBody &sph_body, FluidSolverConfig &fluid_solver_config);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     void buildViscousForceIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType>
     void buildParticleDeletionIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body);
+        SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body);
 
-    template <class MethodContainerType>
     void buildParticleSortIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body);
+        SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     void buildSurfaceIndicationIfOpenBoundary(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 };
 } // namespace SPH

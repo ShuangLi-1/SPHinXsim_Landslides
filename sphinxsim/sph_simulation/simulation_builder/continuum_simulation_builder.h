@@ -30,6 +30,7 @@
 #define CONTINUUM_SIMULATION_BUILDER_H
 
 #include "base_simulation_builder.h"
+#include "sph_solver.h"
 
 namespace SPH
 {
@@ -62,41 +63,40 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     ContinuumSolverParameters parseContinuumSolverParameters(
         const ScalingConfig &scaling_config, const json &config);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MethodContainerType &method_container,
+        EntityManager &config_manager, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MethodContainerType &method_container,
+        EntityManager &config_manager, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class InnerRelationType>
     void buildShearForceIntegrationIfPresent(
-        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        SPHSimulation &sim, MainMethods &main_methods, InnerRelationType &inner_relation);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class InnerRelationType>
     ParticleDynamicsGroup &addLinearCorrectionMatrix(
-        EntityManager &config_manager, MethodContainerType &method_container, InnerRelationType &inner_relation);
+        EntityManager &config_manager, MainMethods &main_methods, InnerRelationType &inner_relation);
 
-    template <class MethodContainerType, class ContactRelationType>
+    template <class ContactRelationType>
     void buildContactRepulsionIfPresent(
-        SPHSimulation &sim, MethodContainerType &method_container, ContactRelationType &contact_relation);
+        SPHSimulation &sim, MainMethods &main_methods, ContactRelationType &contact_relation);
 
-    template <class MethodContainerType>
     void buildInitialConditionsIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+        SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
-    template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class InnerRelationType, class ContactRelationType>
     void buildDensityRegularizationIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         SPHBody &continuum_body, InnerRelationType &inner_relation,
         ContactRelationType &contact_relation);
 
-    template <class MethodContainerType, class InnerRelationType>
+    template <class InnerRelationType>
     void buildStressDiffusionIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods,
+        SPHSimulation &sim, MainMethods &main_methods,
         SPHBody &continuum_body, InnerRelationType &inner_relation,
         BodyStatesRecording &body_state_recorder);
 };
