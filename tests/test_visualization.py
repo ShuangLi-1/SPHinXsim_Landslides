@@ -1392,6 +1392,98 @@ class TestScreenshot:
         assert len(show_calls) == 1
         assert len(screenshot_calls) == 0
 
+    def test_preview_refreshes_shape_bounds_cache_on_rerun(self, tmp_path, monkeypatch):
+        """A rerun should discard stale bounds and rebuild the cache from the current geometry."""
+        import sphinxsim.visualization.preview as pv_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+
+        class CacheRefreshPlotter:
+            window_size = (800, 600)
+
+            def add_mesh(self, *args, **kwargs):
+                pass
+
+            def add_point_labels(self, *args, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+            def add_axes(self, *args, **kwargs):
+                pass
+
+            def show_grid(self, *args, **kwargs):
+                pass
+
+            def show(self, *args, **kwargs):
+                pass
+
+            def __getattr__(self, name):
+                def _noop(*args, **kwargs):
+                    pass
+
+                return _noop
+
+        class CacheRefreshPyVista:
+            def Plotter(self, **kwargs):
+                return CacheRefreshPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                class MockPolyData:
+                    def __init__(self, pts):
+                        self.points = pts
+                        self.center = [0.5, 0.5, 0.0] if len(pts) > 0 else [0.0, 0.0, 0.0]
+                        self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+                return MockPolyData(points)
+
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
+            @staticmethod
+            def Box(bounds):
+                class MockBox:
+                    def __init__(self):
+                        self.bounds = bounds
+
+                return MockBox()
+
+        monkeypatch.setitem(sys.modules, "pyvista", CacheRefreshPyVista())
+
+        viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
+        viz._shape_bounds_cache = {
+            "stale": ([9.0, 9.0], [10.0, 10.0]),
+        }
+
+        def fake_try_build_geometries(self, ndim, with_particles=False):
+            assert self._shape_bounds_cache is None
+            self._shape_bounds_cache = {
+                "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+                "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+            }
+            return None
+
+        monkeypatch.setattr(pv_mod.ConfigVisualizer, "_try_build_geometries", fake_try_build_geometries)
+        monkeypatch.setattr(pv_mod.ConfigVisualizer, "_populate_plotter", lambda *args, **kwargs: None)
+
+        viz.preview(use_cpp=True)
+
+        assert viz._shape_bounds_cache == {
+            "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+            "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+        }
+
 
 class TestCLIScreenshotCommand:
     """CLI tests for the --screenshot flag."""

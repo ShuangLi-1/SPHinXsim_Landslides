@@ -274,6 +274,9 @@ class ConfigVisualizer:
         vtp_dir: Path | None = None
         latest_particle_vtps: dict[str, Path] = {}
         if use_cpp:
+            # Each preview run must rebuild bounds from the current geometry,
+            # so do not carry cached bounds across reruns.
+            self._shape_bounds_cache = None
             vtp_dir = self._try_build_geometries(ndim, with_particles=with_particles)
             if with_particles:
                 latest_particle_vtps = self._discover_latest_particle_vtps(vtp_dir)
