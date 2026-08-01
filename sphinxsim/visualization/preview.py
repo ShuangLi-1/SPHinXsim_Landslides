@@ -11,9 +11,10 @@ VTP mode (preferred)
     ``Shape<Name>.vtp`` polygon meshes are loaded and displayed by PyVista.
     The lightweight C++ ``GeometryBuilder`` is used for this stage.
 
-C++ bounds fallback
+C++ bounds cache
     When VTP files are not produced, accurate bounding boxes are queried
-    directly from the live C++ simulation object via ``getShapeBounds()``.
+    directly from the geometry builder via ``getShapeBounds()`` and reused
+    for preview rendering.
 
 The C++ extension (``_sphinxsys_core_2d`` or ``_sphinxsys_core_3d``) must
 be installed.  If it is not found an :class:`ImportError` is raised with
@@ -26,7 +27,7 @@ import os
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sphinxsim.bindings.loader import load_sphinxsys_core, load_sphinxsys_core_nd
+from sphinxsim.bindings.loader import load_sphinxsys_core_nd
 
 if TYPE_CHECKING:
     from sphinxsim.config.schemas import (
@@ -168,7 +169,6 @@ class ConfigVisualizer:
         self.off_screen = off_screen
 
         self._vtp_dir: Path | None = None
-        self._bounds_sim: Any | None = None
         self._shape_bounds_cache: dict[str, Any] | None = None
         self._annotation_label_actors: list[dict[str, Any]] = []
 
@@ -224,8 +224,8 @@ class ConfigVisualizer:
 
     @property
     def used_cpp_bounds(self) -> bool:
-        """Whether the most recent preview used live C++ shape bounds."""
-        return self._bounds_sim is not None
+        """Whether the most recent preview cached C++ shape bounds."""
+        return self._shape_bounds_cache is not None
 
     @property
     def annotation_label_actors(self) -> list[dict[str, Any]]:
@@ -278,7 +278,6 @@ class ConfigVisualizer:
             if with_particles:
                 latest_particle_vtps = self._discover_latest_particle_vtps(vtp_dir)
         else:
-            self._bounds_sim = None
             self._shape_bounds_cache = None
         self._vtp_dir = vtp_dir
 
@@ -292,8 +291,8 @@ class ConfigVisualizer:
 
         if vtp_dir:
             mode_label = "VTP geometry"
-        elif self._bounds_sim is not None:
-            mode_label = "C++ bounds fallback"
+        elif self._shape_bounds_cache is not None:
+            mode_label = "C++ bounds cache"
         else:
             mode_label = "No C++ geometry"
         dim_label = "2-D" if ndim == 2 else "3-D"
@@ -353,11 +352,11 @@ class ConfigVisualizer:
         Uses ``self.config_path`` directly as the C++ config input so the
         original JSON file is the single source of truth. Geometry generation
         uses the lightweight ``GeometryBuilder`` class. If VTPs are not
-        produced, a live :class:`SPHSimulation` is created as a fallback for
-        ``getShapeBounds()`` queries.
+        produced, the builder-provided ``getShapeBounds()`` cache is reused
+        for preview rendering.
         """
         if self.config_path is None:
-            self._bounds_sim = None
+            self._shape_bounds_cache = None
             return None
 
         try:
@@ -387,6 +386,11 @@ class ConfigVisualizer:
             builder.resetInOutputRoot(str(vtp_output_dir))
             builder.buildGeometries()
 
+            try:
+                self._shape_bounds_cache = builder.getShapeBounds()
+            except Exception:
+                self._shape_bounds_cache = None
+
             # Optionally generate particles so preview can overlay the latest
             # body particle clouds if particle_generation is enabled.
             if with_particles and self.config.particle_generation.build_and_run:
@@ -394,11 +398,7 @@ class ConfigVisualizer:
                 sim.resetOutputRoot(str(vtp_output_dir), True)
                 sim.buildGeometries()
                 sim.generateParticles()
-
-            self._bounds_sim = None
-            self._shape_bounds_cache = None
         except Exception:
-            self._bounds_sim = None
             self._shape_bounds_cache = None
             return None
         finally:
@@ -409,17 +409,6 @@ class ConfigVisualizer:
             return output_subdir
         if any(vtp_output_dir.glob("Shape*.vtp")):
             return vtp_output_dir
-
-        # Fallback: build via SPHSimulation so we can query shape bounds.
-        try:
-            sim = sph.SPHSimulation(str(self.config_path))
-            sim.resetOutputRoot(str(vtp_output_dir))
-            sim.buildGeometries()
-            self._bounds_sim = sim
-            self._shape_bounds_cache = None
-        except Exception:
-            self._bounds_sim = None
-            self._shape_bounds_cache = None
 
         return None
 
@@ -1035,15 +1024,9 @@ class ConfigVisualizer:
                 except Exception:
                     pass
 
-        if self._bounds_sim is not None:
-            try:
-                if self._shape_bounds_cache is None:
-                    self._shape_bounds_cache = self._bounds_sim.getShapeBounds()
-                if shape.name in self._shape_bounds_cache:
-                    lower, upper = self._shape_bounds_cache[shape.name]
-                    return _bounds_to_box(list(lower), list(upper))
-            except Exception:
-                self._shape_bounds_cache = {}
+        if self._shape_bounds_cache is not None and shape.name in self._shape_bounds_cache:
+            lower, upper = self._shape_bounds_cache[shape.name]
+            return _bounds_to_box(list(lower), list(upper))
 
         return None
 

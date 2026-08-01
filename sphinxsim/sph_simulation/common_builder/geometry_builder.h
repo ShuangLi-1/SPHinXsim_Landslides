@@ -59,6 +59,7 @@ class GeometryBuilder
     ~GeometryBuilder();
     void resetInOutputRoot(const fs::path &output_root);
     void buildGeometries();
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> getShapeBounds();
     //----------------------------------------------------------------------
     // static functions for geometry construction used in simulation builder
     //----------------------------------------------------------------------

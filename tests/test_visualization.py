@@ -1635,16 +1635,10 @@ class TestPreviewGravityArrow:
         cfg = SimulationConfig(**data)
 
         viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
-
-        class FakeBoundsSim:
-            def getShapeBounds(self):
-                return {
-                    "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
-                    "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
-                }
-
-        viz._bounds_sim = FakeBoundsSim()
-        viz._shape_bounds_cache = None
+        viz._shape_bounds_cache = {
+            "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+            "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+        }
 
         fake_plotter = _FakePlotter()
         with patch.dict(sys.modules, {"pyvista": _FakePyVista}):
