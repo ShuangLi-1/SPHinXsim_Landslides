@@ -831,26 +831,6 @@ class TestCLIPreviewCommand:
         assert rc == 0
         MockViz.assert_called_once()
         fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
-            screenshot_path=None,
-            with_particles=False,
-        )
-
-    def test_preview_no_cpp_flag(self, build_temp_path):
-        cfg = self._write_config(build_temp_path)
-        mock_pv = MagicMock()
-        fake_visualizer = MagicMock()
-
-        with patch.dict(sys.modules, {"pyvista": mock_pv}):
-            with patch(
-                "sphinxsim.visualization.preview.ConfigVisualizer",
-                return_value=fake_visualizer,
-            ):
-                rc = main(["preview", str(cfg), "--no-cpp"])
-
-        assert rc == 0
-        fake_visualizer.preview.assert_called_once_with(
-            use_cpp=False,
             screenshot_path=None,
             with_particles=False,
         )
@@ -869,7 +849,6 @@ class TestCLIPreviewCommand:
 
         assert rc == 0
         fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
             screenshot_path=None,
             with_particles=True,
         )
@@ -945,25 +924,6 @@ class TestShellPreview:
         assert rc == 0
         mock_show_or_update.assert_called_once()
         _, kwargs = mock_show_or_update.call_args
-        assert kwargs.get("use_cpp") is True
-        assert kwargs.get("with_particles") is False
-
-    def test_shell_preview_no_cpp_flag(self, build_temp_path):
-        _, rel = self._write_config(build_temp_path)
-
-        inputs = [f"load {rel}", "preview --no-cpp", "exit"]
-        with patch.dict(sys.modules, {"pyvista": MagicMock()}):
-            with patch(
-                "sphinxsim.cli._ShellPreviewRuntime.show_or_update",
-                return_value=0,
-            ) as mock_show_or_update:
-                with patch("builtins.input", side_effect=inputs):
-                    rc = main(["shell"])
-
-        assert rc == 0
-        mock_show_or_update.assert_called_once()
-        _, kwargs = mock_show_or_update.call_args
-        assert kwargs.get("use_cpp") is False
         assert kwargs.get("with_particles") is False
 
     def test_shell_preview_with_particles_flag(self, build_temp_path):
@@ -981,7 +941,6 @@ class TestShellPreview:
         assert rc == 0
         mock_show_or_update.assert_called_once()
         _, kwargs = mock_show_or_update.call_args
-        assert kwargs.get("use_cpp") is True
         assert kwargs.get("with_particles") is True
 
     def test_shell_runtime_does_not_require_legacy_view_widgets(self, tmp_path, monkeypatch):
@@ -1007,6 +966,12 @@ class TestShellPreview:
 
             def _add_config_info_text(self, plotter, config_info, ndim):
                 return None
+
+            def _try_build_geometries(self, ndim, with_particles=False):
+                return None
+
+            def _discover_latest_particle_vtps(self, vtp_dir):
+                return {}
 
         class FakePlotter:
             def clear(self):
@@ -1035,7 +1000,6 @@ class TestShellPreview:
             rc = runtime.show_or_update(
                 cfg,
                 resolved_config_path=tmp_path / "config.json",
-                use_cpp=False,
                 with_particles=False,
             )
 
@@ -1242,7 +1206,7 @@ class TestScreenshot:
         monkeypatch.setitem(sys.modules, "pyvista", WidgetlessMockPyVista())
 
         viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
-        viz.preview(use_cpp=False)
+        viz.preview()
 
     def test_preview_screenshot_calls_plotter_screenshot(self, tmp_path, monkeypatch):
         """preview() with screenshot_path should call plotter.screenshot() instead of plotter.show()."""
@@ -1313,7 +1277,7 @@ class TestScreenshot:
 
         viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
         out_file = str(tmp_path / "screenshot.png")
-        viz.preview(use_cpp=False, screenshot_path=out_file)
+        viz.preview(screenshot_path=out_file)
 
         assert len(screenshot_calls) == 1
         assert screenshot_calls[0] == out_file
@@ -1387,10 +1351,102 @@ class TestScreenshot:
         monkeypatch.setitem(sys.modules, "pyvista", ShowMockPyVista())
 
         viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
-        viz.preview(use_cpp=False)
+        viz.preview()
 
         assert len(show_calls) == 1
         assert len(screenshot_calls) == 0
+
+    def test_preview_refreshes_shape_bounds_cache_on_rerun(self, tmp_path, monkeypatch):
+        """A rerun should discard stale bounds and rebuild the cache from the current geometry."""
+        import sphinxsim.visualization.preview as pv_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+
+        class CacheRefreshPlotter:
+            window_size = (800, 600)
+
+            def add_mesh(self, *args, **kwargs):
+                pass
+
+            def add_point_labels(self, *args, **kwargs):
+                pass
+
+            def add_text(self, *args, **kwargs):
+                pass
+
+            def add_legend(self, *args, **kwargs):
+                pass
+
+            def add_axes(self, *args, **kwargs):
+                pass
+
+            def show_grid(self, *args, **kwargs):
+                pass
+
+            def show(self, *args, **kwargs):
+                pass
+
+            def __getattr__(self, name):
+                def _noop(*args, **kwargs):
+                    pass
+
+                return _noop
+
+        class CacheRefreshPyVista:
+            def Plotter(self, **kwargs):
+                return CacheRefreshPlotter()
+
+            @staticmethod
+            def PolyData(points):
+                class MockPolyData:
+                    def __init__(self, pts):
+                        self.points = pts
+                        self.center = [0.5, 0.5, 0.0] if len(pts) > 0 else [0.0, 0.0, 0.0]
+                        self.bounds = [[0.0, 1.0], [0.0, 1.0], [0.0, 1.0]]
+
+                return MockPolyData(points)
+
+            @staticmethod
+            def Arrow(start, direction, scale):
+                return {
+                    "type": "arrow",
+                    "start": start,
+                    "direction": direction,
+                    "scale": scale,
+                }
+
+            @staticmethod
+            def Box(bounds):
+                class MockBox:
+                    def __init__(self):
+                        self.bounds = bounds
+
+                return MockBox()
+
+        monkeypatch.setitem(sys.modules, "pyvista", CacheRefreshPyVista())
+
+        viz = pv_mod.ConfigVisualizer(cfg, tmp_path, off_screen=False)
+        viz._shape_bounds_cache = {
+            "stale": ([9.0, 9.0], [10.0, 10.0]),
+        }
+
+        def fake_try_build_geometries(self, ndim, with_particles=False):
+            assert self._shape_bounds_cache is None
+            self._shape_bounds_cache = {
+                "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+                "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+            }
+            return None
+
+        monkeypatch.setattr(pv_mod.ConfigVisualizer, "_try_build_geometries", fake_try_build_geometries)
+        monkeypatch.setattr(pv_mod.ConfigVisualizer, "_populate_plotter", lambda *args, **kwargs: None)
+
+        viz.preview()
+
+        assert viz._shape_bounds_cache == {
+            "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+            "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+        }
 
 
 class TestCLIScreenshotCommand:
@@ -1416,7 +1472,6 @@ class TestCLIScreenshotCommand:
 
         assert rc == 0
         fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
             screenshot_path="output.png",
             with_particles=False,
         )
@@ -1436,7 +1491,6 @@ class TestCLIScreenshotCommand:
 
         assert rc == 0
         fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
             screenshot_path="out.png",
             with_particles=False,
         )
@@ -1501,7 +1555,6 @@ class TestShellScreenshot:
 
         assert rc == 0
         fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
             screenshot_path="shell_out.png",
             with_particles=False,
         )
@@ -1522,7 +1575,6 @@ class TestShellScreenshot:
 
         assert rc == 0
         fake_visualizer.preview.assert_called_once_with(
-            use_cpp=True,
             screenshot_path="short.png",
             with_particles=False,
         )
@@ -1635,16 +1687,10 @@ class TestPreviewGravityArrow:
         cfg = SimulationConfig(**data)
 
         viz = ConfigVisualizer(cfg, tmp_path, off_screen=True)
-
-        class FakeBoundsSim:
-            def getShapeBounds(self):
-                return {
-                    "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
-                    "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
-                }
-
-        viz._bounds_sim = FakeBoundsSim()
-        viz._shape_bounds_cache = None
+        viz._shape_bounds_cache = {
+            "WaterBody": ([0.0, 0.0], [0.4, 0.2]),
+            "WallBoundary": ([0.0, 0.0], [0.4, 0.2]),
+        }
 
         fake_plotter = _FakePlotter()
         with patch.dict(sys.modules, {"pyvista": _FakePyVista}):

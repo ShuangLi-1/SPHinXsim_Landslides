@@ -36,6 +36,40 @@ python -m pip install -e ".[visualization]"
 
   See [Visualization](visualization.md) for details.
 
+- Optional: enable CLI shell completion.
+
+```bash
+# bash
+echo 'eval "$(sphinxsim --generate-completion bash)"' >> ~/.bashrc
+
+# zsh
+echo 'eval "$(sphinxsim --generate-completion zsh)"' >> ~/.zshrc
+
+# fish
+echo 'sphinxsim --generate-completion fish | source' >> ~/.config/fish/config.fish
+```
+
+- Troubleshooting shell completion:
+
+```bash
+# Reload startup config in the current terminal
+source ~/.bashrc      # bash
+source ~/.zshrc       # zsh
+source ~/.config/fish/config.fish  # fish
+```
+
+```zsh
+# zsh completion must be initialized
+autoload -Uz compinit
+compinit
+eval "$(sphinxsim --generate-completion zsh)"
+```
+
+```bash
+# Quick sanity check that completion script is produced
+sphinxsim --generate-completion bash | head
+```
+
 - Run full Python tests (including examples):
 
 ```bash

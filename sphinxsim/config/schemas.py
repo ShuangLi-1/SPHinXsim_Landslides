@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import Enum
 import math
 import warnings
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, List, Literal, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -129,10 +129,25 @@ class TransformConfig(BaseModel):
     rotation_angle: float
     rotation_axis: Optional[List[float]] = Field(default=None, min_length=3, max_length=3)
 
+    @model_validator(mode="after")
+    def _validate_rotation_axis_requirements(self) -> "TransformConfig":
+        # 3D transforms require a rotation axis in C++ jsonToTransform().
+        if len(self.translation) == 3 and self.rotation_axis is None:
+            raise ValueError("3D transform requires rotation_axis")
+        return self
+
+
+class PrimitiveConfig(BaseModel):
+    name: str = Field(..., min_length=1)
+    type: Literal["box"]
+    half_size: List[float] = Field(..., min_length=2, max_length=3)
+    transform: TransformConfig
+
 
 class MultiPolygonEntryConfig(BaseModel):
     operation: GeometricOperationType
     type: MultiPolygonPrimitiveType
+    primitive: Optional[str] = None
     half_size: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     transform: Optional[TransformConfig] = None
     center: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
@@ -149,8 +164,8 @@ class MultiPolygonEntryConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_shape_payload(self) -> "MultiPolygonEntryConfig":
         if self.type == MultiPolygonPrimitiveType.BOX:
-            if self.half_size is None or self.transform is None:
-                raise ValueError("multipolygon box requires half_size and transform")
+            if not self.primitive and (self.half_size is None or self.transform is None):
+                raise ValueError("multipolygon box requires primitive or half_size and transform")
         elif self.type == MultiPolygonPrimitiveType.BOUNDING_BOX:
             if self.lower_bound is None or self.upper_bound is None:
                 raise ValueError("multipolygon bounding_box requires lower_bound and upper_bound")
@@ -183,6 +198,7 @@ class MultiPolygonEntryConfig(BaseModel):
 class ShapeConfig(BaseModel):
     name: str = Field(..., min_length=1)
     type: BodyShapeType
+    primitive: Optional[str] = None
 
     lower_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     upper_bound: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
@@ -205,8 +221,8 @@ class ShapeConfig(BaseModel):
     @model_validator(mode="after")
     def _validate_type_fields(self) -> "ShapeConfig":
         if self.type == BodyShapeType.BOX:
-            if self.half_size is None or self.transform is None:
-                raise ValueError("box shape requires half_size and transform")
+            if not self.primitive and (self.half_size is None or self.transform is None):
+                raise ValueError("box shape requires primitive or half_size and transform")
             return self
 
         if self.type == BodyShapeType.BOUNDING_BOX:
@@ -246,6 +262,7 @@ class ShapeConfig(BaseModel):
 class OrientedBoxConfig(BaseModel):
     name: str = Field(..., min_length=1)
     type: OrientedBoxType
+    primitive: Optional[str] = None
 
     center: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
     normal: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
@@ -260,14 +277,15 @@ class OrientedBoxConfig(BaseModel):
             if self.center is None or self.normal is None or self.radius is None:
                 raise ValueError("in_outlet oriented_box requires center, normal and radius")
         elif self.type == OrientedBoxType.REGION:
-            if self.half_size is None or self.transform is None:
-                raise ValueError("region oriented_box requires half_size and transform")
+            if not self.primitive and (self.half_size is None or self.transform is None):
+                raise ValueError("region oriented_box requires primitive or half_size and transform")
         return self
 
 
 class GeometriesConfig(BaseModel):
     system_domain: Optional[DomainConfig] = None
     global_resolution: GlobalResolutionConfig
+    primitives: List[PrimitiveConfig] = Field(default_factory=list)
     shapes: List[ShapeConfig] = Field(..., min_length=1)
     oriented_boxes: List[OrientedBoxConfig] = Field(default_factory=list)
 
@@ -275,11 +293,24 @@ class GeometriesConfig(BaseModel):
     def _validate_shape_references(self) -> "GeometriesConfig":
         """Ensure shape definitions are unique and only reference earlier shapes."""
         defined_shape_names: set[str] = set()
+        defined_primitive_names: set[str] = set()
+
+        for primitive in self.primitives:
+            if primitive.name in defined_primitive_names:
+                raise ValueError(
+                    f"geometries.primitives contains duplicate primitive name '{primitive.name}'"
+                )
+            defined_primitive_names.add(primitive.name)
 
         for shape in self.shapes:
             if shape.name in defined_shape_names:
                 raise ValueError(
                     f"geometries.shapes contains duplicate shape name '{shape.name}'"
+                )
+
+            if shape.primitive is not None and shape.primitive not in defined_primitive_names:
+                raise ValueError(
+                    f"shape '{shape.name}' references unknown primitive '{shape.primitive}'"
                 )
 
             if shape.type == BodyShapeType.EXPANDED_BOX:
@@ -295,7 +326,20 @@ class GeometriesConfig(BaseModel):
                             f"complex_shape '{shape.name}' has sub_shape '{sub_shape}' that is not previously defined"
                         )
 
+            if shape.type == BodyShapeType.MULTIPOLYGON:
+                for polygon in shape.polygons or []:
+                    if polygon.primitive is not None and polygon.primitive not in defined_primitive_names:
+                        raise ValueError(
+                            f"multipolygon shape '{shape.name}' references unknown primitive '{polygon.primitive}'"
+                        )
+
             defined_shape_names.add(shape.name)
+
+        for oriented_box in self.oriented_boxes:
+            if oriented_box.primitive is not None and oriented_box.primitive not in defined_primitive_names:
+                raise ValueError(
+                    f"oriented_box '{oriented_box.name}' references unknown primitive '{oriented_box.primitive}'"
+                )
 
         return self
 
@@ -423,6 +467,26 @@ class MultiSpeciesPhaseMaterialConfig(BaseModel):
     species: List[MixtureSpeciesConfig] = Field(..., min_length=1)
 
 
+class MaterialIdRegionEntryConfig(BaseModel):
+    shape: str = Field(..., min_length=1)
+    id: int
+
+
+class MaterialIdRegionsConfig(BaseModel):
+    regions: List[MaterialIdRegionEntryConfig] = Field(..., min_length=1)
+    default_id: int
+
+
+class ActiveStrainConfig(BaseModel):
+    center: List[float] = Field(..., min_length=2, max_length=3)
+    region_span: float = Field(..., gt=0)
+    core_thickness: float = Field(..., ge=0)
+    amplitude: float
+    frequency: float = Field(..., gt=0)
+    wavelength_factor: float = Field(..., gt=0)
+    start_time: float = Field(..., gt=0)
+
+
 class MaterialConfig(BaseModel):
     type: MaterialType
 
@@ -444,8 +508,8 @@ class MaterialConfig(BaseModel):
     youngs_modulus_active: Optional[float] = Field(default=None, gt=0)
     youngs_modulus_1: Optional[float] = Field(default=None, gt=0)
     youngs_modulus_2: Optional[float] = Field(default=None, gt=0)
-    material_id_regions: Optional[Dict[str, Any]] = None
-    active_strain: Optional[Dict[str, Any]] = None
+    material_id_regions: Optional[MaterialIdRegionsConfig] = None
+    active_strain: Optional[ActiveStrainConfig] = None
 
     @field_validator("friction_angle", "dilatancy_angle", mode="before")
     @classmethod
@@ -479,8 +543,12 @@ class MaterialConfig(BaseModel):
                     "weakly_compressible_fluid does not support sound_speed; "
                     "use solver_parameters.fluid_dynamics.max_velocity_factor"
                 )
+        elif self.type == MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE:
+            raise ValueError(
+                "weakly_compressible_mixture is not supported by the current C++ parser; "
+                "use weakly_compressible_multi_species"
+            )
         elif self.type in (
-            MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
             MaterialType.WEAKLY_COMPRESSIBLE_MULTI_SPECIES,
         ):
             if not self.species:
@@ -553,6 +621,22 @@ class MaterialConfig(BaseModel):
                 raise ValueError(
                     "general_continuum requires density, sound_speed, youngs_modulus and poisson_ratio"
                 )
+        elif self.type == MaterialType.COMPOSITE_SOLID:
+            required = (
+                self.density,
+                self.poisson_ratio,
+                self.youngs_modulus_active,
+                self.youngs_modulus_1,
+                self.youngs_modulus_2,
+            )
+            if any(v is None for v in required):
+                raise ValueError(
+                    "composite_solid requires density, poisson_ratio, youngs_modulus_active, "
+                    "youngs_modulus_1 and youngs_modulus_2"
+                )
+            assert self.poisson_ratio is not None
+            if not 0.0 <= self.poisson_ratio < 0.5:
+                raise ValueError("composite_solid requires 0 <= poisson_ratio < 0.5")
         return self
 
 
@@ -565,14 +649,12 @@ class FluidBodyConfig(BaseModel):
     def _material_type(self) -> "FluidBodyConfig":
         if self.material.type not in (
             MaterialType.WEAKLY_COMPRESSIBLE_FLUID,
-            MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
             MaterialType.WEAKLY_COMPRESSIBLE_MULTI_SPECIES,
             MaterialType.WEAKLY_COMPRESSIBLE_MULTI_PHASE,
         ):
             raise ValueError(
                 "fluid body material type must be weakly_compressible_fluid, "
-                "weakly_compressible_mixture, weakly_compressible_multi_species or "
-                "weakly_compressible_multi_phase"
+                "weakly_compressible_multi_species or weakly_compressible_multi_phase"
             )
         return self
 
@@ -607,7 +689,7 @@ class ContinuumBodyConfig(BaseModel):
 
 class FluidBoundaryConditionScheduleConfig(BaseModel):
     switch_on_time: float = Field(..., ge=0)
-    duration: float = Field(..., gt=0)
+    duration: Optional[float] = Field(default=None, gt=0)
 
 
 class MultiSpeciesPhaseBoundaryConfig(BaseModel):
@@ -681,6 +763,15 @@ class InitialConditionAssignmentConfig(BaseModel):
     region: Optional[str] = None
     variable: VariableConfig
     value: float | List[float]
+
+    @model_validator(mode="after")
+    def _validate_value_shape(self) -> "InitialConditionAssignmentConfig":
+        # C++ parses scalar values for real_type and vectors for vector_type.
+        if self.variable.real_type is not None and isinstance(self.value, list):
+            raise ValueError("initial_conditions real_type assignment requires a scalar value")
+        if self.variable.vector_type is not None and not isinstance(self.value, list):
+            raise ValueError("initial_conditions vector_type assignment requires a vector value")
+        return self
 
 
 class InitialConditionConfig(BaseModel):
@@ -787,6 +878,10 @@ class SimulationConfig(BaseModel):
             if shape.transform is not None:
                 dims.add(len(shape.transform.translation))
 
+        for primitive in self.geometries.primitives:
+            dims.add(len(primitive.half_size))
+            dims.add(len(primitive.transform.translation))
+
         for oriented_box in self.geometries.oriented_boxes:
             for vec in (oriented_box.center, oriented_box.normal, oriented_box.half_size):
                 if vec is not None:
@@ -801,6 +896,10 @@ class SimulationConfig(BaseModel):
         for constraint in self.body_constraints:
             if constraint.velocity is not None:
                 dims.add(len(constraint.velocity))
+
+        for solid_body in self.solid_bodies:
+            if solid_body.material.active_strain is not None:
+                dims.add(len(solid_body.material.active_strain.center))
 
         if len(dims) > 1:
             raise ValueError("configuration vector dimensionality must be consistent")
@@ -861,11 +960,15 @@ class SimulationConfig(BaseModel):
         if self.simulation_type == SimulationType.FLUID_DYNAMICS:
             if not self.fluid_bodies:
                 raise ValueError("fluid_dynamics simulation requires fluid_bodies")
+            if len(self.fluid_bodies) > 1:
+                raise ValueError("fluid_dynamics currently supports exactly one fluid body")
             if self.solver_parameters.fluid_dynamics is None:
                 raise ValueError("fluid_dynamics simulation requires solver_parameters.fluid_dynamics")
         elif self.simulation_type == SimulationType.CONTINUUM_DYNAMICS:
             if not self.continuum_bodies:
                 raise ValueError("continuum_dynamics simulation requires continuum_bodies")
+            if len(self.continuum_bodies) > 1:
+                raise ValueError("continuum_dynamics currently supports exactly one continuum body")
             if self.solver_parameters.continuum_dynamics is None:
                 raise ValueError("continuum_dynamics simulation requires solver_parameters.continuum_dynamics")
 
@@ -886,6 +989,12 @@ class SimulationConfig(BaseModel):
         for body in self.solid_bodies:
             if body.name not in shape_names:
                 raise ValueError(f"solid body '{body.name}' must match a shape name in geometries.shapes")
+            if body.material.material_id_regions is not None:
+                for region in body.material.material_id_regions.regions:
+                    if region.shape not in shape_names:
+                        raise ValueError(
+                            "material_id_regions region.shape must reference an existing shape"
+                        )
 
         # Particle generation body names must exist as shapes
         if self.particle_generation.settings is not None:
@@ -915,12 +1024,11 @@ class SimulationConfig(BaseModel):
             if bc.mass_fractions is not None:
                 fluid_body = fluid_body_map[bc.body_name]
                 if fluid_body.material.type not in (
-                    MaterialType.WEAKLY_COMPRESSIBLE_MIXTURE,
                     MaterialType.WEAKLY_COMPRESSIBLE_MULTI_SPECIES,
                 ):
                     raise ValueError(
                         "mass_fractions require boundary-condition body material type "
-                        "weakly_compressible_mixture or weakly_compressible_multi_species"
+                        "weakly_compressible_multi_species"
                     )
                 species_count = len(fluid_body.material.species)
                 if species_count != len(bc.mass_fractions):

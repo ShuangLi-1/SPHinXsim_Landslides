@@ -1,7 +1,7 @@
 #include "continuum_simulation_builder.hpp"
 
 #include "base_simulation_builder.hpp"
-#include "constraint_builder.hpp"
+#include "constraint_builder.h"
 
 namespace SPH
 {
@@ -37,7 +37,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
-    auto &main_methods = sph_solver.addParticleMethodContainer(par_ck);
+    auto &main_methods = sph_solver.getMainMethodContainer();
     auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
     auto &continuum_update_configuration =
         main_methods.addParticleDynamicsGroup()
@@ -214,5 +214,41 @@ ContinuumSolverParameters ContinuumSimulationBuilder::parseContinuumSolverParame
 
     return parameters;
 }
+//=================================================================================================//
+void ContinuumSimulationBuilder::buildInitialConditionsIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
+{
+    EntityManager &config_manager = sim.getConfigManager();
+    SPHSystem &sph_system = sim.getSPHSystem();
+    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
+
+    if (config_manager.hasEntity<RestartConfig>("RestartConfig"))
+    {
+        auto &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
+        sph_system.setRestartStep(restart_config.restore_step_);
+        auto &restart_io = main_methods.template addIODynamics<RestartIOCK>(
+            sph_system, restart_config.summary_enabled_);
+
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ExtraOutput, [&]()
+            { 
+                if (time_stepper.getIterationStep() % restart_config.save_interval_ == 0)
+                {
+                    restart_io.writeToFile(time_stepper.getIterationStep());
+                } });
+
+        auto &initialization_pipeline = sim.getInitializationPipeline();
+        if (restart_config.restore_step_ != 0)
+        {
+            initialization_pipeline.insert_hook(
+                InitializationHookPoint::InitialCondition, [&]()
+                { 
+                    time_stepper.setRestartStep(restart_config.restore_step_);
+                    restart_io.readRestartFiles(restart_config.restore_step_); });
+        }
+    }
+}
+
 //=================================================================================================//
 } // namespace SPH

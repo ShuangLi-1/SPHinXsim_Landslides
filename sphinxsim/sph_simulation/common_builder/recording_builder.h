@@ -30,6 +30,7 @@
 #define RECORDING_BUILDER_H
 
 #include "base_simulation_builder.h"
+#include "sph_solver.h"
 
 namespace SPH
 {
@@ -48,36 +49,31 @@ struct ObserverConfig
 class RecordingBuilder
 {
   public:
-    template <class MethodContainerType>
-    void buildObservationIfPresent(SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+    void buildObservationIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
     // Reduced-quantity recording (e.g. total mechanical energy) driven from a
     // JSON "energy_recording" list, generic over body and quantity type.
-    template <class MethodContainerType>
-    void buildEnergyRecordingIfPresent(SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+    void buildEnergyRecordingIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
-    template <class MethodContainerType>
     BodyStatesRecording &createBodyStatesRecording(
         SPHSystem &sph_system, EntityManager &config_manager,
-        MethodContainerType &main_methods, const json &config);
+        MainMethods &main_methods, const json &config);
 
   private:
     std::string getObserverRelationName(const ObserverConfig &observer_config);
     ObserverConfig parseObserverConfig(const json &config);
     void addObserves(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
 
-    template <class MethodContainerType>
     ParticleDynamicsGroup &createObserverConfigurationDynamics(
-        SPHSystem &sph_system, EntityManager &config_manager, MethodContainerType &main_methods);
+        SPHSystem &sph_system, EntityManager &config_manager, MainMethods &main_methods);
 
-    template <class MethodContainerType>
     IODynamicsGroup &addObserveRecorder(
-        SPHSystem &sph_system, EntityManager &config_manager, MethodContainerType &main_methods);
+        SPHSystem &sph_system, EntityManager &config_manager, MainMethods &main_methods);
 
-    template <class MethodContainerType, class ObserverRelationType>
+    template <class ObserverRelationType>
     BaseIO *addObserveRecorderWithVariableConfig(
         const ScalingConfig &scaling_config, const VariableConfig &variable_config,
-        MethodContainerType &main_methods, ObserverRelationType &observer_relation);
+        MainMethods &main_methods, ObserverRelationType &observer_relation);
 
     void addVariableToStateRecorder(
         BodyStatesRecording &state_recording, SPHBody &sph_body, const json &config);

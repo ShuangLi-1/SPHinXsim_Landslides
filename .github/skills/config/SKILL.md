@@ -52,6 +52,7 @@ SimulationConfig
 ├── geometries: GeometriesConfig
 │   ├── system_domain: DomainConfig
 │   ├── global_resolution: GlobalResolutionConfig
+│   ├── primitives: List[PrimitiveConfig]
 │   ├── shapes: List[ShapeConfig]
 │   └── oriented_boxes: List[OrientedBoxConfig]
 ├── particle_generation: ParticleGenerationConfig
@@ -66,6 +67,7 @@ SimulationConfig
 ├── body_constraints: List[BodyConstraintConfig]
 ├── initial_conditions: List[InitialConditionConfig]
 ├── extra_state_recording: List[ExtraStateRecordingConfig]
+├── energy_recording: List[EnergyRecordingConfig]
 └── solver_parameters: SolverParametersConfig
     ├── restart: RestartConfig
     ├── fluid_dynamics: FluidDynamicsSolverConfig
@@ -75,16 +77,21 @@ SimulationConfig
 ### Material & Body Type Constraints
 
 Each body type restricts its `material.type` to specific `MaterialType` enum values:
-- `FluidBodyConfig` → `WEAKLY_COMPRESSIBLE_FLUID` or `WEAKLY_COMPRESSIBLE_MIXTURE`
-- `SolidBodyConfig` → `RIGID_BODY`
+- `FluidBodyConfig` → `WEAKLY_COMPRESSIBLE_FLUID`, `WEAKLY_COMPRESSIBLE_MULTI_SPECIES`, or `WEAKLY_COMPRESSIBLE_MULTI_PHASE`
+- `SolidBodyConfig` → `RIGID_BODY` or `COMPOSITE_SOLID`
 - `ContinuumBodyConfig` → `J2_PLASTICITY`, `PLASTIC_CONTINUUM`, or `GENERAL_CONTINUUM`
+
+Current parser-aligned constraint:
+- `WEAKLY_COMPRESSIBLE_MIXTURE` is rejected by schema because the current C++ material parser does not support it.
 
 ### Boundary Condition Types
 
 `FluidBoundaryConditionConfig` validates type-specific requirements:
 - `EMITTER` requires `inflow_speed`
 - `BI_DIRECTIONAL` requires `pressure`
-- `mass_fractions` only valid for `BI_DIRECTIONAL`, must sum to 1.0, values in [0, 1]
+- `FREE_STREAM` requires `buffer_box`, `disposer_box`, `target_speed`, and `t_ref`
+- `mass_fractions` are only valid for `BI_DIRECTIONAL`, must sum to 1.0, and values must be in [0, 1]
+- `on_schedule.duration` is optional (if omitted, the schedule switches on and stays on)
 
 ### Body Constraints
 
@@ -98,16 +105,19 @@ Each body type restricts its `material.type` to specific `MaterialType` enum val
 `SimulationConfig._cross_validate` (using `@model_validator(mode="after")`) checks:
 1. `characteristic_dimensions` must include a `Length` entry if provided
 2. Simulation type requirements: `fluid_dynamics` needs `fluid_bodies` + `solver_parameters.fluid_dynamics`; `continuum_dynamics` needs `continuum_bodies` + `solver_parameters.continuum_dynamics`
-3. At least one `solid_body` is always required
-4. All body names (fluid/continuum/solid) must match shape names in `geometries.shapes`
-5. `particle_generation` body names and relaxation constraint references must exist as shapes/oriented boxes
-6. `fluid_boundary_conditions.body_name` must reference an existing fluid body; `oriented_box` must exist
-7. `mass_fractions` require the boundary body's material to be `WEAKLY_COMPRESSIBLE_MIXTURE` with matching species count
-8. `observers.observed_body` must reference an existing fluid/continuum body
-9. `body_constraints.body_name` must reference an existing continuum/solid body; `region` must reference an oriented box
-10. `initial_conditions.body_name` must reference an existing body; `region` must reference an oriented box
-11. Simbody constraints require `solver_parameters.restart`
-12. Dimensional consistency: `gravity` and `observer.positions` dimensionality must match `system_domain`
+3. Current builder limitations are enforced: fluid dynamics supports exactly one fluid body; continuum dynamics supports exactly one continuum body
+4. At least one `solid_body` is required unless a `FREE_STREAM` boundary condition is configured
+5. All body names (fluid/continuum/solid) must match shape names in `geometries.shapes`
+6. `particle_generation` body names and relaxation constraint references must exist as shapes/oriented boxes
+7. `fluid_boundary_conditions.body_name` must reference an existing fluid body; `oriented_box` must exist
+8. `mass_fractions` require the boundary body's material to be `WEAKLY_COMPRESSIBLE_MULTI_SPECIES` with matching species count
+9. `observers.observed_body` must reference an existing fluid/continuum body
+10. `body_constraints.body_name` must reference an existing continuum/solid body; `region` must reference an oriented box
+11. `initial_conditions.body_name` must reference an existing body; assignment `region` must reference an oriented box
+12. Simbody constraints require `solver_parameters.restart`
+13. `solid_bodies[*].material.material_id_regions.regions[*].shape` must reference existing shapes
+14. Dimensional consistency across vectors (including gravity/observers, primitives, transforms, and active_strain center)
+15. 2D/3D compatibility checks: `multipolygon` is 2D-only; `triangle_mesh` is 3D-only
 
 ## Update Patch System
 
@@ -181,18 +191,24 @@ Each operation can specify `preconditions` (list of `PatchPrecondition`) checked
 ### 4. Shape Type Validation
 `ShapeConfig` uses `@model_validator(mode="after")` to enforce type-specific required fields:
 - `bounding_box` → requires `lower_bound`, `upper_bound`
-- `circle` → requires `center`, `radius`
-- `polygon` → requires `points`
-- `multi_polygon` → requires `primitives`
+- `box` / `region` / multipolygon `box` entries → support either inline geometry (`half_size` + `transform`) or primitive references (`primitive`)
+- `expanded_box` → requires `original` and `expansion`
+- `complex_shape` → requires `sub_shapes` and `operations` (union/subtraction only)
+- `multipolygon` → requires non-empty `polygons` with per-entry type validation
+- `triangle_mesh` → requires `file_name`
+- `TransformConfig` requires `rotation_axis` for 3D translations
 - Other shape types have their own field requirements
 
 ### 5. Material Type Validation
 `MaterialConfig` validates type-specific required fields:
 - `WEAKLY_COMPRESSIBLE_FLUID` → `density`
-- `WEAKLY_COMPRESSIBLE_MIXTURE` → `density`, `species` (non-empty list)
+- `WEAKLY_COMPRESSIBLE_MIXTURE` → explicitly rejected (not supported by current C++ parser)
+- `WEAKLY_COMPRESSIBLE_MULTI_SPECIES` → non-empty `species`
+- `WEAKLY_COMPRESSIBLE_MULTI_PHASE` → non-empty `pure_phases`
 - `RIGID_BODY` → no extra fields
-- `J2_PLASTICITY` → `density`, `sound_speed`, `youngs_modulus`, `poisson_ratio`, `yield_stress`
+- `J2_PLASTICITY` → `density`, `sound_speed`, `youngs_modulus`, `poisson_ratio`, `yield_stress`, `hardening_modulus`
 - `PLASTIC_CONTINUUM` / `GENERAL_CONTINUUM` → `density`, `sound_speed`, `youngs_modulus`, `poisson_ratio`
+- `COMPOSITE_SOLID` → `density`, `poisson_ratio`, `youngs_modulus_active`, `youngs_modulus_1`, `youngs_modulus_2`
 
 ### 6. LLM Integration
 - `sphinxsim/llm/common.py` provides `sanitize_config_dict()` and `apply_explicit_instruction_overrides()` for cleaning LLM-generated configs before validation
@@ -253,13 +269,13 @@ Test each operation type: `set_value`, `merge_object`, `append_item`, `upsert_it
 
 ```bash
 # Schema tests only
-python -m pytest tests/test_schemas.py -v
+python3 -m pytest tests/test_schemas.py -v
 
 # Patch tests only
-python -m pytest tests/test_update_patch.py -v
+python3 -m pytest tests/test_update_patch.py -v
 
 # Both
-python -m pytest tests/test_schemas.py tests/test_update_patch.py -v
+python3 -m pytest tests/test_schemas.py tests/test_update_patch.py -v
 ```
 
 ## Common Pitfalls
@@ -267,7 +283,8 @@ python -m pytest tests/test_schemas.py tests/test_update_patch.py -v
 1. **Forgetting a required cross-reference**: When adding a new body, ensure its `name` matches a shape in `geometries.shapes` — the top-level `_cross_validate` will reject mismatches.
 2. **Material type / body type mismatch**: `FluidBodyConfig` with `MaterialType.RIGID_BODY` will fail validation. Each body type has an allowed material type subset.
 3. **Missing solver section**: `fluid_dynamics` simulations require `solver_parameters.fluid_dynamics`; `continuum_dynamics` requires `solver_parameters.continuum_dynamics`.
-4. **At least one solid body**: Even fluid-only simulations require at least one `solid_body` (typically a wall boundary).
+4. **At least one solid body**: Required unless `FREE_STREAM` boundary condition is used.
 5. **Dimensional mismatch**: `gravity` and `observer.positions` must match `system_domain` dimensionality (2D vs 3D).
 6. **Patch path errors**: `append_item` requires the path to resolve to a list; applying it to a scalar will fail (strict mode) or warn (non-strict).
-7. **mass_fractions constraints**: Only valid for `BI_DIRECTIONAL` boundary conditions on `WEAKLY_COMPRESSIBLE_MIXTURE` fluid bodies, must sum to 1.0, and length must match material species count.
+7. **mass_fractions constraints**: Only valid for `BI_DIRECTIONAL` boundary conditions on `WEAKLY_COMPRESSIBLE_MULTI_SPECIES` fluid bodies, must sum to 1.0, and length must match material species count.
+8. **Single-body builder assumptions**: Current C++ builders assume one fluid body for fluid dynamics and one continuum body for continuum dynamics.
