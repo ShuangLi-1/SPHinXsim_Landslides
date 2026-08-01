@@ -44,6 +44,7 @@ Alternatively, you can use direct commands for non-interactive workflows:
 - `sphinxsim validate` — Check config validity
 - `sphinxsim run` — Execute a validated simulation
 - `sphinxsim preview` — Render an interactive geometry/BC preview before running
+- `sphinxsim --generate-completion {bash|zsh|fish}` — Print shell completion scripts
 
 The shell also includes geometry lock controls (`lock-geometry`, `unlock-geometry`, `lock-status`) for safer staged geometry tuning.
 

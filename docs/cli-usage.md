@@ -4,6 +4,60 @@ SPHinXsim provides a command-line interface for building, validating, updating, 
 
 ## Quick start
 
+### Shell auto-completion
+
+Generate completion scripts directly from the CLI:
+
+```bash
+sphinxsim --generate-completion bash
+sphinxsim --generate-completion zsh
+sphinxsim --generate-completion fish
+```
+
+You can evaluate the script for the current shell session:
+
+```bash
+# bash
+eval "$(sphinxsim --generate-completion bash)"
+
+# zsh
+eval "$(sphinxsim --generate-completion zsh)"
+
+# fish
+sphinxsim --generate-completion fish | source
+```
+
+For persistent completion, add the command to your shell startup file
+(`~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`).
+
+Troubleshooting:
+- If completion is not active in the current terminal, reload your shell config:
+
+```bash
+# bash
+source ~/.bashrc
+
+# zsh
+source ~/.zshrc
+
+# fish
+source ~/.config/fish/config.fish
+```
+
+- For zsh, ensure completion is initialized before evaluating the script:
+
+```zsh
+autoload -Uz compinit
+compinit
+eval "$(sphinxsim --generate-completion zsh)"
+```
+
+- To verify script output quickly:
+
+```bash
+sphinxsim --generate-completion bash | head
+```
+
 ### Interactive shell mode (recommended)
 
 The easiest way to get started is the interactive shell:
