@@ -1396,8 +1396,51 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
+def _parse_ai_cli_style(argv: list[str]) -> list[str] | None:
+    """Parse AI-CLI-style arguments (e.g., /generate "description" -> generate description).
+
+    Returns transformed argv list for argparse, or None if not AI-CLI style.
+    """
+    if not argv:
+        return None
+
+    first = argv[0]
+    if not first.startswith("/"):
+        return None
+
+    # Strip the leading slash
+    command = first[1:]
+    valid_commands = {
+        "generate", "validate", "update", "run", "preview", "explore", "shell"
+    }
+
+    if command not in valid_commands:
+        return None
+
+    # For commands that take a description (generate, update, explore),
+    # join the rest of the arguments as a single description string.
+    description_commands = {"generate", "update", "explore"}
+
+    if command in description_commands:
+        if len(argv) < 2:
+            # No description provided - will let argparse handle the error
+            return [command]
+        # Join all remaining args as the description (no quotes needed)
+        description = " ".join(argv[1:])
+        return [command, description]
+    else:
+        # Commands like validate, run, preview, shell take optional config file
+        return [command] + argv[1:]
+
+
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``sphinxsim`` CLI."""
+    # Check for AI-CLI style commands (e.g., /generate "description")
+    if argv is not None:
+        transformed = _parse_ai_cli_style(argv)
+        if transformed is not None:
+            argv = transformed
+
     parser = _build_parser()
     args = parser.parse_args(argv)
     return args.func(args)
