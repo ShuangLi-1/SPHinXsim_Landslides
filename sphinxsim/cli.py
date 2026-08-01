@@ -229,7 +229,6 @@ def cmd_update(args: argparse.Namespace) -> int:
     if rc != 0:
         return rc
     assert config is not None
-    geometry_locked = bool(getattr(args, "geometry_locked", False))
 
     llm = get_llm()
     try:
@@ -292,14 +291,6 @@ def cmd_update(args: argparse.Namespace) -> int:
         return 1
     except Exception as exc:
         print(f"Unexpected error updating config: {exc}", file=sys.stderr)
-        return 1
-
-    if geometry_locked and _geometry_changed(config, updated_config):
-        print(
-            "Geometry is locked after particle generation. "
-            "Unlock geometry first to apply geometry changes.",
-            file=sys.stderr,
-        )
         return 1
 
     output_path = Path(args.output) if args.output else config_path
@@ -610,13 +601,6 @@ def _shell_auto_validate(config_path: Path) -> bool:
         return False
     print(f"✅ Auto-validation passed: {config_path}")
     return True
-
-
-def _geometry_changed(before: SimulationConfig, after: SimulationConfig) -> bool:
-    """Return True when the geometries section differs between configs."""
-    before_geometry = before.model_dump(exclude_none=True).get("geometries")
-    after_geometry = after.model_dump(exclude_none=True).get("geometries")
-    return before_geometry != after_geometry
 
 
 def _resolve_preview_config_path(config_file: str) -> Path:
@@ -985,19 +969,13 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print(
             "Commands: load FILE, generate DESCRIPTION FILE, "
             "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-            "validate, run, preview [--with-particles] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+                    "validate, run, preview [--with-particles] [--screenshot FILE], explore QUESTION, exit"
     )
     print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
     config_path: Path | None = None
-    geometry_locked = False
     shell_sim = None
     preview_runtime = _ShellPreviewRuntime()
-
-    def _current_geometry_locked() -> bool:
-        if shell_sim is not None and hasattr(shell_sim, "isGeometryLocked"):
-            return bool(shell_sim.isGeometryLocked())
-        return geometry_locked
 
     while True:
         try:
@@ -1030,9 +1008,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  preview --with-particles        - Run particle generation and overlay particles")
             print("  preview --screenshot FILE        - Save a screenshot to FILE instead of interactive window")
             print("  run                             - Run simulation from loaded config")
-            print("  lock-geometry                   - Manually lock geometry updates")
-            print("  unlock-geometry                 - Unlock geometry updates")
-            print("  lock-status                     - Show geometry lock status")
             print("  exit                            - Exit shell")
             continue
 
@@ -1064,7 +1039,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 config_path = None
                 continue
             print(f"✅ Loaded config: {config_path}")
-            geometry_locked = False
             shell_sim = None
             continue
 
@@ -1085,7 +1059,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 config_path.parent.mkdir(parents=True, exist_ok=True)
                 config_path.write_text(dump_simulation_config_json(config, indent=2))
                 print(f"✅ Config generated and written to {config_path}")
-                geometry_locked = False
                 shell_sim = None
                 _shell_auto_validate(config_path)
             except (ValueError, ValidationError) as exc:
@@ -1141,7 +1114,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                     patch_mode=patch_mode,
                     dry_run=dry_run,
                     strict=strict,
-                    geometry_locked=_current_geometry_locked(),
                 )
             )
             if rc == 0 and not dry_run:
@@ -1244,54 +1216,10 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("\n🚀 Running simulation...")
                 shell_sim.run()
                 print("✅ Simulation completed successfully!")
-
-                geometry_locked = _current_geometry_locked()
-                if geometry_locked:
-                    print("🔒 Geometry updates are now locked (simulator-reported state).")
-                    print("   Use 'unlock-geometry' before changing geometries in config updates.")
             except ImportError:
                 rc = cmd_run(argparse.Namespace(config_file=str(config_path)))
-                if rc == 0:
-                    geometry_locked = True
-                    print("🔒 Geometry updates are now locked (shell fallback state).")
             except Exception as exc:
                 print(f"❌ Run failed: {exc}", file=sys.stderr)
-            continue
-
-        if cmd == "lock-geometry":
-            if shell_sim is not None and hasattr(shell_sim, "generateParticles"):
-                try:
-                    if hasattr(shell_sim, "hasBuiltGeometries") and not shell_sim.hasBuiltGeometries():
-                        shell_sim.buildGeometries()
-                    if hasattr(shell_sim, "hasGeneratedParticles") and not shell_sim.hasGeneratedParticles():
-                        shell_sim.generateParticles()
-                    geometry_locked = _current_geometry_locked()
-                    print("🔒 Geometry updates locked (simulator-reported state).")
-                except Exception as exc:
-                    print(f"Failed to lock geometry through simulator: {exc}", file=sys.stderr)
-            else:
-                geometry_locked = True
-                print("🔒 Geometry updates locked (shell fallback state).")
-            continue
-
-        if cmd == "unlock-geometry":
-            if shell_sim is not None and hasattr(shell_sim, "resetAfterGeometryChange"):
-                try:
-                    shell_sim.resetAfterGeometryChange()
-                    geometry_locked = _current_geometry_locked()
-                    print("🔓 Geometry updates unlocked (simulator-reported state).")
-                except Exception as exc:
-                    print(f"Failed to unlock geometry through simulator: {exc}", file=sys.stderr)
-            else:
-                geometry_locked = False
-                print("🔓 Geometry updates unlocked (shell fallback state).")
-            continue
-
-        if cmd == "lock-status":
-            locked = _current_geometry_locked()
-            status = "locked" if locked else "unlocked"
-            source = "simulator" if shell_sim is not None else "shell fallback"
-            print(f"Geometry lock status: {status} (source: {source})")
             continue
 
         print(f"Unknown command: {cmd}. Type 'help' for commands.", file=sys.stderr)

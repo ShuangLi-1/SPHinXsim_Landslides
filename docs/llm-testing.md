@@ -76,8 +76,8 @@ Supported body types include fluid bodies, continuum bodies, and rigid solid bod
 🚀 Running simulation...
 ```
 
-### Geometry lock note
+### Geometry update note
 
-In shell workflows, geometry-lock enforcement prefers live simulator state when a simulator instance is attached. This means geometry-changing updates can be rejected after particle generation even if the config update itself is schema-valid. Use `lock-status` to inspect state and `unlock-geometry` before applying geometry changes.
+Shell workflows do not keep a persistent geometry lock state. Geometry-changing updates are applied to the config directly, and the next `preview` or `run` rebuilds from the updated JSON.
 
 See [CLI Usage](cli-usage.md) for full shell command reference, including `explore`.

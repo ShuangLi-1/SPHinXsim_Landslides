@@ -99,15 +99,7 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
 ✅ Simulation initialized
 🚀 Running simulation...
 
-> lock-status
-Geometry lock status: locked (source: simulator)
-
 > update "water flow with 5 mm resolution"
-Geometry is locked after particle generation. Unlock geometry first to apply geometry changes.
-
-> unlock-geometry
-🔓 Geometry updates unlocked (simulator-reported state).
-
 > update "water flow with 5 mm resolution"
 ✓ Updated config written to .../.build-temp/config.json
 ✓ Schema validation passed
@@ -134,9 +126,6 @@ Inside the shell, you can use the following commands:
 | `preview --with-particles` | Also run particle generation and overlay the latest generated particles per body |
 | `preview --screenshot FILE` | Save a screenshot to FILE instead of opening an interactive window |
 | `run` | Build and execute the loaded config |
-| `lock-geometry` | Lock geometry updates for the active shell session |
-| `unlock-geometry` | Unlock geometry updates (and reset downstream simulator state when attached) |
-| `lock-status` | Show whether geometry updates are locked |
 | `help` | Show available commands |
 | `exit` | Quit the shell |
 
@@ -147,17 +136,15 @@ Notes:
 - In shell mode, `preview` keeps a persistent window and returns control to the prompt. Running `preview` again updates the same window.
 - For responsive persistent preview, install `pyvistaqt` and a Qt backend (`PySide6` or `PyQt5`).
 
-## Geometry lock behavior
+## Geometry update workflow
 
-The simulator now acts as the source of truth for geometry lock state during shell workflows.
+Shell workflows do not keep a persistent geometry lock state.
 
-- Geometry becomes locked after particle generation in the simulator lifecycle.
-- While locked, geometry-changing `update` operations are rejected.
-- Non-geometry updates (for example, end time changes) are still allowed.
-- `unlock-geometry` re-opens geometry edits. If a simulator instance is attached, this calls the simulator reset path so downstream particle/system/solver state is invalidated safely.
-- `lock-status` reports whether the lock state comes from the simulator or shell fallback state.
+- Geometry changes can be applied with `update` whenever needed.
+- After changing geometry, rerun `validate`, `preview`, or `run` to rebuild from the updated JSON config.
+- `run` always rebuilds the simulation from the current config before executing it.
 
-In non-interactive direct commands (`sphinxsim update ...`), there is no persistent simulator session, so lock enforcement is session policy rather than live simulator state.
+In non-interactive direct commands (`sphinxsim update ...`), the same config-first behavior applies: the updated JSON is the source of truth for the next `preview` or `run`.
 
 ## Direct commands (non-interactive)
 
@@ -332,17 +319,15 @@ sphinxsim shell
 > exit
 ```
 
-### Example 6: Geometry edit safety loop in shell
+### Example 6: Geometry edit loop in shell
 
 ```bash
 sphinxsim shell
 > load config.json
 > run
-> lock-status
-> update "water flow with 5 mm resolution"     # rejected while locked
-> unlock-geometry
-> update "water flow with 5 mm resolution"     # now allowed
+> update "water flow with 5 mm resolution"
 > validate
+> preview
 > run
 ```
 

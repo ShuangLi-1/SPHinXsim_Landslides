@@ -79,53 +79,17 @@ void SPHSimulation::generateParticles()
         particle_generation_ptr_ = std::make_unique<ParticleGeneration>();
         particle_generation_ptr_->buildParticleGeneration(*this, config.at("settings"));
         particle_generation_ptr_->runRelaxation();
-        particles_generated_ = true;
-        geometry_locked_ = true;
     }
 }
 //=================================================================================================//
 void SPHSimulation::buildGeometries()
 {
-    if (geometry_locked_)
-    {
-        throw std::runtime_error(
-            "SPHSimulation::buildGeometries: geometry is locked after particle generation. "
-            "Call resetAfterGeometryChange() before modifying geometry.");
-    }
-
     json config = loadConfig();
     config_manager_.clear();
     config_manager_.emplaceEntity<ScalingConfig>("ScalingConfig", config);
     GeometryBuilder::createGeometries(config_manager_, config.at("geometries"));
     geometry_built_ = true;
     executable_simulation_state_ready_ = false;
-}
-//=================================================================================================//
-void SPHSimulation::resetAfterGeometryChange()
-{
-    particle_generation_ptr_.reset();
-    sph_system_ptr_.reset();
-    sph_solver_ptr_.reset();
-    initialization_pipeline_ = StagePipeline<InitializationHookPoint>();
-    simulation_pipeline_ = StagePipeline<SimulationHookPoint>();
-    executable_simulation_state_ready_ = false;
-    particles_generated_ = false;
-    geometry_locked_ = false;
-}
-//=================================================================================================//
-bool SPHSimulation::isGeometryLocked() const
-{
-    return geometry_locked_;
-}
-//=================================================================================================//
-bool SPHSimulation::hasBuiltGeometries() const
-{
-    return geometry_built_;
-}
-//=================================================================================================//
-bool SPHSimulation::hasGeneratedParticles() const
-{
-    return particles_generated_;
 }
 //=================================================================================================//
 void SPHSimulation::buildSimulation()
@@ -223,18 +187,6 @@ void SPHSimulation::stepBy(Real interval)
     TimeStepper &time_stepper = sph_solver_ptr_->getTimeStepper();
     Real present_time_ = time_stepper.getPhysicalTime();
     stepTo(present_time_ + interval);
-}
-//=================================================================================================//
-void SPHSimulation::rerunParticleRelaxation()
-{
-    if (!particles_generated_ || !particle_generation_ptr_)
-    {
-        std::cerr << "SPHSimulation::rerunParticleGeneration: ParticleGeneration not found. "
-                     "Call createParticlesGeneration() before rerunParticleGeneration\n";
-
-        exit(1);
-    }
-    particle_generation_ptr_->runRelaxation();
 }
 //=================================================================================================//
 } // namespace SPH

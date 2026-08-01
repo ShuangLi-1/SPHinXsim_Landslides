@@ -30,11 +30,11 @@ Inside the shell, you can:
 4. **Update** it with further instructions: `update "simulate for 2 s"`
 5. **Explore** the simulator schema and capabilities: `explore what body types are supported?`
 6. **Run** the validated simulation: `run`
-7. **Check geometry lock state**: `lock-status`
-8. **Unlock geometry for edits when needed**: `unlock-geometry`
+7. **Update geometry or other fields**: `update "water flow with 5 mm resolution"`
+8. **Rerun preview or run** to rebuild from the updated config
 
 In shell mode, `validate` reloads the loaded file from disk so external edits are picked up immediately.
-After particle generation, geometry edits are lock-protected in the shell workflow. When a simulator session is attached, lock state is read directly from the simulator.
+Geometry edits stay config-driven in shell mode: update the JSON, then rerun `preview` or `run` to rebuild from the current file.
 
 Alternatively, you can use direct commands for non-interactive workflows:
 
@@ -45,8 +45,6 @@ Alternatively, you can use direct commands for non-interactive workflows:
 - `sphinxsim run` — Execute a validated simulation
 - `sphinxsim preview` — Render an interactive geometry/BC preview before running
 - `sphinxsim --generate-completion {bash|zsh|fish}` — Print shell completion scripts
-
-The shell also includes geometry lock controls (`lock-geometry`, `unlock-geometry`, `lock-status`) for safer staged geometry tuning.
 
 For detailed examples and all command options, see [CLI Usage](cli-usage.md).
 

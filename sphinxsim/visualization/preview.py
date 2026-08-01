@@ -983,7 +983,7 @@ class ConfigVisualizer:
         """Return coarse lower/upper bounds for the scene.
 
         Used when ``system_domain`` is absent so the gravity arrow can still be
-        scaled to the scene.  Falls back to a unit box if no bounds arepreview
+        scaled to the scene.  Falls back to a unit box if no bounds are preview
         available.
         """
         lower = [0.0] * ndim
