@@ -108,6 +108,13 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
 Goodbye!
 ```
 
+In shell mode you can also use slash-prefixed commands without quotes around the description, for example:
+
+```text
+sphinxsim> /generate water dam break simulation config.json
+sphinxsim> /update simulate for 2 s
+```
+
 ### Shell commands
 
 Inside the shell, you can use the following commands:
@@ -132,6 +139,7 @@ Inside the shell, you can use the following commands:
 Notes:
 - `sphinxsim shell` starts with no file loaded.
 - Relative file paths inside the shell resolve from the current directory first, then fall back to `.build-temp/`.
+- In shell mode, slash-prefixed commands are also accepted, e.g. `/generate water dam break simulation config.json` or `/update simulate for 2 s`.
 - `validate` always reloads from disk, so external edits are picked up immediately.
 - In shell mode, `preview` keeps a persistent window and returns control to the prompt. Running `preview` again updates the same window.
 - For responsive persistent preview, install `pyvistaqt` and a Qt backend (`PySide6` or `PyQt5`).

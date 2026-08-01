@@ -1012,7 +1012,11 @@ def cmd_shell(args: argparse.Namespace) -> int:
             continue
 
         try:
-            parts = shlex.split(line)
+            translated_parts = _parse_shell_ai_cli_style(line)
+            if translated_parts is not None:
+                parts = translated_parts
+            else:
+                parts = shlex.split(line)
         except ValueError as exc:
             print(f"Invalid command syntax: {exc}", file=sys.stderr)
             continue
@@ -1396,51 +1400,45 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 
 
-def _parse_ai_cli_style(argv: list[str]) -> list[str] | None:
-    """Parse AI-CLI-style arguments (e.g., /generate "description" -> generate description).
+def _parse_shell_ai_cli_style(text: str) -> list[str] | None:
+    """Translate slash-prefixed shell commands to the shell command parser.
 
-    Returns transformed argv list for argparse, or None if not AI-CLI style.
+    Examples:
+        /generate water dam break simulation cfg.json -> ["generate", "water dam break simulation", "cfg.json"]
+        /update simulate for 2 s -> ["update", "simulate for 2 s"]
     """
-    if not argv:
+    if not text:
         return None
 
-    first = argv[0]
-    if not first.startswith("/"):
+    stripped = text.strip()
+    if not stripped.startswith("/"):
         return None
 
-    # Strip the leading slash
-    command = first[1:]
-    valid_commands = {
-        "generate", "validate", "update", "run", "preview", "explore", "shell"
-    }
+    parts = shlex.split(stripped)
+    if not parts:
+        return None
 
+    command = parts[0][1:]
+    valid_commands = {"generate", "validate", "update", "run", "preview", "explore", "shell"}
     if command not in valid_commands:
         return None
 
-    # For commands that take a description (generate, update, explore),
-    # join the rest of the arguments as a single description string.
-    description_commands = {"generate", "update", "explore"}
-
-    if command in description_commands:
-        if len(argv) < 2:
-            # No description provided - will let argparse handle the error
+    if command in {"generate", "update", "explore"}:
+        if len(parts) < 2:
             return [command]
-        # Join all remaining args as the description (no quotes needed)
-        description = " ".join(argv[1:])
-        return [command, description]
-    else:
-        # Commands like validate, run, preview, shell take optional config file
-        return [command] + argv[1:]
+        if command == "generate":
+            if len(parts) == 2:
+                return [command, parts[1]]
+            return [command, " ".join(parts[1:-1]), parts[-1]]
+        if command == "update":
+            return [command, " ".join(parts[1:])]
+        return [command, " ".join(parts[1:])]
+
+    return [command] + parts[1:]
 
 
 def main(argv: list[str] | None = None) -> int:
     """Entry point for the ``sphinxsim`` CLI."""
-    # Check for AI-CLI style commands (e.g., /generate "description")
-    if argv is not None:
-        transformed = _parse_ai_cli_style(argv)
-        if transformed is not None:
-            argv = transformed
-
     parser = _build_parser()
     args = parser.parse_args(argv)
     return args.func(args)

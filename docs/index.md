@@ -33,6 +33,7 @@ Inside the shell, you can:
 7. **Update geometry or other fields**: `update "water flow with 5 mm resolution"`
 8. **Rerun preview or run** to rebuild from the updated config
 
+In shell mode, you can also use slash-prefixed commands without quotes around the description, for example `/generate water dam break config.json` or `/update simulate for 2 s`.
 In shell mode, `validate` reloads the loaded file from disk so external edits are picked up immediately.
 Geometry edits stay config-driven in shell mode: update the JSON, then rerun `preview` or `run` to rebuild from the current file.
 

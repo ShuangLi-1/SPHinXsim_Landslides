@@ -384,6 +384,10 @@ class TestCLIUpdate:
         rc = main(["update", str(build_temp_path / "missing.json"), "simulate for 1 s"])
         assert rc != 0
 
+    def test_top_level_cli_rejects_slash_style_commands(self):
+        with pytest.raises(SystemExit):
+            main(["/generate", "water flow"])
+
     def test_update_patch_mode_in_place(self, build_temp_path):
         p = self._write_valid(build_temp_path)
         rc = main(["update", str(p), "simulate for 2 s", "--patch-mode"])
@@ -455,6 +459,22 @@ class TestCLIShell:
 
         out = capsys.readouterr().out
         assert "Auto-validation passed" in out
+
+    def test_shell_accepts_slash_style_commands(self, build_temp_path):
+        cfg = build_temp_path / "shell_slash_config.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_slash_config.json"
+        inputs = [
+            f"/generate water dam break simulation {shell_rel_cfg}",
+            "/update simulate for 2 s",
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        assert cfg.exists()
+        data = json.loads(cfg.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
 
     def test_shell_run_selects_3d_native_module(self, build_temp_path):
         cfg = build_temp_path / "shell_3d_config.json"
