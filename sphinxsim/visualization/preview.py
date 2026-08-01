@@ -240,7 +240,6 @@ class ConfigVisualizer:
         self,
         *,
         title: str = "SPHinXsim - Configuration Preview",
-        use_cpp: bool = True,
         screenshot_path: str | Path | None = None,
         with_particles: bool = False,
     ) -> None:
@@ -250,9 +249,6 @@ class ConfigVisualizer:
         ----------
         title:
             Window title.
-        use_cpp:
-            When *True*, call ``buildGeometries()`` from the C++ extension.
-            Raises :class:`ImportError` if the extension is not installed.
         screenshot_path:
             When provided, save a screenshot of the render to this file path
             instead of opening an interactive window.  Forces off-screen
@@ -271,17 +267,14 @@ class ConfigVisualizer:
             ) from None
 
         ndim = self._spatial_dim()
+        # Every preview run rebuilds the current geometry, then falls back to
+        # the cached bounds if VTP meshes are unavailable.
+        self._shape_bounds_cache = None
         vtp_dir: Path | None = None
         latest_particle_vtps: dict[str, Path] = {}
-        if use_cpp:
-            # Each preview run must rebuild bounds from the current geometry,
-            # so do not carry cached bounds across reruns.
-            self._shape_bounds_cache = None
-            vtp_dir = self._try_build_geometries(ndim, with_particles=with_particles)
-            if with_particles:
-                latest_particle_vtps = self._discover_latest_particle_vtps(vtp_dir)
-        else:
-            self._shape_bounds_cache = None
+        vtp_dir = self._try_build_geometries(ndim, with_particles=with_particles)
+        if with_particles:
+            latest_particle_vtps = self._discover_latest_particle_vtps(vtp_dir)
         self._vtp_dir = vtp_dir
 
         # Screenshot mode implies off-screen rendering.

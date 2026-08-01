@@ -131,7 +131,6 @@ Inside the shell, you can use the following commands:
 | `explore "question"` | Ask the configured LLM questions about the simulator schema and capabilities |
 | `validate` | Reload the loaded file from disk and validate it |
 | `preview` | Render an interactive geometry/BC preview of the loaded config |
-| `preview --no-cpp` | Preview using schema bounding-box fallback only (no C++ build) |
 | `preview --with-particles` | Also run particle generation and overlay the latest generated particles per body |
 | `preview --screenshot FILE` | Save a screenshot to FILE instead of opening an interactive window |
 | `run` | Build and execute the loaded config |
@@ -253,7 +252,6 @@ Options:
 
 | Flag | Description |
 | --- | --- |
-| `--no-cpp` | Skip C++ geometry build; render only the system domain bounding box and annotations |
 | `--with-particles` | Also run particle generation and overlay the latest generated particles per body. Hides regular shapes; keeps oriented boxes and annotations. |
 | `--off-screen` | Render off-screen (no window) — useful for automated testing |
 | `--screenshot FILE` / `-s FILE` | Save a screenshot to FILE instead of opening a window. Implies `--off-screen`. |
@@ -328,7 +326,6 @@ sphinxsim shell
 > generate "2D heat transfer in a channel" config.json
 > validate
 > preview                   # inspect geometry and BCs interactively
-> preview --no-cpp          # quick bounding-box fallback if C++ not built
 > preview --with-particles  # overlay generated particles (hides shapes)
 > preview --screenshot preview.png   # save a screenshot for a report
 > run

@@ -506,7 +506,6 @@ def cmd_preview(args: argparse.Namespace) -> int:
 
     from sphinxsim.visualization.preview import ConfigVisualizer
 
-    use_cpp = not getattr(args, "no_cpp", False)
     off_screen = getattr(args, "off_screen", False)
     screenshot_path = getattr(args, "screenshot", None)
     with_particles = getattr(args, "with_particles", False)
@@ -516,12 +515,9 @@ def cmd_preview(args: argparse.Namespace) -> int:
         off_screen = True
 
     print(f"🖼  Building configuration preview for: {resolved_config_path}")
-    if use_cpp:
-        print("   Attempting C++ geometry build for accurate VTP meshes...")
-        if with_particles:
-            print("   Particle generation overlay is enabled (--with-particles).")
-    else:
-        print("   Skipping C++ geometry build (--no-cpp).")
+    print("   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.")
+    if with_particles:
+        print("   Particle generation overlay is enabled (--with-particles).")
 
     visualizer = ConfigVisualizer(
         config,
@@ -531,17 +527,13 @@ def cmd_preview(args: argparse.Namespace) -> int:
     )
     try:
         visualizer.preview(
-            use_cpp=use_cpp,
             screenshot_path=screenshot_path,
             with_particles=with_particles,
         )
-        if use_cpp:
-            if visualizer.used_cpp_geometry:
-                print("✅ Preview used C++ geometry (VTP meshes).")
-            else:
-                print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
+        if visualizer.used_cpp_geometry:
+            print("✅ Preview used C++ geometry (VTP meshes).")
         else:
-            print("ℹ️ Preview rendered without C++ geometry (--no-cpp).")
+            print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
         if screenshot_path:
             print(f"📸 Screenshot saved to: {screenshot_path}")
     except ImportError as exc:
@@ -863,7 +855,6 @@ class _ShellPreviewRuntime:
         self,
         config: SimulationConfig,
         *,
-        use_cpp: bool,
         with_particles: bool,
     ) -> bool:
         if with_particles:
@@ -871,7 +862,6 @@ class _ShellPreviewRuntime:
 
         payload = {
             "config": config.model_dump(exclude_none=True),
-            "use_cpp": use_cpp,
             "with_particles": with_particles,
         }
         signature = json.dumps(payload, sort_keys=True)
@@ -884,7 +874,6 @@ class _ShellPreviewRuntime:
         config: SimulationConfig,
         *,
         resolved_config_path: Path,
-        use_cpp: bool,
         with_particles: bool,
     ) -> int:
         try:
@@ -897,7 +886,7 @@ class _ShellPreviewRuntime:
             )
             return 1
 
-        if self._is_unchanged(config, use_cpp=use_cpp, with_particles=with_particles):
+        if self._is_unchanged(config, with_particles=with_particles):
             print("ℹ️ Preview unchanged; keeping existing window.")
             return 0
 
@@ -914,10 +903,11 @@ class _ShellPreviewRuntime:
         vtp_dir: Path | None = None
         latest_particle_vtps: dict[str, Path] = {}
 
-        if use_cpp:
-            vtp_dir = visualizer._try_build_geometries(ndim, with_particles=with_particles)
-            if with_particles:
-                latest_particle_vtps = visualizer._discover_latest_particle_vtps(vtp_dir)
+        # Always rebuild geometry; if VTPs are unavailable the preview falls back
+        # to cached bounds and still renders the scene.
+        vtp_dir = visualizer._try_build_geometries(ndim, with_particles=with_particles)
+        if with_particles:
+            latest_particle_vtps = visualizer._discover_latest_particle_vtps(vtp_dir)
 
         try:
             if sys.platform.startswith("linux"):
@@ -993,9 +983,9 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print("SPHinXsim interactive shell")
     print(f"LLM provider: {provider}")
     print(
-        "Commands: load FILE, generate DESCRIPTION FILE, "
-        "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, preview [--no-cpp] [--with-particles] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+            "Commands: load FILE, generate DESCRIPTION FILE, "
+            "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
+            "validate, run, preview [--with-particles] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
     )
     print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
@@ -1037,7 +1027,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  explore QUESTION                - Ask about schema")
             print("  validate                        - Reload and validate config from disk")
             print("  preview                         - Render geometry/BC preview (requires pyvista)")
-            print("  preview --no-cpp                - Preview without C++ geometry build")
             print("  preview --with-particles        - Run particle generation and overlay particles")
             print("  preview --screenshot FILE        - Save a screenshot to FILE instead of interactive window")
             print("  run                             - Run simulation from loaded config")
@@ -1185,7 +1174,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
             if config_path is None:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
-            no_cpp = "--no-cpp" in parts
             with_particles = "--with-particles" in parts
             # Extract --screenshot / -s value from shell input
             screenshot_path = None
@@ -1201,7 +1189,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 _ = cmd_preview(
                     argparse.Namespace(
                         config_file=str(config_path),
-                        no_cpp=no_cpp,
                         with_particles=with_particles,
                         off_screen=False,
                         screenshot=screenshot_path,
@@ -1215,17 +1202,13 @@ def cmd_shell(args: argparse.Namespace) -> int:
 
             resolved_config_path = _resolve_preview_config_path(str(config_path))
             print(f"🖼  Building configuration preview for: {resolved_config_path}")
-            if not no_cpp:
-                print("   Attempting C++ geometry build for accurate VTP meshes...")
-                if with_particles:
-                    print("   Particle generation overlay is enabled (--with-particles).")
-            else:
-                print("   Skipping C++ geometry build (--no-cpp).")
+            print("   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.")
+            if with_particles:
+                print("   Particle generation overlay is enabled (--with-particles).")
 
             rc = preview_runtime.show_or_update(
                 cfg,
                 resolved_config_path=resolved_config_path,
-                use_cpp=not no_cpp,
                 with_particles=with_particles,
             )
             if rc == 0:
@@ -1443,11 +1426,6 @@ def _build_parser() -> argparse.ArgumentParser:
         nargs="?",
         default="config.json",
         help="Path to JSON config file.",
-    )
-    prev.add_argument(
-        "--no-cpp",
-        action="store_true",
-        help="Skip C++ geometry build (no shapes rendered without C++).",
     )
     prev.add_argument(
         "--with-particles",
