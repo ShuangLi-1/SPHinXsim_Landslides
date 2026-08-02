@@ -55,6 +55,7 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
                 std::cout << "- Too large: overlapped bodies" << std::endl;
                 std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
                 std::cout << "------------------------------------------------------------" << std::endl;
+                exit(1);
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();

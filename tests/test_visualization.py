@@ -52,7 +52,7 @@ def _minimal_fluid_config() -> dict:
             "oriented_boxes": [
                 {
                     "name": "Inlet",
-                    "type": "in_outlet",
+                    "type": "boundary",
                     "center": [0.0, 0.1],
                     "normal": [1.0, 0.0],
                     "radius": 0.1,
@@ -156,7 +156,7 @@ class TestOrientedBoxLabel:
         ob = fluid_config.geometries.oriented_boxes[0]  # "Inlet"
         label = oriented_box_label(ob, fluid_config)
         assert "Inlet" in label
-        assert "in_outlet" in label
+        assert "boundary" in label
 
     def test_label_includes_bc_type(self, fluid_config):
         from sphinxsim.visualization.annotations import oriented_box_label

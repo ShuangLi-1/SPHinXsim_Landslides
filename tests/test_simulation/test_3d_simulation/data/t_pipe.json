@@ -38,21 +38,21 @@
     "oriented_boxes": [
       {
         "name": "Inlet",
-        "type": "in_outlet",
+        "type": "boundary",
         "center": [-0.01, 0.0, 0.0],
         "normal": [1.0, 0.0, 0.0],
         "radius": 0.00185
       },
       {
         "name": "UpperOutlet",
-        "type": "in_outlet",
+        "type": "boundary",
         "center": [0.005, 0.03, 0.0],
         "normal": [0.0, -1.0, 0.0],
         "radius": 0.00145
       },
       {
         "name": "LowerOutlet",
-        "type": "in_outlet",
+        "type": "boundary",
         "center": [0.005, -0.03, 0.0],
         "normal": [0.0, 1.0, 0.0],
         "radius": 0.00121

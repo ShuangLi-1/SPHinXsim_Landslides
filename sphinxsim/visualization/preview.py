@@ -23,7 +23,8 @@ a clear install hint.
 
 from __future__ import annotations
 
-import os
+import json
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -342,14 +343,51 @@ class ConfigVisualizer:
             color="cyan",
         )
 
+    def _runtime_config_payload(self) -> dict[str, Any]:
+        """Return a runtime payload with input paths resolved from config dir."""
+        payload = self.config.model_dump(exclude_none=True)
+        if self.config_path is None:
+            return payload
+
+        config_dir = self.config_path.parent
+        geometries = payload.get("geometries", {})
+        shapes = geometries.get("shapes", [])
+        if not isinstance(shapes, list):
+            return payload
+
+        def _absolutize(path_value: Any) -> Any:
+            if not isinstance(path_value, str) or not path_value:
+                return path_value
+            path = Path(path_value)
+            if path.is_absolute():
+                return str(path)
+            return str((config_dir / path).resolve())
+
+        for shape in shapes:
+            if not isinstance(shape, dict):
+                continue
+            if shape.get("type") == "triangle_mesh":
+                shape["file_name"] = _absolutize(shape.get("file_name"))
+            if shape.get("type") == "multipolygon":
+                polygons = shape.get("polygons", [])
+                if not isinstance(polygons, list):
+                    continue
+                for polygon in polygons:
+                    if not isinstance(polygon, dict):
+                        continue
+                    if polygon.get("type") == "data_file":
+                        polygon["file_name"] = _absolutize(polygon.get("file_name"))
+
+        return payload
+
     def _try_build_geometries(self, ndim: int, with_particles: bool = False) -> Path | None:
         """Run buildGeometries() and return the VTP output directory, or None.
 
-        Uses ``self.config_path`` directly as the C++ config input so the
-        original JSON file is the single source of truth. Geometry generation
-        uses the lightweight ``GeometryBuilder`` class. If VTPs are not
-        produced, the builder-provided ``getShapeBounds()`` cache is reused
-        for preview rendering.
+        Writes a temporary runtime JSON derived from ``self.config`` where
+        relative input file paths are resolved from ``self.config_path``.
+        Geometry generation uses the lightweight ``GeometryBuilder`` class.
+        If VTPs are not produced, the builder-provided ``getShapeBounds()``
+        cache is reused for preview rendering.
         """
         if self.config_path is None:
             self._shape_bounds_cache = None
@@ -360,25 +398,33 @@ class ConfigVisualizer:
         except ImportError as exc:
             raise ImportError(str(exc)) from None
 
-        vtp_output_dir = self.project_root / ".build-temp" / "preview_geometry"
+        vtp_output_dir = self.project_root / ".build-temp" / "test_simulation"
         vtp_output_dir.mkdir(parents=True, exist_ok=True)
         output_subdir = vtp_output_dir / "output"
         for stale_dir in (vtp_output_dir, output_subdir):
             if not stale_dir.is_dir():
                 continue
-            # This directory is reserved for preview, so clean stale VTPs.
-            for stale_vtp in stale_dir.glob("*.vtp"):
+            # In shared output mode, only clean preview geometry meshes.
+            for stale_vtp in stale_dir.glob("Shape*.vtp"):
                 try:
                     stale_vtp.unlink()
                 except OSError:
                     pass
 
-        original_dir = os.getcwd()
-        # Change to the config file's directory so that relative paths in the
-        # JSON (e.g. STL file_path for 3-D triangle_mesh shapes) resolve correctly.
-        os.chdir(self.config_path.parent)
+        runtime_config_path: Path | None = None
         try:
-            builder = sph.GeometryBuilder(str(self.config_path))
+            tmp = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".json",
+                prefix="sphinxsim_preview_",
+                delete=False,
+                dir=str(vtp_output_dir),
+            )
+            json.dump(self._runtime_config_payload(), tmp, indent=2)
+            tmp.close()
+            runtime_config_path = Path(tmp.name)
+
+            builder = sph.GeometryBuilder(str(runtime_config_path))
             builder.resetInOutputRoot(str(vtp_output_dir))
             builder.buildGeometries()
 
@@ -390,7 +436,7 @@ class ConfigVisualizer:
             # Optionally generate particles so preview can overlay the latest
             # body particle clouds if particle_generation is enabled.
             if with_particles and self.config.particle_generation.build_and_run:
-                sim = sph.SPHSimulation(str(self.config_path))
+                sim = sph.SPHSimulation(str(runtime_config_path))
                 sim.resetOutputRoot(str(vtp_output_dir), True)
                 sim.buildGeometries()
                 sim.generateParticles()
@@ -398,7 +444,11 @@ class ConfigVisualizer:
             self._shape_bounds_cache = None
             return None
         finally:
-            os.chdir(original_dir)
+            if runtime_config_path is not None:
+                try:
+                    runtime_config_path.unlink()
+                except OSError:
+                    pass
 
         # VTPs land in <vtp_output_dir>/output/
         if output_subdir.is_dir() and any(output_subdir.glob("Shape*.vtp")):
@@ -697,7 +747,7 @@ class ConfigVisualizer:
             if mesh is None:
                 continue
 
-            colour = _INLET_OUTLET_COLOUR if ob.type.value == "in_outlet" else _REGION_COLOUR
+            colour = _INLET_OUTLET_COLOUR if ob.type.value == "boundary" else _REGION_COLOUR
             plotter.add_mesh(
                 mesh,
                 color=colour,

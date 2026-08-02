@@ -625,6 +625,37 @@ class TestSimulationConfig:
                 ]
             )
 
+    def test_particle_generation_blocks_accept_existing_oriented_box(self):
+        cfg = _make_minimal_fluid_config(
+            particle_generation={
+                "build_and_run": False,
+                "settings": {
+                    "bodies": [
+                        {"name": "WaterBody", "blocks": ["Inlet"]},
+                        {"name": "WallBoundary", "solid_body": {}},
+                    ],
+                    "relaxation_parameters": {"total_iterations": 1000},
+                },
+            }
+        )
+        assert cfg.particle_generation.settings is not None
+        assert cfg.particle_generation.settings.bodies[0].blocks == ["Inlet"]
+
+    def test_particle_generation_blocks_reject_unknown_oriented_box(self):
+        with pytest.raises(ValidationError, match="blocks entries must reference existing"):
+            _make_minimal_fluid_config(
+                particle_generation={
+                    "build_and_run": False,
+                    "settings": {
+                        "bodies": [
+                            {"name": "WaterBody", "blocks": ["MissingBox"]},
+                            {"name": "WallBoundary", "solid_body": {}},
+                        ],
+                        "relaxation_parameters": {"total_iterations": 1000},
+                    },
+                }
+            )
+
     def test_global_resolution_is_required(self):
         data = _make_minimal_fluid_config().model_dump(mode="json")
         del data["geometries"]["global_resolution"]

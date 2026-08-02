@@ -66,7 +66,7 @@ class MultiPolygonPrimitiveType(str, Enum):
 
 
 class OrientedBoxType(str, Enum):
-    IN_OUTLET = "in_outlet"
+    BOUNDARY = "boundary"
     REGION = "region"
 
 
@@ -273,9 +273,9 @@ class OrientedBoxConfig(BaseModel):
 
     @model_validator(mode="after")
     def _validate_oriented_box(self) -> "OrientedBoxConfig":
-        if self.type == OrientedBoxType.IN_OUTLET:
+        if self.type == OrientedBoxType.BOUNDARY:
             if self.center is None or self.normal is None or self.radius is None:
-                raise ValueError("in_outlet oriented_box requires center, normal and radius")
+                raise ValueError("boundary oriented_box requires center, normal and radius")
         elif self.type == OrientedBoxType.REGION:
             if not self.primitive and (self.half_size is None or self.transform is None):
                 raise ValueError("region oriented_box requires primitive or half_size and transform")
@@ -351,6 +351,7 @@ class RelaxationBodyConfig(BaseModel):
 
 class ParticleGenerationBodyConfig(BaseModel):
     name: str = Field(..., min_length=1)
+    blocks: List[str] = Field(default_factory=list)
     solid_body: Optional[dict] = None
     relaxation: Optional[RelaxationBodyConfig] = None
 
@@ -1003,6 +1004,12 @@ class SimulationConfig(BaseModel):
                     raise ValueError(
                         f"particle_generation body '{body.name}' must match a shape name in geometries.shapes"
                     )
+                for block_name in body.blocks:
+                    if block_name not in oriented_box_names:
+                        raise ValueError(
+                            "particle_generation body blocks entries must reference existing "
+                            "geometries.oriented_boxes names"
+                        )
             for c in self.particle_generation.settings.relaxation_constraints:
                 if c.body_name not in shape_names:
                     raise ValueError(

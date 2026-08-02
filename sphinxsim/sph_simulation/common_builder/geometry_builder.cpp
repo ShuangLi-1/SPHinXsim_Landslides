@@ -382,7 +382,7 @@ GeometricShapeBox GeometryBuilder::addOrientedBox(
     const std::string name = config.at("name").get<std::string>();
     const std::string type = config.at("type").get<std::string>();
 
-    if (type == "in_outlet")
+    if (type == "boundary")
     {
         Vecd center = scaling_config.jsonToVecd(config.at("center"), "Length");
         Vecd normal = scaling_config.jsonToVecd(config.at("normal"), "Dimensionless");

@@ -74,6 +74,13 @@
         "name": "Emitter",
         "type": "region",
         "primitive": "EmitterBox"
+      },
+      {
+        "name": "FillLevel",
+        "type": "boundary",
+        "center": [1.0, 0.4],
+        "normal": [0.0, -1.0],
+        "radius": 1.0
       }
     ]
   },
@@ -82,7 +89,8 @@
     "settings": {
       "bodies": [
         {
-          "name": "MultiPhaseBody"
+          "name": "MultiPhaseBody",
+          "blocks": ["FillLevel"]
         },
         {
           "name": "WallBoundary",

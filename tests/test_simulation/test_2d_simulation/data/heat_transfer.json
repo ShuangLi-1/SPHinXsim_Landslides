@@ -50,14 +50,14 @@
     "oriented_boxes": [
       {
         "name": "Inlet",
-        "type": "in_outlet",
+        "type": "boundary",
         "center": [0.0, 0.2],
         "normal": [1.0, 0.0],
         "radius": 0.2
       },
       {
         "name": "Outlet",
-        "type": "in_outlet",
+        "type": "boundary",
         "center": [2.0, 0.2],
         "normal": [-1.0, 0.0],
         "radius": 0.2
