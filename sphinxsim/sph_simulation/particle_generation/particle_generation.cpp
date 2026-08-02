@@ -193,7 +193,16 @@ void ParticleGeneration ::addAllBodies(
                 blocks.push_back(&config_manager.getEntity<OrientedBox>(block.get<std::string>()));
             }
         }
-        real_body.generateParticles<BaseParticles, Lattice>(blocks);
+
+        StdVec<OrientedBox *> inserts;
+        if (bd.contains("inserts"))
+        {
+            for (const auto &insert : bd.at("inserts"))
+            {
+                inserts.push_back(&config_manager.getEntity<OrientedBox>(insert.get<std::string>()));
+            }
+        }
+        real_body.generateParticles<BaseParticles, Lattice>(blocks, inserts);
     }
 }
 //=================================================================================================//
