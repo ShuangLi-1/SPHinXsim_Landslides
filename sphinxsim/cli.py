@@ -24,6 +24,7 @@ import shlex
 import subprocess
 import sys
 import tempfile
+import time
 import warnings
 from pathlib import Path
 from typing import Any, Tuple
@@ -638,6 +639,37 @@ class _ShellPreviewRuntime:
             pass
         self.plotter = None
 
+    def pump_ui_events(self) -> None:
+        """Keep the persistent preview responsive while shell work blocks."""
+        if self.plotter is None:
+            return
+
+        try:
+            if self._using_background_plotter:
+                app = getattr(self.plotter, "app", None)
+                if app is not None and hasattr(app, "processEvents"):
+                    app.processEvents()
+                    return
+
+                try:
+                    from PySide6.QtWidgets import QApplication  # type: ignore[import]
+                except Exception:
+                    try:
+                        from PyQt5.QtWidgets import QApplication  # type: ignore[import]
+                    except Exception:
+                        QApplication = None  # type: ignore[misc,assignment]
+
+                if QApplication is not None:
+                    app = QApplication.instance()
+                    if app is not None:
+                        app.processEvents()
+                        return
+
+            if hasattr(self.plotter, "render"):
+                self.plotter.render()
+        except Exception:
+            pass
+
     @staticmethod
     def _set_label_font_size(actor: Any, size: int) -> bool:
         try:
@@ -1201,20 +1233,27 @@ def cmd_shell(args: argparse.Namespace) -> int:
             # Run simulation in an isolated subprocess to avoid state leakage.
             if preview_runtime.plotter is not None:
                 resolved_config_path = _resolve_preview_config_path(str(config_path))
-                print("ℹ️ Running simulation in isolated subprocess (persistent preview is active).")
+                print(
+                    "ℹ️ Running simulation in isolated subprocess (persistent preview is active).",
+                    flush=True,
+                )
                 try:
-                    completed = subprocess.run(
+                    env = os.environ.copy()
+                    env.setdefault("PYTHONUNBUFFERED", "1")
+
+                    process = subprocess.Popen(
                         [sys.executable, "-m", "sphinxsim", "run", str(resolved_config_path)],
                         cwd=str(resolved_config_path.parent),
-                        capture_output=True,
-                        text=True,
+                        env=env,
                     )
-                    if completed.stdout:
-                        print(completed.stdout, end="")
-                    if completed.stderr:
-                        print(completed.stderr, end="", file=sys.stderr)
-                    if completed.returncode != 0:
-                        print(f"❌ Run failed with exit code {completed.returncode}", file=sys.stderr)
+                    while True:
+                        preview_runtime.pump_ui_events()
+                        return_code = process.poll()
+                        if return_code is not None:
+                            break
+                        time.sleep(0.05)
+                    if return_code != 0:
+                        print(f"❌ Run failed with exit code {return_code}", file=sys.stderr)
                 except Exception as exc:
                     print(f"❌ Run failed: {exc}", file=sys.stderr)
                 continue
