@@ -21,6 +21,7 @@ import argparse
 import json
 import os
 import shlex
+import subprocess
 import sys
 import tempfile
 import warnings
@@ -1195,6 +1196,29 @@ def cmd_shell(args: argparse.Namespace) -> int:
             if config_path is None:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
+
+            # Persistent preview keeps native UI/runtime state alive in-process.
+            # Run simulation in an isolated subprocess to avoid state leakage.
+            if preview_runtime.plotter is not None:
+                resolved_config_path = _resolve_preview_config_path(str(config_path))
+                print("ℹ️ Running simulation in isolated subprocess (persistent preview is active).")
+                try:
+                    completed = subprocess.run(
+                        [sys.executable, "-m", "sphinxsim", "run", str(resolved_config_path)],
+                        cwd=str(resolved_config_path.parent),
+                        capture_output=True,
+                        text=True,
+                    )
+                    if completed.stdout:
+                        print(completed.stdout, end="")
+                    if completed.stderr:
+                        print(completed.stderr, end="", file=sys.stderr)
+                    if completed.returncode != 0:
+                        print(f"❌ Run failed with exit code {completed.returncode}", file=sys.stderr)
+                except Exception as exc:
+                    print(f"❌ Run failed: {exc}", file=sys.stderr)
+                continue
+
             try:
                 cfg, rc = _load_config(config_path)
                 if rc != 0 or cfg is None:
