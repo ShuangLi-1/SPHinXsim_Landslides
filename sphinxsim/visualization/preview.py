@@ -697,7 +697,7 @@ class ConfigVisualizer:
             if mesh is None:
                 continue
 
-            colour = _INLET_OUTLET_COLOUR if ob.type.value == "in_outlet" else _REGION_COLOUR
+            colour = _INLET_OUTLET_COLOUR if ob.type.value == "boundary" else _REGION_COLOUR
             plotter.add_mesh(
                 mesh,
                 color=colour,
