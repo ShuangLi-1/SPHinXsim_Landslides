@@ -82,6 +82,12 @@ class GeometryBuilder
     static void addPrimitive(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
     static TransformGeometryBox fetch_or_parseBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+
+#ifdef SPHINXSYS_3D
+    static TransformGeometryCylinder fetch_or_parseCylinder(
+        const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+#endif
+
     static Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
     static GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
