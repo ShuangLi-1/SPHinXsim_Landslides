@@ -368,7 +368,7 @@ class ParticleGenerationBodyConfig(BaseModel):
 
     name: str = Field(..., min_length=1)
     blocks: List[str] = Field(default_factory=list)
-    inserts: List[str] = Field(default_factory=list)
+    box_shape_inserts: List[str] = Field(default_factory=list)
     solid_body: Optional[dict] = None
     relaxation: Optional[RelaxationBodyConfig] = None
 
@@ -1053,11 +1053,11 @@ class SimulationConfig(BaseModel):
                             "particle_generation body blocks entries must reference existing "
                             "geometries.oriented_boxes names"
                         )
-                for insert_name in body.inserts:
-                    if insert_name not in oriented_box_names:
+                for insert_name in body.box_shape_inserts:
+                    if insert_name not in shape_names:
                         raise ValueError(
-                            "particle_generation body inserts entries must reference existing "
-                            "geometries.oriented_boxes names"
+                            "particle_generation body box_shape_inserts entries must reference existing "
+                            "geometries.shapes names"
                         )
             for c in self.particle_generation.settings.relaxation_constraints:
                 if c.body_name not in shape_names:

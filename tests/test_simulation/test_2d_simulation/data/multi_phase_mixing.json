@@ -40,6 +40,11 @@
         "upper_bound": [2.0, 0.5]
       },
       {
+        "name": "EmitterInsert",
+        "type": "box",
+        "primitive": "EmitterBox"
+      },
+      {
         "name": "WallBoundary",
         "type": "multipolygon",
         "polygons": [
@@ -80,7 +85,7 @@
         {
           "name": "MultiPhaseBody",
           "blocks": ["FillLevel"],
-          "inserts": ["Emitter"]
+          "box_shape_inserts": ["EmitterInsert"]
         },
         {
           "name": "WallBoundary",

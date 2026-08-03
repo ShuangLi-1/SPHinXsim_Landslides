@@ -656,13 +656,13 @@ class TestSimulationConfig:
                 }
             )
 
-    def test_particle_generation_inserts_accept_existing_oriented_box(self):
+    def test_particle_generation_box_shape_inserts_accept_existing_shape(self):
         cfg = _make_minimal_fluid_config(
             particle_generation={
                 "build_and_run": False,
                 "settings": {
                     "bodies": [
-                        {"name": "WaterBody", "inserts": ["Inlet"]},
+                        {"name": "WaterBody", "box_shape_inserts": ["WallBoundary"]},
                         {"name": "WallBoundary", "solid_body": {}},
                     ],
                     "relaxation_parameters": {"total_iterations": 1000},
@@ -670,16 +670,16 @@ class TestSimulationConfig:
             }
         )
         assert cfg.particle_generation.settings is not None
-        assert cfg.particle_generation.settings.bodies[0].inserts == ["Inlet"]
+        assert cfg.particle_generation.settings.bodies[0].box_shape_inserts == ["WallBoundary"]
 
-    def test_particle_generation_inserts_reject_unknown_oriented_box(self):
-        with pytest.raises(ValidationError, match="inserts entries must reference existing"):
+    def test_particle_generation_box_shape_inserts_reject_unknown_shape(self):
+        with pytest.raises(ValidationError, match="box_shape_inserts entries must reference existing"):
             _make_minimal_fluid_config(
                 particle_generation={
                     "build_and_run": False,
                     "settings": {
                         "bodies": [
-                            {"name": "WaterBody", "inserts": ["MissingBox"]},
+                            {"name": "WaterBody", "box_shape_inserts": ["MissingShape"]},
                             {"name": "WallBoundary", "solid_body": {}},
                         ],
                         "relaxation_parameters": {"total_iterations": 1000},
