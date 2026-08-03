@@ -6,7 +6,7 @@ Install system tools:
 
 ```bash
 brew update
-brew install ninja autoconf automake autoconf-archive pkg-config vtk
+brew install ninja autoconf automake autoconf-archive pkg-config
 ```
 
 ## Clone Repository
