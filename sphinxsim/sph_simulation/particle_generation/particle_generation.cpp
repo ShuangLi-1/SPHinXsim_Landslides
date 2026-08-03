@@ -194,7 +194,7 @@ void ParticleGeneration ::addAllBodies(
             }
         }
 
-        StdVec<GeometricShapeBox *> inserts;
+        StdVec<Shape *> inserts;
         if (bd.contains("box_shape_inserts"))
         {
             for (const auto &insert : bd.at("box_shape_inserts"))
@@ -202,6 +202,17 @@ void ParticleGeneration ::addAllBodies(
                 inserts.push_back(&config_manager.getEntity<GeometricShapeBox>(insert.get<std::string>()));
             }
         }
+
+#ifdef SPHINXSYS_3D
+        if (bd.contains("cylinder_shape_inserts"))
+        {
+            for (const auto &insert : bd.at("cylinder_shape_inserts"))
+            {
+                inserts.push_back(&config_manager.getEntity<GeometricShapeCylinder>(insert.get<std::string>()));
+            }
+        }
+#endif
+
         real_body.generateParticles<BaseParticles, Lattice>(blocks, inserts);
     }
 }
