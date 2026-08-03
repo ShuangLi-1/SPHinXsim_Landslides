@@ -10,6 +10,7 @@ import pytest
 
 import sphinxsim
 from sphinxsim.cli import _config_spatial_dim, _load_config, main
+from sphinxsim.cli import _build_parser
 from sphinxsim.llm.common import LLMRepairWarning
 
 
@@ -383,6 +384,10 @@ class TestCLIUpdate:
         rc = main(["update", str(build_temp_path / "missing.json"), "simulate for 1 s"])
         assert rc != 0
 
+    def test_top_level_cli_rejects_slash_style_commands(self):
+        with pytest.raises(SystemExit):
+            main(["/generate", "water flow"])
+
     def test_update_patch_mode_in_place(self, build_temp_path):
         p = self._write_valid(build_temp_path)
         rc = main(["update", str(p), "simulate for 2 s", "--patch-mode"])
@@ -455,6 +460,22 @@ class TestCLIShell:
         out = capsys.readouterr().out
         assert "Auto-validation passed" in out
 
+    def test_shell_accepts_slash_style_commands(self, build_temp_path):
+        cfg = build_temp_path / "shell_slash_config.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_slash_config.json"
+        inputs = [
+            f"/generate water dam break simulation {shell_rel_cfg}",
+            "/update simulate for 2 s",
+            "exit",
+        ]
+        with patch("builtins.input", side_effect=inputs):
+            rc = main(["shell"])
+
+        assert rc == 0
+        assert cfg.exists()
+        data = json.loads(cfg.read_text())
+        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
+
     def test_shell_run_selects_3d_native_module(self, build_temp_path):
         cfg = build_temp_path / "shell_3d_config.json"
         cfg.write_text(json.dumps(_valid_3d_data()))
@@ -518,12 +539,11 @@ class TestCLIShell:
         data = json.loads(cfg.read_text())
         assert data["solver_parameters"]["end_time"] == pytest.approx(1.0)
 
-    def test_shell_geometry_lock_blocks_geometry_update(self, build_temp_path, capsys):
-        cfg = build_temp_path / "shell_geometry_lock.json"
-        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_lock.json"
+    def test_shell_geometry_update_after_generate_is_allowed(self, build_temp_path):
+        cfg = build_temp_path / "shell_geometry_update.json"
+        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_update.json"
         inputs = [
             f'generate "water dam break simulation" {shell_rel_cfg}',
-            "lock-geometry",
             'update "water flow with 5 mm resolution"',
             "exit",
         ]
@@ -531,26 +551,8 @@ class TestCLIShell:
             rc = main(["shell"])
 
         assert rc == 0
-        err = capsys.readouterr().err
-        assert "Geometry is locked" in err
         data = json.loads(cfg.read_text())
-        assert data["geometries"]["global_resolution"]["particle_spacing"] == pytest.approx(0.025)
-
-    def test_shell_geometry_lock_allows_non_geometry_update(self, build_temp_path):
-        cfg = build_temp_path / "shell_geometry_lock_non_geo.json"
-        shell_rel_cfg = f"pytest-temp/{build_temp_path.name}/shell_geometry_lock_non_geo.json"
-        inputs = [
-            f'generate "water dam break simulation" {shell_rel_cfg}',
-            "lock-geometry",
-            'update "simulate for 2 s"',
-            "exit",
-        ]
-        with patch("builtins.input", side_effect=inputs):
-            rc = main(["shell"])
-
-        assert rc == 0
-        data = json.loads(cfg.read_text())
-        assert data["solver_parameters"]["end_time"] == pytest.approx(2.0)
+        assert data["geometries"]["global_resolution"]["particle_spacing"] == pytest.approx(0.005)
 
 
 class TestCLIExplore:
@@ -574,3 +576,37 @@ class TestCLIVersion:
         assert exc_info.value.code == 0
         out = capsys.readouterr().out
         assert sphinxsim.__version__ in out
+
+class TestCLIGenerateCompletion:
+    def test_generate_completion_bash(self, capsys):
+        """Test bash shell completion generation."""
+        parser = _build_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--generate-completion", "bash"])
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "_sphinxsim_completion" in captured.out
+        assert "generate" in captured.out
+
+    def test_generate_completion_zsh(self, capsys):
+        """Test zsh shell completion generation."""
+        parser = _build_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--generate-completion", "zsh"])
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "#compdef sphinxsim" in captured.out
+        assert "generate" in captured.out
+
+    def test_generate_completion_fish(self, capsys):
+        """Test fish shell completion generation."""
+        parser = _build_parser()
+        with pytest.raises(SystemExit) as exc_info:
+            parser.parse_args(["--generate-completion", "fish"])
+        assert exc_info.value.code == 0
+
+        captured = capsys.readouterr()
+        assert "complete -c sphinxsim" in captured.out
+        assert "generate" in captured.out

@@ -1,4 +1,4 @@
-#include "base_simulation_builder.h"
+#include "base_simulation_builder.hpp"
 
 #include "material_builder.h"
 #include "recording_builder.h"
@@ -145,6 +145,62 @@ void SimulationBuilder::parseScheduledEvents(SPHSimulation &sim, const json &con
         time_stepper.getEventScheduler().schedule(
             switch_off_time, [&]()
             { on_flag = false; });
+    }
+}
+//=================================================================================================//
+void SimulationBuilder::buildExternalForceIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods, SPHBody &real_body, const json &config)
+{
+    auto &config_manager = sim.getConfigManager();
+    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    auto &initialization_pipeline = sim.getInitializationPipeline();
+
+    if (config.contains("gravity"))
+    {
+        auto &constant_gravity =
+            main_methods.template addStateDynamics<GravityForceCK<Gravity>>(
+                real_body, Gravity(scaling_config.jsonToVecd(config.at("gravity"), "Acceleration")));
+
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { constant_gravity.exec(); });
+    }
+}
+//=================================================================================================//
+void SimulationBuilder::buildInitialConditionIfPresent(
+    SPHSimulation &sim, MainMethods &method_container, const json &config)
+{
+    if (config.contains("initial_conditions"))
+    {
+        auto &sph_system = sim.getSPHSystem();
+        auto &config_manager = sim.getConfigManager();
+        auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+        auto &initialization_pipeline = sim.getInitializationPipeline();
+
+        auto &dynamics = method_container.addParticleDynamicsGroup();
+        for (const auto &ic : config.at("initial_conditions"))
+        {
+            const std::string name = ic.at("body_name").get<std::string>();
+            auto &real_body = sph_system.getBodyByName<RealBody>(name);
+            for (const auto &assignment : ic.at("assignments"))
+            {
+                if (assignment.contains("region"))
+                {
+                    std::string region_name = assignment.at("region").get<std::string>();
+                    auto &oriented_box = config_manager.getEntity<OrientedBox>(region_name);
+                    auto &body_region = real_body.template addBodyPart<OrientedBoxByParticle>(oriented_box);
+                    dynamics.add(&addVariableAssignment(method_container, body_region, scaling_config, assignment));
+                }
+                else
+                {
+                    dynamics.add(&addVariableAssignment(method_container, real_body, scaling_config, assignment));
+                }
+            }
+        }
+
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { dynamics.exec(); });
     }
 }
 //=================================================================================================//

@@ -1,7 +1,6 @@
 #ifndef FLUID_DYNAMICS_BUILDER_HPP
 #define FLUID_DYNAMICS_BUILDER_HPP
 
-#include "fluid_boundary_builder.hpp"
 #include "fluid_dynamics_builder.h"
 #include "sph_simulation.h"
 
@@ -10,9 +9,9 @@ namespace SPH
 //=================================================================================================//
 using namespace fluid_dynamics;
 //=================================================================================================//
-template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class FluidType, class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
-    SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
+    SPHSimulation &sim, MainMethods &method_container, InnerRelationType &inner_relation,
     ContactRelationType &contact_relation, const std::string &surface_type)
 {
     auto &density_summation =
@@ -35,27 +34,28 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
             std::cout << "------------------------------------------------------------" << std::endl; });
 
     auto &minimum_compression =
-        method_container.template addReduceDynamics<QuantityReduce, ReduceMin<Real>>(sph_body, "Compression");
+        method_container.template addReduceDynamics<
+            QuantityReduce, IndexedMin, SimpleEvaluation<IndexedValue<Real>>>(sph_body, "Compression");
     auto &maximum_compression =
-        method_container.template addReduceDynamics<QuantityReduce, ReduceMax<Real>>(sph_body, "Compression");
+        method_container.template addReduceDynamics<
+            QuantityReduce, IndexedMax, SimpleEvaluation<IndexedValue<Real>>>(sph_body, "Compression");
+
     initialization_pipeline.insert_hook(
-        InitializationHookPoint::PreSimulationSanityCheck, [&, surface_type]()
-        {
-            Real lower_limit = minimum_compression.exec();
-            Real upper_limit = maximum_compression.exec();
-            if (lower_limit < 0.95 || upper_limit > 1.05)
+        InitializationHookPoint::PreSimulationSanityCheck, [&]()
+        { 
+            auto lower_limit = minimum_compression.exec();
+            auto upper_limit = maximum_compression.exec();
+            if (lower_limit.first < 0.95 || upper_limit.first > 1.05)
             {
                 std::cout << "\n------------------------------------------------------------" << std::endl;
                 std::cout << "Error: Compression is out of range!" << std::endl;
-                std::cout << "Lower limit: " << lower_limit << " Upper limit: "<< upper_limit << std::endl;
+                std::cout << "Lower limit: " << lower_limit.first << " at particle " << lower_limit.second << std::endl;
+                std::cout << "Upper limit: " << upper_limit.first << " at particle " << upper_limit.second << std::endl;
                 std::cout << "The possible issues are the following:" << std::endl;
                 std::cout << "- Too large: overlapped bodies" << std::endl;
                 std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
                 std::cout << "------------------------------------------------------------" << std::endl;
-                if (surface_type != "free_stream")
-                {
-                    throw std::runtime_error("Compression is out of range!");
-                }
+                exit(1);
             } });
 
     auto &density_regularization = method_container.addParticleDynamicsGroup();

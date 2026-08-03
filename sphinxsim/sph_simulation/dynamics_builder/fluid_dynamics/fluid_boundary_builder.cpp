@@ -1,6 +1,3 @@
-#ifndef FLUID_BOUNDARY_BUILDER_HPP
-#define FLUID_BOUNDARY_BUILDER_HPP
-
 #include "fluid_dynamics_builder.h"
 
 #include "material_builder.h"
@@ -11,9 +8,8 @@ namespace SPH
 //=================================================================================================//
 using namespace fluid_dynamics;
 //=================================================================================================//
-template <class MethodContainerType>
 void FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(
-    SPHSimulation &sim, MethodContainerType &main_methods, const json &config)
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     if (config.contains("fluid_boundary_conditions"))
     {
@@ -24,9 +20,8 @@ void FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(
     }
 }
 //=================================================================================================//
-template <class MethodContainerType>
 void FluidDynamicsBuilder::addBoundaryCondition(
-    SPHSimulation &sim, MethodContainerType &main_methods, const json &config)
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     StagePipeline<InitializationHookPoint> &initialization_pipeline = sim.getInitializationPipeline();
     StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
@@ -194,7 +189,7 @@ void FluidDynamicsBuilder::addBoundaryCondition(
             { supplementary_conditions.exec(); });
 
         auto &surface_particle_count = main_methods.template addReduceDynamics<
-            QuantityReduce, ReduceSum<int>>(oriented_box_by_cell, "Indicator");
+            QuantityReduce, ReduceSum<int>, SimpleEvaluation<DirectValue<int>>>(oriented_box_by_cell, "Indicator");
 
         initialization_pipeline.insert_hook(
             InitializationHookPoint::PreSimulationSanityCheck, [&]()
@@ -276,10 +271,9 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         "FluidDynamicsBuilder::buildBoundaryConditionsIfPresent: unsupported: " + type);
 }
 //=================================================================================================//
-template <class MethodContainerType>
 AbstractBidirectionalBoundary &FluidDynamicsBuilder::createBiDirectionBoundary(
     OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
-    MethodContainerType &main_methods, const json &config)
+    MainMethods &main_methods, const json &config)
 {
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     if (config.contains("pressure"))
@@ -308,4 +302,3 @@ AbstractBidirectionalBoundary &FluidDynamicsBuilder::createBiDirectionBoundary(
 }
 //=================================================================================================//
 } // namespace SPH
-#endif // FLUID_BOUNDARY_BUILDER_HPP

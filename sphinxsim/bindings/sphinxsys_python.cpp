@@ -42,18 +42,6 @@ PYBIND11_MODULE(MODULE_NAME, m)
              "Build geometries from JSON configuration file")
         .def("generateParticles", &SPHSimulation::generateParticles,
              "Generate particles for all bodies from configuration")
-        .def("resetAfterGeometryChange", &SPHSimulation::resetAfterGeometryChange,
-             "Reset particle/system/solver state to allow geometry edits and rebuild")
-        .def("isGeometryLocked", &SPHSimulation::isGeometryLocked,
-             "Return whether geometry edits are locked after particle generation")
-        .def("hasBuiltGeometries", &SPHSimulation::hasBuiltGeometries,
-             "Return whether geometries have been built in this simulator instance")
-        .def("hasGeneratedParticles", &SPHSimulation::hasGeneratedParticles,
-             "Return whether particles have been generated in this simulator instance")
-        .def("rerunParticleRelaxation", &SPHSimulation::rerunParticleRelaxation,
-             "Rerun particle relaxation workflow")
-        .def("getShapeBounds", &SPHSimulation::getShapeBounds,
-             "Return dict of shape_name -> (lower_bound, upper_bound) after buildGeometries()")
         .def("buildSimulation", &SPHSimulation::buildSimulation,
              "Build simulation (relations, dynamics, etc.) from JSON configuration")
         .def("initializeSimulation", &SPHSimulation::initializeSimulation,
@@ -72,7 +60,9 @@ PYBIND11_MODULE(MODULE_NAME, m)
         .def("resetInOutputRoot", &GeometryBuilder::resetInOutputRoot, py::arg("output_root"),
              "Override output/restart/reload root folder. Call before building geometries.")
         .def("buildGeometries", &GeometryBuilder::buildGeometries,
-             "Build geometries from JSON configuration file");
+             "Build geometries from JSON configuration file")
+        .def("getShapeBounds", &GeometryBuilder::getShapeBounds,
+             "Return dict of shape_name -> (lower_bound, upper_bound) after buildGeometries()");
 
     // Module version info
     m.attr("__version__") = "0.1.0";

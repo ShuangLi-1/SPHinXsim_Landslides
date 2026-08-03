@@ -1,6 +1,3 @@
-#ifndef CONSTRAINT_BUILDER_HPP
-#define CONSTRAINT_BUILDER_HPP
-
 #include "constraint_builder.h"
 
 #include "geometry_builder.h"
@@ -10,22 +7,20 @@
 namespace SPH
 {
 //=================================================================================================//
-template <class MethodContainerType>
 void ConstraintBuilder::addConstraints(
-    SPHSimulation &sim, MethodContainerType &method_container, const json &config)
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     SPHSystem &sph_system = sim.getSPHSystem();
     for (const auto &constraint_config : config.at("body_constraints"))
     {
         const std::string body_name = constraint_config.at("body_name").get<std::string>();
         RealBody &real_body = sph_system.getBodyByName<RealBody>(body_name);
-        addConstraint(sim, method_container, real_body, constraint_config);
+        addConstraint(sim, main_methods, real_body, constraint_config);
     }
 }
 //=================================================================================================//
-template <class MethodContainerType>
 void ConstraintBuilder::addConstraint(
-    SPHSimulation &sim, MethodContainerType &method_container, RealBody &real_body, const json &config)
+    SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body, const json &config)
 {
     EntityManager &config_manager = sim.getConfigManager();
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
@@ -36,17 +31,17 @@ void ConstraintBuilder::addConstraint(
 
     if (type == "fixed")
     {
-        auto &constraint = method_container.addParticleDynamicsGroup();
+        auto &constraint = main_methods.addParticleDynamicsGroup();
         if (config.contains("region"))
         {
             auto &oriented_box = config_manager.getEntity<OrientedBox>(config.at("region").get<std::string>());
             auto &body_part = real_body.template addBodyPart<OrientedBoxByParticle>(oriented_box);
-            constraint.add(&method_container.template addStateDynamics<
+            constraint.add(&main_methods.template addStateDynamics<
                             ConstantConstraintCK, Vecd>(body_part, "Velocity", Vecd::Zero()));
         }
         else
         {
-            constraint.add(&method_container.template addStateDynamics<
+            constraint.add(&main_methods.template addStateDynamics<
                             ConstantConstraintCK, Vecd>(real_body, "Velocity", Vecd::Zero()));
         }
 
@@ -111,7 +106,7 @@ void ConstraintBuilder::addConstraint(
             }
             integ.initialize(state);
 
-            auto &constraint = method_container.template addStateDynamics<
+            auto &constraint = main_methods.template addStateDynamics<
                 solid_dynamics::ConstraintBodyPartBySimBodyCK>(body_part, MBsystem, mobilized_body, integ);
             simulation_pipeline.insert_hook(
                 SimulationHookPoint::PositionConstraint, [&]()
@@ -136,4 +131,3 @@ void ConstraintBuilder::addConstraint(
 }
 //=================================================================================================//
 } // namespace SPH
-#endif // CONSTRAINT_BUILDER_HPP

@@ -39,10 +39,12 @@ Does not cover:
 - Preferred for geometry fidelity.
 
 2. C++ bounds fallback
-- If VTP meshes are unavailable, query bounds from C++ simulation object.
+- If VTP meshes are unavailable, query bounds from `GeometryBuilder.getShapeBounds()`.
 - Render bounding boxes as fallback.
 
 Design rule:
+- Preview always rebuilds geometry from the current config.
+- There is no `use_cpp` / `--no-cpp` switch; fallback to cached bounds is automatic when VTP meshes are not produced.
 - Prefer VTP/VTK objects for visualization.
 - Avoid constructing ad-hoc meshes from config-only geometry when VTP/VTK path is expected.
 
@@ -58,6 +60,7 @@ Design rule:
 - Populate plotter with shapes, oriented boxes, constraints, observers, and annotations.
 - Keep rendering robust when PyVista or mesh assets are unavailable.
 - Support screenshot output via `screenshot_path` parameter on `preview()`.
+- Rebuild geometry on each preview run and refresh the shape-bounds cache from the builder.
 
 ### Annotation functions
 Keep annotation formatting centralized in `annotations.py`:

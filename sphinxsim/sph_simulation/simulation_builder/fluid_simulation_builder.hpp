@@ -15,9 +15,9 @@ namespace SPH
 //=================================================================================================//
 using namespace fluid_dynamics;
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class InnerRelationType, class ContactRelationType>
 void FluidSimulationBuilder::addMainPhysicalTimeStep(
-    SPHSimulation &sim, MethodContainerType &main_methods,
+    SPHSimulation &sim, MainMethods &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &fluid_wall_contact)
 {
     EntityManager &config_manager = sim.getConfigManager();
@@ -95,9 +95,9 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
     }
 }
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
-    SPHSimulation &sim, MethodContainerType &main_methods,
+    SPHSimulation &sim, MainMethods &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     auto &config_manager = sim.getConfigManager();
@@ -121,9 +121,9 @@ BaseDynamics<void> &FluidSimulationBuilder::addDensityRegularization(
         "FluidSimulationBuilder::addDensityRegularization: no supported fluid type found!");
 }
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class InnerRelationType, class ContactRelationType>
 BaseDynamics<void> &FluidSimulationBuilder::addLinearCorrectionMatrixWithScope(
-    EntityManager &config_manager, MethodContainerType &main_methods,
+    EntityManager &config_manager, MainMethods &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     auto &fluid_linear_correction_matrix = main_methods.addParticleDynamicsGroup();
@@ -142,9 +142,9 @@ BaseDynamics<void> &FluidSimulationBuilder::addLinearCorrectionMatrixWithScope(
     return fluid_linear_correction_matrix;
 }
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class InnerRelationType, class ContactRelationType>
 void FluidSimulationBuilder::buildTransportVelocityFormulationIfNotFreeSurface(
-    SPHSimulation &sim, MethodContainerType &main_methods,
+    SPHSimulation &sim, MainMethods &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     EntityManager &config_manager = sim.getConfigManager();
@@ -201,9 +201,9 @@ void FluidSimulationBuilder::addTransportVelocityCorrection(
         "FluidSimulationBuilder::addTransportVelocityCorrection: no supported flow type found!");
 }
 //=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class InnerRelationType, class ContactRelationType>
 void FluidSimulationBuilder::buildViscousForceIfPresent(
-    SPHSimulation &sim, MethodContainerType &main_methods,
+    SPHSimulation &sim, MainMethods &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     EntityManager &config_manager = sim.getConfigManager();
@@ -227,27 +227,9 @@ void FluidSimulationBuilder::buildViscousForceIfPresent(
     }
 }
 //=================================================================================================//
-template <class MethodContainerType>
-void FluidSimulationBuilder::buildParticleDeletionIfPresent(
-    SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body)
-{
-    auto &config_manager = sim.getConfigManager();
-    StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    if (fluid_solver_config.particle_deletion_)
-    {
-        auto &particle_deletion = main_methods.template addStateDynamics<
-            OutflowParticleDeletion>(real_body);
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleDeletion, [&]()
-            { particle_deletion.exec(); });
-    }
-}
-//=================================================================================================//
-template <class MethodContainerType, class InnerRelationType, class ContactRelationType>
+template <class InnerRelationType, class ContactRelationType>
 void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
-    SPHSimulation &sim, MethodContainerType &main_methods,
+    SPHSimulation &sim, MainMethods &main_methods,
     InnerRelationType &inner_relation, ContactRelationType &contact_relation)
 {
     auto &config_manager = sim.getConfigManager();
@@ -269,29 +251,6 @@ void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
         simulation_pipeline.insert_hook(
             SimulationHookPoint::ParticleIndicationTagging, [&]()
             { fluid_surface_indication.exec(); });
-    }
-}
-//=================================================================================================//
-template <class MethodContainerType>
-void FluidSimulationBuilder::buildParticleSortIfPresent(
-    SPHSimulation &sim, MethodContainerType &main_methods, RealBody &real_body)
-{
-    auto &config_manager = sim.getConfigManager();
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
-
-    if (fluid_solver_config.particle_sorting_)
-    {
-        auto &particle_sort = main_methods.addSortDynamics(real_body);
-
-        auto &simulation_pipeline = sim.getSimulationPipeline();
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleSort, [&]()
-            {
-                if (time_stepper.getIterationStep() % fluid_solver_config.sort_frequency_ == 0)
-                {
-                    particle_sort.exec();
-                } });
     }
 }
 //=================================================================================================//

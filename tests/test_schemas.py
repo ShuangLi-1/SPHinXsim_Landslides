@@ -625,6 +625,87 @@ class TestSimulationConfig:
                 ]
             )
 
+    def test_particle_generation_blocks_accept_existing_oriented_box(self):
+        cfg = _make_minimal_fluid_config(
+            particle_generation={
+                "build_and_run": False,
+                "settings": {
+                    "bodies": [
+                        {"name": "WaterBody", "blocks": ["Inlet"]},
+                        {"name": "WallBoundary", "solid_body": {}},
+                    ],
+                    "relaxation_parameters": {"total_iterations": 1000},
+                },
+            }
+        )
+        assert cfg.particle_generation.settings is not None
+        assert cfg.particle_generation.settings.bodies[0].blocks == ["Inlet"]
+
+    def test_particle_generation_blocks_reject_unknown_oriented_box(self):
+        with pytest.raises(ValidationError, match="blocks entries must reference existing"):
+            _make_minimal_fluid_config(
+                particle_generation={
+                    "build_and_run": False,
+                    "settings": {
+                        "bodies": [
+                            {"name": "WaterBody", "blocks": ["MissingBox"]},
+                            {"name": "WallBoundary", "solid_body": {}},
+                        ],
+                        "relaxation_parameters": {"total_iterations": 1000},
+                    },
+                }
+            )
+
+    def test_particle_generation_inserts_accept_existing_oriented_box(self):
+        cfg = _make_minimal_fluid_config(
+            particle_generation={
+                "build_and_run": False,
+                "settings": {
+                    "bodies": [
+                        {"name": "WaterBody", "inserts": ["Inlet"]},
+                        {"name": "WallBoundary", "solid_body": {}},
+                    ],
+                    "relaxation_parameters": {"total_iterations": 1000},
+                },
+            }
+        )
+        assert cfg.particle_generation.settings is not None
+        assert cfg.particle_generation.settings.bodies[0].inserts == ["Inlet"]
+
+    def test_particle_generation_inserts_reject_unknown_oriented_box(self):
+        with pytest.raises(ValidationError, match="inserts entries must reference existing"):
+            _make_minimal_fluid_config(
+                particle_generation={
+                    "build_and_run": False,
+                    "settings": {
+                        "bodies": [
+                            {"name": "WaterBody", "inserts": ["MissingBox"]},
+                            {"name": "WallBoundary", "solid_body": {}},
+                        ],
+                        "relaxation_parameters": {"total_iterations": 1000},
+                    },
+                }
+            )
+
+    def test_particle_generation_body_unknown_field_warns_and_is_preserved(self):
+        with pytest.warns(UserWarning, match="contains unknown keys that are preserved"):
+            cfg = _make_minimal_fluid_config(
+                particle_generation={
+                    "build_and_run": False,
+                    "settings": {
+                        "bodies": [
+                            {"name": "WaterBody", "unknown_key": ["Inlet"]},
+                            {"name": "WallBoundary", "solid_body": {}},
+                        ],
+                        "relaxation_parameters": {"total_iterations": 1000},
+                    },
+                }
+            )
+
+        dumped = cfg.model_dump(mode="json")
+        assert "unknown_key" in dumped["particle_generation"]["settings"]["bodies"][0]
+        assert dumped["particle_generation"]["settings"]["bodies"][0]["unknown_key"] == ["Inlet"]
+
     def test_global_resolution_is_required(self):
         data = _make_minimal_fluid_config().model_dump(mode="json")
         del data["geometries"]["global_resolution"]
@@ -734,6 +815,127 @@ class TestSimulationConfig:
                             "switch_on_time": 0.0,
                             "duration": -1.0,
                         },
+                    }
+                ]
+            )
+
+    def test_boundary_condition_schedule_allows_missing_duration(self):
+        cfg = _make_minimal_fluid_config(
+            fluid_boundary_conditions=[
+                {
+                    "body_name": "WaterBody",
+                    "oriented_box": "Inlet",
+                    "type": "emitter",
+                    "inflow_speed": 1.5,
+                    "on_schedule": {
+                        "switch_on_time": 0.0,
+                    },
+                }
+            ]
+        )
+
+        schedule = cfg.fluid_boundary_conditions[0].on_schedule
+        assert schedule is not None
+        assert schedule.switch_on_time == pytest.approx(0.0)
+        assert schedule.duration is None
+
+    def test_fluid_dynamics_rejects_multiple_fluid_bodies(self):
+        data = _make_minimal_fluid_config().model_dump(mode="json", exclude_none=True)
+        extra_body = json.loads(json.dumps(data["fluid_bodies"][0]))
+        extra_body["name"] = "WaterBody2"
+        data["geometries"]["shapes"].append(
+            {
+                "name": "WaterBody2",
+                "type": "bounding_box",
+                "lower_bound": [0.45, 0.0],
+                "upper_bound": [0.8, 0.2],
+            }
+        )
+        data["particle_generation"]["settings"]["bodies"].append({"name": "WaterBody2"})
+        data["fluid_bodies"].append(extra_body)
+
+        with pytest.raises(ValidationError, match="exactly one fluid body"):
+            SimulationConfig.model_validate(data)
+
+    def test_continuum_dynamics_rejects_multiple_continuum_bodies(self):
+        data = _make_minimal_continuum_config().model_dump(mode="json", exclude_none=True)
+        extra_body = json.loads(json.dumps(data["continuum_bodies"][0]))
+        extra_body["name"] = "ContinuumBody2"
+        data["geometries"]["shapes"].append(
+            {
+                "name": "ContinuumBody2",
+                "type": "bounding_box",
+                "lower_bound": [0.45, 0.0],
+                "upper_bound": [0.8, 0.2],
+            }
+        )
+        data["particle_generation"]["settings"]["bodies"].append({"name": "ContinuumBody2"})
+        data["continuum_bodies"].append(extra_body)
+
+        with pytest.raises(ValidationError, match="exactly one continuum body"):
+            SimulationConfig.model_validate(data)
+
+    def test_3d_transform_requires_rotation_axis(self):
+        with pytest.raises(ValidationError, match="3D transform requires rotation_axis"):
+            _make_minimal_continuum_config(
+                geometries={
+                    "system_domain": {"lower_bound": [0.0, 0.0, 0.0], "upper_bound": [1.0, 1.0, 1.0]},
+                    "global_resolution": {"particle_spacing": 0.05},
+                    "primitives": [
+                        {
+                            "name": "BoxPrimitive",
+                            "type": "box",
+                            "half_size": [0.1, 0.1, 0.1],
+                            "transform": {
+                                "translation": [0.1, 0.1, 0.1],
+                                "rotation_angle": 0.0,
+                            },
+                        }
+                    ],
+                    "shapes": [
+                        {
+                            "name": "ContinuumBody",
+                            "type": "box",
+                            "primitive": "BoxPrimitive",
+                        },
+                        {
+                            "name": "WallBoundary",
+                            "type": "bounding_box",
+                            "lower_bound": [0.0, 0.0, 0.0],
+                            "upper_bound": [1.0, 1.0, 1.0],
+                        },
+                    ],
+                }
+            )
+
+    def test_initial_condition_real_type_rejects_vector_value(self):
+        with pytest.raises(ValidationError, match="real_type assignment requires a scalar"):
+            _make_minimal_fluid_config(
+                initial_conditions=[
+                    {
+                        "body_name": "WaterBody",
+                        "assignments": [
+                            {
+                                "variable": {"real_type": "Pressure"},
+                                "value": [1.0, 2.0],
+                            }
+                        ],
+                    }
+                ]
+            )
+
+    def test_initial_condition_vector_type_rejects_scalar_value(self):
+        with pytest.raises(ValidationError, match="vector_type assignment requires a vector"):
+            _make_minimal_fluid_config(
+                initial_conditions=[
+                    {
+                        "body_name": "WaterBody",
+                        "assignments": [
+                            {
+                                "variable": {"vector_type": "Velocity"},
+                                "value": 1.0,
+                            }
+                        ],
                     }
                 ]
             )

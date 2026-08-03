@@ -47,6 +47,19 @@ void GeometryBuilder::buildGeometries()
     createGeometries(config_manager_, config.at("geometries"));
 }
 //=================================================================================================//
+std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> GeometryBuilder::getShapeBounds()
+{
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> result;
+    for (Shape *shape : config_manager_.entitiesWith<Shape>())
+    {
+        BoundingBoxd bounds = shape->getBounds();
+        std::vector<double> lower(bounds.lower_.data(), bounds.lower_.data() + bounds.lower_.size());
+        std::vector<double> upper(bounds.upper_.data(), bounds.upper_.data() + bounds.upper_.size());
+        result[shape->Name()] = {lower, upper};
+    }
+    return result;
+}
+//=================================================================================================//
 json GeometryBuilder::loadConfig()
 {
     json config;
@@ -369,7 +382,7 @@ GeometricShapeBox GeometryBuilder::addOrientedBox(
     const std::string name = config.at("name").get<std::string>();
     const std::string type = config.at("type").get<std::string>();
 
-    if (type == "in_outlet")
+    if (type == "boundary")
     {
         Vecd center = scaling_config.jsonToVecd(config.at("center"), "Length");
         Vecd normal = scaling_config.jsonToVecd(config.at("normal"), "Dimensionless");

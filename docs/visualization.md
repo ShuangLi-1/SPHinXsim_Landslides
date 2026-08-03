@@ -22,9 +22,9 @@ pip install pyvistaqt PySide6
 ```
 
 The compiled C++ extension (`_sphinxsys_core_2d` or `_sphinxsys_core_3d`) is
-required only for C++ geometry rendering (simulation shapes and oriented-box
-meshes). Without it (or when using `--no-cpp`), preview still opens and
-renders only the system domain bounding box and annotations.
+required for preview geometry generation. The preview always attempts to build
+VTP meshes first and automatically falls back to cached shape bounds when VTP
+files are not produced.
 
 ## What it shows
 
@@ -78,15 +78,6 @@ When particles are shown:
 This is useful for verifying particle distribution and spacing before running
 the full simulation.
 
-### Skip C++ geometry build
-
-```bash
-sphinxsim preview path/to/config.json --no-cpp
-```
-
-Skips the C++ geometry build entirely.  Shapes are not rendered; only the
-system domain bounding box and annotations are shown.
-
 ### Off-screen rendering
 
 ```bash
@@ -126,7 +117,8 @@ This is useful for:
 `preview` is available as a first-class shell command:
 
 In shell mode, `preview` keeps a persistent window and returns control to the
-shell prompt. Running `preview` again updates the existing window.
+shell prompt. Running `preview` again updates the existing window and rebuilds
+geometry from the current config.
 
 Notes:
 - `preview --screenshot ...` is one-shot and does not use the persistent window.
@@ -139,23 +131,18 @@ sphinxsim> load config.json
 
 sphinxsim> preview
 🖼  Building configuration preview for: .../config.json
-   Attempting C++ geometry build for accurate VTP meshes...
+   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.
 ✅ Preview used C++ geometry (VTP meshes).
-
-sphinxsim> preview --no-cpp
-🖼  Building configuration preview for: .../config.json
-   Skipping C++ geometry build (--no-cpp).
-ℹ️ Preview rendered without C++ geometry (--no-cpp).
 
 sphinxsim> preview --screenshot preview.png
 🖼  Building configuration preview for: .../config.json
-   Attempting C++ geometry build for accurate VTP meshes...
+   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.
 ✅ Preview used C++ geometry (VTP meshes).
 📸 Screenshot saved to: preview.png
 
 sphinxsim> preview --with-particles
 🖼  Building configuration preview for: .../config.json
-   Attempting C++ geometry build for accurate VTP meshes...
+   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.
    Particle generation overlay is enabled (--with-particles).
 ✅ Preview used C++ geometry (VTP meshes).
 ```
@@ -175,7 +162,6 @@ config = SimulationConfig(**json.loads(config_path.read_text()))
 
 viz = ConfigVisualizer(config, project_root=Path("."), config_path=config_path)
 viz.preview()                     # opens interactive window
-viz.preview(use_cpp=False)        # skip C++ build (shapes not rendered)
 viz.preview(title="My setup")     # custom window title
 viz.preview(screenshot_path="preview.png")  # save screenshot, no window
 ```
@@ -194,7 +180,6 @@ viz.preview(screenshot_path="preview.png")  # save screenshot, no window
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `title` | `str` | `"SPHinXsim - Configuration Preview"` | Window title |
-| `use_cpp` | `bool` | `True` | Run C++ geometry build. Raises `ImportError` if extension not installed. |
 | `with_particles` | `bool` | `False` | Run particle generation and overlay latest particles per body. In shell persistent mode, enabling this always redraws the scene. |
 | `screenshot_path` | `str \| Path \| None` | `None` | When set, saves a screenshot to this path instead of opening a window. Implies off-screen rendering. |
 
@@ -212,27 +197,26 @@ print(viz.used_cpp_bounds)     # True if live C++ bounds were used
 
 ## Two-tier rendering strategy
 
-### Tier 1 — VTP geometry (preferred)
+### VTP geometry (preferred)
 
-When `use_cpp=True` (the default), the visualizer:
+The visualizer always:
 
 1. Passes your original JSON file directly to `SPHSimulation` (no copy written).
 2. Calls `SPHSimulation.buildGeometries()` from the C++ extension.
 3. The C++ builders write `Shape<Name>.vtp` files to `.build-temp/preview_geometry/output/`.
 4. PyVista reads and renders those polygon meshes.
-5. The live `SPHSimulation` object is kept in memory for Tier 2 queries.
 
 This gives **accurate geometry** — including rotations, boolean-composition results,
 and imported triangle meshes.
 
-### Tier 2 — C++ shape bounds (fallback)
+### Bounds fallback
 
-When VTP files are not produced (e.g. the builder does not write VTPs for a
-given shape type), the visualizer queries `getShapeBounds()` directly from the
-live `SPHSimulation` object and renders axis-aligned bounding boxes.
+When VTP files are not produced, the visualizer queries `getShapeBounds()` from
+the geometry builder and renders axis-aligned bounding boxes from the cached
+shape bounds.
 
-Both tiers require the C++ extension.  If it is not installed, an
-`ImportError` is raised with an install hint.
+Both paths require the C++ extension.  If it is not installed, an `ImportError`
+is raised with an install hint.
 
 ## Shape types and VTP availability
 

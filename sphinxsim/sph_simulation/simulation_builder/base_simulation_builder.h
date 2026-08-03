@@ -30,6 +30,7 @@
 #define BASE_SIMULATION_BUILDER_H
 
 #include "simulation_scaling.h"
+#include "sph_solver.h"
 
 namespace SPH
 {
@@ -130,21 +131,19 @@ class SimulationBuilder
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     RestartConfig parseRestartConfig(const json &config);
 
-    template <class MethodContainerType>
     void buildExternalForceIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, SPHBody &sph_body, const json &config);
+        SPHSimulation &sim, MainMethods &main_methods, SPHBody &sph_body, const json &config);
 
-    template <class MethodContainerType>
     void buildInitialConditionIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+        SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
     SolverCommonConfig parseSolverCommonConfig(const ScalingConfig &scaling_config, const json &config);
 
-    template <class MethodContainerType, class IdentifierType>
+    template <class IdentifierType>
     BaseDynamics<void> &addVariableAssignment(
-        MethodContainerType &method_container, IdentifierType &identifier,
+        MainMethods &method_container, IdentifierType &identifier,
         const ScalingConfig &scaling_config, const json &config);
 };
 } // namespace SPH

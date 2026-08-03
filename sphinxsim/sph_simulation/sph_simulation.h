@@ -57,12 +57,6 @@ class SPHSimulation
     void resetOutputRoot(const fs::path &output_root, bool keep_existing = false);
     void buildGeometries();
     void generateParticles();
-    void resetAfterGeometryChange();
-    bool isGeometryLocked() const;
-    bool hasBuiltGeometries() const;
-    bool hasGeneratedParticles() const;
-    void rerunParticleRelaxation();
-    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> getShapeBounds();
     void buildSimulation();
     void initializeSimulation();
     void run();
@@ -107,8 +101,6 @@ class SPHSimulation
     std::unique_ptr<SPHSolver> sph_solver_ptr_;
     UniquePtrsKeeper<Contact<>> structure_contacts_keeper_;
     bool geometry_built_{false};
-    bool geometry_locked_{false};
-    bool particles_generated_{false};
     bool executable_simulation_state_ready_{false};
     json loadConfig();
 };

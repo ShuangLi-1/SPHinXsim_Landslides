@@ -21,8 +21,10 @@ import argparse
 import json
 import os
 import shlex
+import subprocess
 import sys
 import tempfile
+import time
 import warnings
 from pathlib import Path
 from typing import Any, Tuple
@@ -229,7 +231,6 @@ def cmd_update(args: argparse.Namespace) -> int:
     if rc != 0:
         return rc
     assert config is not None
-    geometry_locked = bool(getattr(args, "geometry_locked", False))
 
     llm = get_llm()
     try:
@@ -292,14 +293,6 @@ def cmd_update(args: argparse.Namespace) -> int:
         return 1
     except Exception as exc:
         print(f"Unexpected error updating config: {exc}", file=sys.stderr)
-        return 1
-
-    if geometry_locked and _geometry_changed(config, updated_config):
-        print(
-            "Geometry is locked after particle generation. "
-            "Unlock geometry first to apply geometry changes.",
-            file=sys.stderr,
-        )
         return 1
 
     output_path = Path(args.output) if args.output else config_path
@@ -506,7 +499,6 @@ def cmd_preview(args: argparse.Namespace) -> int:
 
     from sphinxsim.visualization.preview import ConfigVisualizer
 
-    use_cpp = not getattr(args, "no_cpp", False)
     off_screen = getattr(args, "off_screen", False)
     screenshot_path = getattr(args, "screenshot", None)
     with_particles = getattr(args, "with_particles", False)
@@ -516,12 +508,9 @@ def cmd_preview(args: argparse.Namespace) -> int:
         off_screen = True
 
     print(f"🖼  Building configuration preview for: {resolved_config_path}")
-    if use_cpp:
-        print("   Attempting C++ geometry build for accurate VTP meshes...")
-        if with_particles:
-            print("   Particle generation overlay is enabled (--with-particles).")
-    else:
-        print("   Skipping C++ geometry build (--no-cpp).")
+    print("   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.")
+    if with_particles:
+        print("   Particle generation overlay is enabled (--with-particles).")
 
     visualizer = ConfigVisualizer(
         config,
@@ -531,17 +520,13 @@ def cmd_preview(args: argparse.Namespace) -> int:
     )
     try:
         visualizer.preview(
-            use_cpp=use_cpp,
             screenshot_path=screenshot_path,
             with_particles=with_particles,
         )
-        if use_cpp:
-            if visualizer.used_cpp_geometry:
-                print("✅ Preview used C++ geometry (VTP meshes).")
-            else:
-                print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
+        if visualizer.used_cpp_geometry:
+            print("✅ Preview used C++ geometry (VTP meshes).")
         else:
-            print("ℹ️ Preview rendered without C++ geometry (--no-cpp).")
+            print("ℹ️ Preview used C++ bounds fallback (no VTP meshes produced).")
         if screenshot_path:
             print(f"📸 Screenshot saved to: {screenshot_path}")
     except ImportError as exc:
@@ -620,13 +605,6 @@ def _shell_auto_validate(config_path: Path) -> bool:
     return True
 
 
-def _geometry_changed(before: SimulationConfig, after: SimulationConfig) -> bool:
-    """Return True when the geometries section differs between configs."""
-    before_geometry = before.model_dump(exclude_none=True).get("geometries")
-    after_geometry = after.model_dump(exclude_none=True).get("geometries")
-    return before_geometry != after_geometry
-
-
 def _resolve_preview_config_path(config_file: str) -> Path:
     """Resolve preview config path using cwd-first then .build-temp fallback."""
     config_path = Path(config_file)
@@ -660,6 +638,37 @@ class _ShellPreviewRuntime:
         except Exception:
             pass
         self.plotter = None
+
+    def pump_ui_events(self) -> None:
+        """Keep the persistent preview responsive while shell work blocks."""
+        if self.plotter is None:
+            return
+
+        try:
+            if self._using_background_plotter:
+                app = getattr(self.plotter, "app", None)
+                if app is not None and hasattr(app, "processEvents"):
+                    app.processEvents()
+                    return
+
+                try:
+                    from PySide6.QtWidgets import QApplication  # type: ignore[import]
+                except Exception:
+                    try:
+                        from PyQt5.QtWidgets import QApplication  # type: ignore[import]
+                    except Exception:
+                        QApplication = None  # type: ignore[misc,assignment]
+
+                if QApplication is not None:
+                    app = QApplication.instance()
+                    if app is not None:
+                        app.processEvents()
+                        return
+
+            if hasattr(self.plotter, "render"):
+                self.plotter.render()
+        except Exception:
+            pass
 
     @staticmethod
     def _set_label_font_size(actor: Any, size: int) -> bool:
@@ -863,7 +872,6 @@ class _ShellPreviewRuntime:
         self,
         config: SimulationConfig,
         *,
-        use_cpp: bool,
         with_particles: bool,
     ) -> bool:
         if with_particles:
@@ -871,7 +879,6 @@ class _ShellPreviewRuntime:
 
         payload = {
             "config": config.model_dump(exclude_none=True),
-            "use_cpp": use_cpp,
             "with_particles": with_particles,
         }
         signature = json.dumps(payload, sort_keys=True)
@@ -884,7 +891,6 @@ class _ShellPreviewRuntime:
         config: SimulationConfig,
         *,
         resolved_config_path: Path,
-        use_cpp: bool,
         with_particles: bool,
     ) -> int:
         try:
@@ -897,7 +903,7 @@ class _ShellPreviewRuntime:
             )
             return 1
 
-        if self._is_unchanged(config, use_cpp=use_cpp, with_particles=with_particles):
+        if self._is_unchanged(config, with_particles=with_particles):
             print("ℹ️ Preview unchanged; keeping existing window.")
             return 0
 
@@ -914,10 +920,11 @@ class _ShellPreviewRuntime:
         vtp_dir: Path | None = None
         latest_particle_vtps: dict[str, Path] = {}
 
-        if use_cpp:
-            vtp_dir = visualizer._try_build_geometries(ndim, with_particles=with_particles)
-            if with_particles:
-                latest_particle_vtps = visualizer._discover_latest_particle_vtps(vtp_dir)
+        # Always rebuild geometry; if VTPs are unavailable the preview falls back
+        # to cached bounds and still renders the scene.
+        vtp_dir = visualizer._try_build_geometries(ndim, with_particles=with_particles)
+        if with_particles:
+            latest_particle_vtps = visualizer._discover_latest_particle_vtps(vtp_dir)
 
         try:
             if sys.platform.startswith("linux"):
@@ -1010,21 +1017,15 @@ def cmd_shell(args: argparse.Namespace) -> int:
     print("SPHinXsim interactive shell")
     print(f"LLM provider: {provider}")
     print(
-        "Commands: load FILE, generate DESCRIPTION FILE, "
-        "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
-        "validate, run, preview [--no-cpp] [--with-particles] [--screenshot FILE], lock-geometry, unlock-geometry, lock-status, explore QUESTION, exit"
+            "Commands: load FILE, generate DESCRIPTION FILE, "
+            "update [--patch-mode] [--dry-run] [--strict true|false] INSTRUCTION, "
+                    "validate, run, preview [--with-particles] [--screenshot FILE], explore QUESTION, exit"
     )
     print("Note: relative paths are resolved from the current directory first, then .build-temp/.")
 
     config_path: Path | None = None
-    geometry_locked = False
     shell_sim = None
     preview_runtime = _ShellPreviewRuntime()
-
-    def _current_geometry_locked() -> bool:
-        if shell_sim is not None and hasattr(shell_sim, "isGeometryLocked"):
-            return bool(shell_sim.isGeometryLocked())
-        return geometry_locked
 
     while True:
         try:
@@ -1054,18 +1055,18 @@ def cmd_shell(args: argparse.Namespace) -> int:
             print("  explore QUESTION                - Ask about schema")
             print("  validate                        - Reload and validate config from disk")
             print("  preview                         - Render geometry/BC preview (requires pyvista)")
-            print("  preview --no-cpp                - Preview without C++ geometry build")
             print("  preview --with-particles        - Run particle generation and overlay particles")
             print("  preview --screenshot FILE        - Save a screenshot to FILE instead of interactive window")
             print("  run                             - Run simulation from loaded config")
-            print("  lock-geometry                   - Manually lock geometry updates")
-            print("  unlock-geometry                 - Unlock geometry updates")
-            print("  lock-status                     - Show geometry lock status")
             print("  exit                            - Exit shell")
             continue
 
         try:
-            parts = shlex.split(line)
+            translated_parts = _parse_shell_ai_cli_style(line)
+            if translated_parts is not None:
+                parts = translated_parts
+            else:
+                parts = shlex.split(line)
         except ValueError as exc:
             print(f"Invalid command syntax: {exc}", file=sys.stderr)
             continue
@@ -1092,7 +1093,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 config_path = None
                 continue
             print(f"✅ Loaded config: {config_path}")
-            geometry_locked = False
             shell_sim = None
             continue
 
@@ -1113,7 +1113,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 config_path.parent.mkdir(parents=True, exist_ok=True)
                 config_path.write_text(dump_simulation_config_json(config, indent=2))
                 print(f"✅ Config generated and written to {config_path}")
-                geometry_locked = False
                 shell_sim = None
                 _shell_auto_validate(config_path)
             except (ValueError, ValidationError) as exc:
@@ -1169,7 +1168,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                     patch_mode=patch_mode,
                     dry_run=dry_run,
                     strict=strict,
-                    geometry_locked=_current_geometry_locked(),
                 )
             )
             if rc == 0 and not dry_run:
@@ -1202,7 +1200,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
             if config_path is None:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
-            no_cpp = "--no-cpp" in parts
             with_particles = "--with-particles" in parts
             # Extract --screenshot / -s value from shell input
             screenshot_path = None
@@ -1218,7 +1215,6 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 _ = cmd_preview(
                     argparse.Namespace(
                         config_file=str(config_path),
-                        no_cpp=no_cpp,
                         with_particles=with_particles,
                         off_screen=False,
                         screenshot=screenshot_path,
@@ -1232,17 +1228,13 @@ def cmd_shell(args: argparse.Namespace) -> int:
 
             resolved_config_path = _resolve_preview_config_path(str(config_path))
             print(f"🖼  Building configuration preview for: {resolved_config_path}")
-            if not no_cpp:
-                print("   Attempting C++ geometry build for accurate VTP meshes...")
-                if with_particles:
-                    print("   Particle generation overlay is enabled (--with-particles).")
-            else:
-                print("   Skipping C++ geometry build (--no-cpp).")
+            print("   Building C++ geometry; bounds cache fallback will be used if VTP meshes are unavailable.")
+            if with_particles:
+                print("   Particle generation overlay is enabled (--with-particles).")
 
             rc = preview_runtime.show_or_update(
                 cfg,
                 resolved_config_path=resolved_config_path,
-                use_cpp=not no_cpp,
                 with_particles=with_particles,
             )
             if rc == 0:
@@ -1253,6 +1245,36 @@ def cmd_shell(args: argparse.Namespace) -> int:
             if config_path is None:
                 print("No config loaded. Run 'load FILE' or 'generate' first.", file=sys.stderr)
                 continue
+
+            # Persistent preview keeps native UI/runtime state alive in-process.
+            # Run simulation in an isolated subprocess to avoid state leakage.
+            if preview_runtime.plotter is not None:
+                resolved_config_path = _resolve_preview_config_path(str(config_path))
+                print(
+                    "ℹ️ Running simulation in isolated subprocess (persistent preview is active).",
+                    flush=True,
+                )
+                try:
+                    env = os.environ.copy()
+                    env.setdefault("PYTHONUNBUFFERED", "1")
+
+                    process = subprocess.Popen(
+                        [sys.executable, "-m", "sphinxsim", "run", str(resolved_config_path)],
+                        cwd=str(resolved_config_path.parent),
+                        env=env,
+                    )
+                    while True:
+                        preview_runtime.pump_ui_events()
+                        return_code = process.poll()
+                        if return_code is not None:
+                            break
+                        time.sleep(0.05)
+                    if return_code != 0:
+                        print(f"❌ Run failed with exit code {return_code}", file=sys.stderr)
+                except Exception as exc:
+                    print(f"❌ Run failed: {exc}", file=sys.stderr)
+                continue
+
             try:
                 cfg, rc = _load_config(config_path)
                 if rc != 0 or cfg is None:
@@ -1278,54 +1300,10 @@ def cmd_shell(args: argparse.Namespace) -> int:
                 print("\n🚀 Running simulation...")
                 shell_sim.run()
                 print("✅ Simulation completed successfully!")
-
-                geometry_locked = _current_geometry_locked()
-                if geometry_locked:
-                    print("🔒 Geometry updates are now locked (simulator-reported state).")
-                    print("   Use 'unlock-geometry' before changing geometries in config updates.")
             except ImportError:
                 rc = cmd_run(argparse.Namespace(config_file=str(config_path)))
-                if rc == 0:
-                    geometry_locked = True
-                    print("🔒 Geometry updates are now locked (shell fallback state).")
             except Exception as exc:
                 print(f"❌ Run failed: {exc}", file=sys.stderr)
-            continue
-
-        if cmd == "lock-geometry":
-            if shell_sim is not None and hasattr(shell_sim, "generateParticles"):
-                try:
-                    if hasattr(shell_sim, "hasBuiltGeometries") and not shell_sim.hasBuiltGeometries():
-                        shell_sim.buildGeometries()
-                    if hasattr(shell_sim, "hasGeneratedParticles") and not shell_sim.hasGeneratedParticles():
-                        shell_sim.generateParticles()
-                    geometry_locked = _current_geometry_locked()
-                    print("🔒 Geometry updates locked (simulator-reported state).")
-                except Exception as exc:
-                    print(f"Failed to lock geometry through simulator: {exc}", file=sys.stderr)
-            else:
-                geometry_locked = True
-                print("🔒 Geometry updates locked (shell fallback state).")
-            continue
-
-        if cmd == "unlock-geometry":
-            if shell_sim is not None and hasattr(shell_sim, "resetAfterGeometryChange"):
-                try:
-                    shell_sim.resetAfterGeometryChange()
-                    geometry_locked = _current_geometry_locked()
-                    print("🔓 Geometry updates unlocked (simulator-reported state).")
-                except Exception as exc:
-                    print(f"Failed to unlock geometry through simulator: {exc}", file=sys.stderr)
-            else:
-                geometry_locked = False
-                print("🔓 Geometry updates unlocked (shell fallback state).")
-            continue
-
-        if cmd == "lock-status":
-            locked = _current_geometry_locked()
-            status = "locked" if locked else "unlocked"
-            source = "simulator" if shell_sim is not None else "shell fallback"
-            print(f"Geometry lock status: {status} (source: {source})")
             continue
 
         print(f"Unknown command: {cmd}. Type 'help' for commands.", file=sys.stderr)
@@ -1334,6 +1312,50 @@ def cmd_shell(args: argparse.Namespace) -> int:
 # Argument parser
 # ---------------------------------------------------------------------------
 
+COMPLETION_SCRIPTS = {
+    "bash": """_sphinxsim_completion() {
+    local cur opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    opts="generate validate update run preview explore shell --help --version --generate-completion"
+    COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+    return 0
+}
+complete -F _sphinxsim_completion sphinxsim""",
+
+    "zsh": """#compdef sphinxsim
+_sphinxsim() {
+    local -a subcmds
+    subcmds=(
+        'generate:Generate a simulation config from a natural-language description'
+        'validate:Validate a JSON simulation config against the schema'
+        'update:Update an existing simulation config from an instruction'
+        'run:Run a simulation from a JSON config file'
+        'preview:Render an interactive geometry/BC preview of a JSON config file'
+        'explore:Ask schema/functionality questions using LLM'
+        'shell:Interactive shell for config workflow'
+    )
+    _describe 'sphinxsim commands' subcmds
+}
+_sphinxsim "$@" """,
+
+    "fish": """complete -c sphinxsim -f -a "generate" -d "Generate simulation config"
+complete -c sphinxsim -f -a "validate" -d "Validate JSON simulation config"
+complete -c sphinxsim -f -a "update" -d "Update existing simulation config"
+complete -c sphinxsim -f -a "run" -d "Run simulation from JSON config"
+complete -c sphinxsim -f -a "preview" -d "Render interactive geometry/BC preview"
+complete -c sphinxsim -f -a "explore" -d "Ask schema/functionality questions"
+complete -c sphinxsim -f -a "shell" -d "Interactive shell workflow" """
+}
+
+
+class GenerateCompletionAction(argparse.Action):
+    """Custom argparse action to print shell auto-completion scripts and exit."""
+    def __call__(self, parser, namespace, values, option_string=None):
+        shell = values.lower()
+        if shell in COMPLETION_SCRIPTS:
+            print(COMPLETION_SCRIPTS[shell].strip())
+        parser.exit(0)
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -1341,6 +1363,13 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Python UI for the SPHinXsys multi-physics C++ library.",
     )
     parser.add_argument("--version", action="version", version=f"sphinxsim {__version__}")
+
+    parser.add_argument(
+        "--generate-completion",
+        choices=["bash", "zsh", "fish"],
+        action=GenerateCompletionAction,
+        help="Generate shell auto-completion script for bash, zsh, or fish.",
+    )
 
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -1411,11 +1440,6 @@ def _build_parser() -> argparse.ArgumentParser:
         help="Path to JSON config file.",
     )
     prev.add_argument(
-        "--no-cpp",
-        action="store_true",
-        help="Skip C++ geometry build (no shapes rendered without C++).",
-    )
-    prev.add_argument(
         "--with-particles",
         action="store_true",
         help="Also run particle generation and overlay the latest generated particles per body.",
@@ -1454,6 +1478,43 @@ def _build_parser() -> argparse.ArgumentParser:
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------
+
+
+def _parse_shell_ai_cli_style(text: str) -> list[str] | None:
+    """Translate slash-prefixed shell commands to the shell command parser.
+
+    Examples:
+        /generate water dam break simulation cfg.json -> ["generate", "water dam break simulation", "cfg.json"]
+        /update simulate for 2 s -> ["update", "simulate for 2 s"]
+    """
+    if not text:
+        return None
+
+    stripped = text.strip()
+    if not stripped.startswith("/"):
+        return None
+
+    parts = shlex.split(stripped)
+    if not parts:
+        return None
+
+    command = parts[0][1:]
+    valid_commands = {"generate", "validate", "update", "run", "preview", "explore", "shell"}
+    if command not in valid_commands:
+        return None
+
+    if command in {"generate", "update", "explore"}:
+        if len(parts) < 2:
+            return [command]
+        if command == "generate":
+            if len(parts) == 2:
+                return [command, parts[1]]
+            return [command, " ".join(parts[1:-1]), parts[-1]]
+        if command == "update":
+            return [command, " ".join(parts[1:])]
+        return [command, " ".join(parts[1:])]
+
+    return [command] + parts[1:]
 
 
 def main(argv: list[str] | None = None) -> int:

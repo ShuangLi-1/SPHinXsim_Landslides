@@ -11,9 +11,10 @@ VTP mode (preferred)
     ``Shape<Name>.vtp`` polygon meshes are loaded and displayed by PyVista.
     The lightweight C++ ``GeometryBuilder`` is used for this stage.
 
-C++ bounds fallback
+C++ bounds cache
     When VTP files are not produced, accurate bounding boxes are queried
-    directly from the live C++ simulation object via ``getShapeBounds()``.
+    directly from the geometry builder via ``getShapeBounds()`` and reused
+    for preview rendering.
 
 The C++ extension (``_sphinxsys_core_2d`` or ``_sphinxsys_core_3d``) must
 be installed.  If it is not found an :class:`ImportError` is raised with
@@ -22,11 +23,12 @@ a clear install hint.
 
 from __future__ import annotations
 
-import os
+import json
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from sphinxsim.bindings.loader import load_sphinxsys_core, load_sphinxsys_core_nd
+from sphinxsim.bindings.loader import load_sphinxsys_core_nd
 
 
 # Gravity arrow length is always one fifth of the displayed model height.
@@ -178,7 +180,6 @@ class ConfigVisualizer:
         self.off_screen = off_screen
 
         self._vtp_dir: Path | None = None
-        self._bounds_sim: Any | None = None
         self._shape_bounds_cache: dict[str, Any] | None = None
         self._annotation_label_actors: list[dict[str, Any]] = []
 
@@ -234,8 +235,8 @@ class ConfigVisualizer:
 
     @property
     def used_cpp_bounds(self) -> bool:
-        """Whether the most recent preview used live C++ shape bounds."""
-        return self._bounds_sim is not None
+        """Whether the most recent preview cached C++ shape bounds."""
+        return self._shape_bounds_cache is not None
 
     @property
     def annotation_label_actors(self) -> list[dict[str, Any]]:
@@ -250,7 +251,6 @@ class ConfigVisualizer:
         self,
         *,
         title: str = "SPHinXsim - Configuration Preview",
-        use_cpp: bool = True,
         screenshot_path: str | Path | None = None,
         with_particles: bool = False,
     ) -> None:
@@ -260,9 +260,6 @@ class ConfigVisualizer:
         ----------
         title:
             Window title.
-        use_cpp:
-            When *True*, call ``buildGeometries()`` from the C++ extension.
-            Raises :class:`ImportError` if the extension is not installed.
         screenshot_path:
             When provided, save a screenshot of the render to this file path
             instead of opening an interactive window.  Forces off-screen
@@ -281,15 +278,14 @@ class ConfigVisualizer:
             ) from None
 
         ndim = self._spatial_dim()
+        # Every preview run rebuilds the current geometry, then falls back to
+        # the cached bounds if VTP meshes are unavailable.
+        self._shape_bounds_cache = None
         vtp_dir: Path | None = None
         latest_particle_vtps: dict[str, Path] = {}
-        if use_cpp:
-            vtp_dir = self._try_build_geometries(ndim, with_particles=with_particles)
-            if with_particles:
-                latest_particle_vtps = self._discover_latest_particle_vtps(vtp_dir)
-        else:
-            self._bounds_sim = None
-            self._shape_bounds_cache = None
+        vtp_dir = self._try_build_geometries(ndim, with_particles=with_particles)
+        if with_particles:
+            latest_particle_vtps = self._discover_latest_particle_vtps(vtp_dir)
         self._vtp_dir = vtp_dir
 
         # Screenshot mode implies off-screen rendering.
@@ -311,8 +307,8 @@ class ConfigVisualizer:
 
         if vtp_dir:
             mode_label = "VTP geometry"
-        elif self._bounds_sim is not None:
-            mode_label = "C++ bounds fallback"
+        elif self._shape_bounds_cache is not None:
+            mode_label = "C++ bounds cache"
         else:
             mode_label = "No C++ geometry"
         dim_label = "2-D" if ndim == 2 else "3-D"
@@ -508,17 +504,54 @@ class ConfigVisualizer:
             font="arial",
         )
 
+    def _runtime_config_payload(self) -> dict[str, Any]:
+        """Return a runtime payload with input paths resolved from config dir."""
+        payload = self.config.model_dump(exclude_none=True)
+        if self.config_path is None:
+            return payload
+
+        config_dir = self.config_path.parent
+        geometries = payload.get("geometries", {})
+        shapes = geometries.get("shapes", [])
+        if not isinstance(shapes, list):
+            return payload
+
+        def _absolutize(path_value: Any) -> Any:
+            if not isinstance(path_value, str) or not path_value:
+                return path_value
+            path = Path(path_value)
+            if path.is_absolute():
+                return str(path)
+            return str((config_dir / path).resolve())
+
+        for shape in shapes:
+            if not isinstance(shape, dict):
+                continue
+            if shape.get("type") == "triangle_mesh":
+                shape["file_name"] = _absolutize(shape.get("file_name"))
+            if shape.get("type") == "multipolygon":
+                polygons = shape.get("polygons", [])
+                if not isinstance(polygons, list):
+                    continue
+                for polygon in polygons:
+                    if not isinstance(polygon, dict):
+                        continue
+                    if polygon.get("type") == "data_file":
+                        polygon["file_name"] = _absolutize(polygon.get("file_name"))
+
+        return payload
+
     def _try_build_geometries(self, ndim: int, with_particles: bool = False) -> Path | None:
         """Run buildGeometries() and return the VTP output directory, or None.
 
-        Uses ``self.config_path`` directly as the C++ config input so the
-        original JSON file is the single source of truth. Geometry generation
-        uses the lightweight ``GeometryBuilder`` class. If VTPs are not
-        produced, a live :class:`SPHSimulation` is created as a fallback for
-        ``getShapeBounds()`` queries.
+        Writes a temporary runtime JSON derived from ``self.config`` where
+        relative input file paths are resolved from ``self.config_path``.
+        Geometry generation uses the lightweight ``GeometryBuilder`` class.
+        If VTPs are not produced, the builder-provided ``getShapeBounds()``
+        cache is reused for preview rendering.
         """
         if self.config_path is None:
-            self._bounds_sim = None
+            self._shape_bounds_cache = None
             return None
 
         try:
@@ -526,61 +559,63 @@ class ConfigVisualizer:
         except ImportError as exc:
             raise ImportError(str(exc)) from None
 
-        vtp_output_dir = self.project_root / ".build-temp" / "preview_geometry"
+        vtp_output_dir = self.project_root / ".build-temp" / "test_simulation"
         vtp_output_dir.mkdir(parents=True, exist_ok=True)
         output_subdir = vtp_output_dir / "output"
         for stale_dir in (vtp_output_dir, output_subdir):
             if not stale_dir.is_dir():
                 continue
-            # This directory is reserved for preview, so clean stale VTPs.
-            for stale_vtp in stale_dir.glob("*.vtp"):
+            # In shared output mode, only clean preview geometry meshes.
+            for stale_vtp in stale_dir.glob("Shape*.vtp"):
                 try:
                     stale_vtp.unlink()
                 except OSError:
                     pass
 
-        original_dir = os.getcwd()
-        # Change to the config file's directory so that relative paths in the
-        # JSON (e.g. STL file_path for 3-D triangle_mesh shapes) resolve correctly.
-        os.chdir(self.config_path.parent)
+        runtime_config_path: Path | None = None
         try:
-            builder = sph.GeometryBuilder(str(self.config_path))
+            tmp = tempfile.NamedTemporaryFile(
+                mode="w",
+                suffix=".json",
+                prefix="sphinxsim_preview_",
+                delete=False,
+                dir=str(vtp_output_dir),
+            )
+            json.dump(self._runtime_config_payload(), tmp, indent=2)
+            tmp.close()
+            runtime_config_path = Path(tmp.name)
+
+            builder = sph.GeometryBuilder(str(runtime_config_path))
             builder.resetInOutputRoot(str(vtp_output_dir))
             builder.buildGeometries()
+
+            try:
+                self._shape_bounds_cache = builder.getShapeBounds()
+            except Exception:
+                self._shape_bounds_cache = None
 
             # Optionally generate particles so preview can overlay the latest
             # body particle clouds if particle_generation is enabled.
             if with_particles and self.config.particle_generation.build_and_run:
-                sim = sph.SPHSimulation(str(self.config_path))
+                sim = sph.SPHSimulation(str(runtime_config_path))
                 sim.resetOutputRoot(str(vtp_output_dir), True)
                 sim.buildGeometries()
                 sim.generateParticles()
-
-            self._bounds_sim = None
-            self._shape_bounds_cache = None
         except Exception:
-            self._bounds_sim = None
             self._shape_bounds_cache = None
             return None
         finally:
-            os.chdir(original_dir)
+            if runtime_config_path is not None:
+                try:
+                    runtime_config_path.unlink()
+                except OSError:
+                    pass
 
         # VTPs land in <vtp_output_dir>/output/
         if output_subdir.is_dir() and any(output_subdir.glob("Shape*.vtp")):
             return output_subdir
         if any(vtp_output_dir.glob("Shape*.vtp")):
             return vtp_output_dir
-
-        # Fallback: build via SPHSimulation so we can query shape bounds.
-        try:
-            sim = sph.SPHSimulation(str(self.config_path))
-            sim.resetOutputRoot(str(vtp_output_dir))
-            sim.buildGeometries()
-            self._bounds_sim = sim
-            self._shape_bounds_cache = None
-        except Exception:
-            self._bounds_sim = None
-            self._shape_bounds_cache = None
 
         return None
 
@@ -865,7 +900,7 @@ class ConfigVisualizer:
             if mesh is None:
                 continue
 
-            colour = _INLET_OUTLET_COLOUR if ob.type.value == "in_outlet" else _REGION_COLOUR
+            colour = _INLET_OUTLET_COLOUR if ob.type.value == "boundary" else _REGION_COLOUR
             plotter.add_mesh(
                 mesh,
                 color=colour,
@@ -1176,7 +1211,7 @@ class ConfigVisualizer:
         """Return coarse lower/upper bounds for the scene.
 
         Used when ``system_domain`` is absent so the gravity arrow can still be
-        scaled to the scene.  Falls back to a unit box if no bounds arepreview
+        scaled to the scene.  Falls back to a unit box if no bounds are preview
         available.
         """
         lower = [0.0] * ndim
@@ -1213,15 +1248,9 @@ class ConfigVisualizer:
                 except Exception:
                     pass
 
-        if self._bounds_sim is not None:
-            try:
-                if self._shape_bounds_cache is None:
-                    self._shape_bounds_cache = self._bounds_sim.getShapeBounds()
-                if shape.name in self._shape_bounds_cache:
-                    lower, upper = self._shape_bounds_cache[shape.name]
-                    return _bounds_to_box(list(lower), list(upper))
-            except Exception:
-                self._shape_bounds_cache = {}
+        if self._shape_bounds_cache is not None and shape.name in self._shape_bounds_cache:
+            lower, upper = self._shape_bounds_cache[shape.name]
+            return _bounds_to_box(list(lower), list(upper))
 
         return None
 

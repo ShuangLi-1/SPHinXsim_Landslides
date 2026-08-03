@@ -30,6 +30,7 @@
 #define FLUID_DYNAMICS_BUILDER_H
 
 #include "base_simulation_builder.h"
+#include "sph_solver.h"
 
 namespace SPH
 {
@@ -58,24 +59,21 @@ struct FluidSolverConfig
 class FluidDynamicsBuilder
 {
   public:
-    template <class FluidType, class MethodContainerType, class InnerRelationType, class ContactRelationType>
+    template <class FluidType, class InnerRelationType, class ContactRelationType>
     static BaseDynamics<void> &buildDensityRegularization(
-        SPHSimulation &sim, MethodContainerType &method_container, InnerRelationType &inner_relation,
+        SPHSimulation &sim, MainMethods &method_container, InnerRelationType &inner_relation,
         ContactRelationType &contact_relation, const std::string &surface_type);
 
-    template <class MethodContainerType>
     static void buildBoundaryConditionsIfPresent(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+        SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
   private:
-    template <class MethodContainerType>
     static void addBoundaryCondition(
-        SPHSimulation &sim, MethodContainerType &main_methods, const json &config);
+        SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
-    template <class MethodContainerType>
     static fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
         OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
-        MethodContainerType &main_methods, const json &config);
+        MainMethods &main_methods, const json &config);
 };
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_H

@@ -3,7 +3,7 @@
     {
       "value": 1.0,
       "name": "Length",
-      "hint": "geometries.shapes[name=MultiPhaseBody].polygons[type=bounding_box].upper_bound"
+      "hint": "geometries.shapes[name=MultiPhaseBody].upper_bound"
     },
     {
       "value": 1.0,
@@ -35,20 +35,9 @@
     "shapes": [
       {
         "name": "MultiPhaseBody",
-        "type": "multipolygon",
-        "polygons": [
-          {
-            "operation": "union",
-            "type": "box",
-            "primitive": "EmitterBox"
-          },
-          {
-            "operation": "union",
-            "type": "bounding_box",
-            "lower_bound": [0.0, 0.0],
-            "upper_bound": [2.0, 0.5]
-          }
-        ]
+        "type": "bounding_box",
+        "lower_bound": [0.0, 0.0],
+        "upper_bound": [2.0, 0.5]
       },
       {
         "name": "WallBoundary",
@@ -74,6 +63,13 @@
         "name": "Emitter",
         "type": "region",
         "primitive": "EmitterBox"
+      },
+      {
+        "name": "FillLevel",
+        "type": "boundary",
+        "center": [1.0, 0.4],
+        "normal": [0.0, -1.0],
+        "radius": 1.0
       }
     ]
   },
@@ -82,7 +78,9 @@
     "settings": {
       "bodies": [
         {
-          "name": "MultiPhaseBody"
+          "name": "MultiPhaseBody",
+          "blocks": ["FillLevel"],
+          "inserts": ["Emitter"]
         },
         {
           "name": "WallBoundary",

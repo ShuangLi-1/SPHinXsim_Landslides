@@ -4,6 +4,60 @@ SPHinXsim provides a command-line interface for building, validating, updating, 
 
 ## Quick start
 
+### Shell auto-completion
+
+Generate completion scripts directly from the CLI:
+
+```bash
+sphinxsim --generate-completion bash
+sphinxsim --generate-completion zsh
+sphinxsim --generate-completion fish
+```
+
+You can evaluate the script for the current shell session:
+
+```bash
+# bash
+eval "$(sphinxsim --generate-completion bash)"
+
+# zsh
+eval "$(sphinxsim --generate-completion zsh)"
+
+# fish
+sphinxsim --generate-completion fish | source
+```
+
+For persistent completion, add the command to your shell startup file
+(`~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`).
+
+Troubleshooting:
+- If completion is not active in the current terminal, reload your shell config:
+
+```bash
+# bash
+source ~/.bashrc
+
+# zsh
+source ~/.zshrc
+
+# fish
+source ~/.config/fish/config.fish
+```
+
+- For zsh, ensure completion is initialized before evaluating the script:
+
+```zsh
+autoload -Uz compinit
+compinit
+eval "$(sphinxsim --generate-completion zsh)"
+```
+
+- To verify script output quickly:
+
+```bash
+sphinxsim --generate-completion bash | head
+```
+
 ### Interactive shell mode (recommended)
 
 The easiest way to get started is the interactive shell:
@@ -45,21 +99,20 @@ Configuration: WaterBody (fluid) + WallBoundary (solid)
 ✅ Simulation initialized
 🚀 Running simulation...
 
-> lock-status
-Geometry lock status: locked (source: simulator)
-
 > update "water flow with 5 mm resolution"
-Geometry is locked after particle generation. Unlock geometry first to apply geometry changes.
-
-> unlock-geometry
-🔓 Geometry updates unlocked (simulator-reported state).
-
 > update "water flow with 5 mm resolution"
 ✓ Updated config written to .../.build-temp/config.json
 ✓ Schema validation passed
 
 > exit
 Goodbye!
+```
+
+In shell mode you can also use slash-prefixed commands without quotes around the description, for example:
+
+```text
+sphinxsim> /generate water dam break simulation config.json
+sphinxsim> /update simulate for 2 s
 ```
 
 ### Shell commands
@@ -77,34 +130,29 @@ Inside the shell, you can use the following commands:
 | `explore "question"` | Ask the configured LLM questions about the simulator schema and capabilities |
 | `validate` | Reload the loaded file from disk and validate it |
 | `preview` | Render an interactive geometry/BC preview of the loaded config |
-| `preview --no-cpp` | Preview using schema bounding-box fallback only (no C++ build) |
 | `preview --with-particles` | Also run particle generation and overlay the latest generated particles per body |
 | `preview --screenshot FILE` | Save a screenshot to FILE instead of opening an interactive window |
 | `run` | Build and execute the loaded config |
-| `lock-geometry` | Lock geometry updates for the active shell session |
-| `unlock-geometry` | Unlock geometry updates (and reset downstream simulator state when attached) |
-| `lock-status` | Show whether geometry updates are locked |
 | `help` | Show available commands |
 | `exit` | Quit the shell |
 
 Notes:
 - `sphinxsim shell` starts with no file loaded.
 - Relative file paths inside the shell resolve from the current directory first, then fall back to `.build-temp/`.
+- In shell mode, slash-prefixed commands are also accepted, e.g. `/generate water dam break simulation config.json` or `/update simulate for 2 s`.
 - `validate` always reloads from disk, so external edits are picked up immediately.
 - In shell mode, `preview` keeps a persistent window and returns control to the prompt. Running `preview` again updates the same window.
 - For responsive persistent preview, install `pyvistaqt` and a Qt backend (`PySide6` or `PyQt5`).
 
-## Geometry lock behavior
+## Geometry update workflow
 
-The simulator now acts as the source of truth for geometry lock state during shell workflows.
+Shell workflows do not keep a persistent geometry lock state.
 
-- Geometry becomes locked after particle generation in the simulator lifecycle.
-- While locked, geometry-changing `update` operations are rejected.
-- Non-geometry updates (for example, end time changes) are still allowed.
-- `unlock-geometry` re-opens geometry edits. If a simulator instance is attached, this calls the simulator reset path so downstream particle/system/solver state is invalidated safely.
-- `lock-status` reports whether the lock state comes from the simulator or shell fallback state.
+- Geometry changes can be applied with `update` whenever needed.
+- After changing geometry, rerun `validate`, `preview`, or `run` to rebuild from the updated JSON config.
+- `run` always rebuilds the simulation from the current config before executing it.
 
-In non-interactive direct commands (`sphinxsim update ...`), there is no persistent simulator session, so lock enforcement is session policy rather than live simulator state.
+In non-interactive direct commands (`sphinxsim update ...`), the same config-first behavior applies: the updated JSON is the source of truth for the next `preview` or `run`.
 
 ## Direct commands (non-interactive)
 
@@ -199,7 +247,6 @@ Options:
 
 | Flag | Description |
 | --- | --- |
-| `--no-cpp` | Skip C++ geometry build; render only the system domain bounding box and annotations |
 | `--with-particles` | Also run particle generation and overlay the latest generated particles per body. Hides regular shapes; keeps oriented boxes and annotations. |
 | `--off-screen` | Render off-screen (no window) — useful for automated testing |
 | `--screenshot FILE` / `-s FILE` | Save a screenshot to FILE instead of opening a window. Implies `--off-screen`. |
@@ -274,24 +321,21 @@ sphinxsim shell
 > generate "2D heat transfer in a channel" config.json
 > validate
 > preview                   # inspect geometry and BCs interactively
-> preview --no-cpp          # quick bounding-box fallback if C++ not built
 > preview --with-particles  # overlay generated particles (hides shapes)
 > preview --screenshot preview.png   # save a screenshot for a report
 > run
 > exit
 ```
 
-### Example 6: Geometry edit safety loop in shell
+### Example 6: Geometry edit loop in shell
 
 ```bash
 sphinxsim shell
 > load config.json
 > run
-> lock-status
-> update "water flow with 5 mm resolution"     # rejected while locked
-> unlock-geometry
-> update "water flow with 5 mm resolution"     # now allowed
+> update "water flow with 5 mm resolution"
 > validate
+> preview
 > run
 ```
 
