@@ -2,15 +2,15 @@
 
 ## Introduction
 
-SPHinXsim is a Python and LLM-facing workflow for building, validating, updating, and running SPH simulations on top of the SPHinXsys C++ library.
+SPHinXsim is a Python and LLM-facing workflow for building, visualizing, validating, updating, and running SPH simulations on top of the SPHinXsys C++ library.
 
 The project is designed around explicit simulation configuration rather than opaque prompt-only execution. A user can describe a scenario in natural language, generate a structured JSON config, revise that config with further instructions, validate it against strict schemas, and execute it through the SPHinXsys backend.
 
 ## What this repository provides
 
-- A Python package, `sphinxsim`, with a CLI for config generation, update, validation, and execution.
+- A Python package, `sphinxsim`, with a CLI for config generation, update, visualization,  validation, and execution.
 - Pydantic-based schemas for geometry, materials, particle generation, solver settings, observers, constraints, and recording options.
-- LLM adapters with a local mock backend by default and OpenAI-backed generation when configured.
+- LLM adapters with a local mock backend by default and API service based generation when configured.
 - Native C++ bindings and simulation builders that bridge validated JSON configs to SPHinXsys runtime components.
 - Tests and documentation covering schema rules, CLI behavior, and integrated simulation workflows.
 
