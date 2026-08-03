@@ -656,6 +656,56 @@ class TestSimulationConfig:
                 }
             )
 
+    def test_particle_generation_inserts_accept_existing_oriented_box(self):
+        cfg = _make_minimal_fluid_config(
+            particle_generation={
+                "build_and_run": False,
+                "settings": {
+                    "bodies": [
+                        {"name": "WaterBody", "inserts": ["Inlet"]},
+                        {"name": "WallBoundary", "solid_body": {}},
+                    ],
+                    "relaxation_parameters": {"total_iterations": 1000},
+                },
+            }
+        )
+        assert cfg.particle_generation.settings is not None
+        assert cfg.particle_generation.settings.bodies[0].inserts == ["Inlet"]
+
+    def test_particle_generation_inserts_reject_unknown_oriented_box(self):
+        with pytest.raises(ValidationError, match="inserts entries must reference existing"):
+            _make_minimal_fluid_config(
+                particle_generation={
+                    "build_and_run": False,
+                    "settings": {
+                        "bodies": [
+                            {"name": "WaterBody", "inserts": ["MissingBox"]},
+                            {"name": "WallBoundary", "solid_body": {}},
+                        ],
+                        "relaxation_parameters": {"total_iterations": 1000},
+                    },
+                }
+            )
+
+    def test_particle_generation_body_unknown_field_warns_and_is_preserved(self):
+        with pytest.warns(UserWarning, match="contains unknown keys that are preserved"):
+            cfg = _make_minimal_fluid_config(
+                particle_generation={
+                    "build_and_run": False,
+                    "settings": {
+                        "bodies": [
+                            {"name": "WaterBody", "unknown_key": ["Inlet"]},
+                            {"name": "WallBoundary", "solid_body": {}},
+                        ],
+                        "relaxation_parameters": {"total_iterations": 1000},
+                    },
+                }
+            )
+
+        dumped = cfg.model_dump(mode="json")
+        assert "unknown_key" in dumped["particle_generation"]["settings"]["bodies"][0]
+        assert dumped["particle_generation"]["settings"]["bodies"][0]["unknown_key"] == ["Inlet"]
+
     def test_global_resolution_is_required(self):
         data = _make_minimal_fluid_config().model_dump(mode="json")
         del data["geometries"]["global_resolution"]

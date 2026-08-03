@@ -345,15 +345,44 @@ class GeometriesConfig(BaseModel):
 
 
 class RelaxationBodyConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     level_set: Optional[dict] = None
     dependent_bodies: List[str] = Field(default_factory=list)
 
+    @model_validator(mode="after")
+    def _warn_unknown_fields(self) -> "RelaxationBodyConfig":
+        extra = getattr(self, "__pydantic_extra__", None)
+        if extra:
+            warnings.warn(
+                "particle_generation.relaxation contains unknown keys that are preserved: "
+                + ", ".join(sorted(extra.keys())),
+                UserWarning,
+                stacklevel=2,
+            )
+        return self
+
 
 class ParticleGenerationBodyConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     name: str = Field(..., min_length=1)
     blocks: List[str] = Field(default_factory=list)
+    inserts: List[str] = Field(default_factory=list)
     solid_body: Optional[dict] = None
     relaxation: Optional[RelaxationBodyConfig] = None
+
+    @model_validator(mode="after")
+    def _warn_unknown_fields(self) -> "ParticleGenerationBodyConfig":
+        extra = getattr(self, "__pydantic_extra__", None)
+        if extra:
+            warnings.warn(
+                "particle_generation.settings.bodies contains unknown keys that are preserved: "
+                + ", ".join(sorted(extra.keys())),
+                UserWarning,
+                stacklevel=2,
+            )
+        return self
 
 
 class RelaxationParametersConfig(BaseModel):
@@ -367,9 +396,23 @@ class RelaxationConstraintConfig(BaseModel):
 
 
 class ParticleGenerationSettingsConfig(BaseModel):
+    model_config = ConfigDict(extra="allow")
+
     bodies: List[ParticleGenerationBodyConfig] = Field(..., min_length=1)
     relaxation_constraints: List[RelaxationConstraintConfig] = Field(default_factory=list)
     relaxation_parameters: RelaxationParametersConfig = Field(default_factory=RelaxationParametersConfig)
+
+    @model_validator(mode="after")
+    def _warn_unknown_fields(self) -> "ParticleGenerationSettingsConfig":
+        extra = getattr(self, "__pydantic_extra__", None)
+        if extra:
+            warnings.warn(
+                "particle_generation.settings contains unknown keys that are preserved: "
+                + ", ".join(sorted(extra.keys())),
+                UserWarning,
+                stacklevel=2,
+            )
+        return self
 
 
 class ParticleGenerationConfig(BaseModel):
@@ -1008,6 +1051,12 @@ class SimulationConfig(BaseModel):
                     if block_name not in oriented_box_names:
                         raise ValueError(
                             "particle_generation body blocks entries must reference existing "
+                            "geometries.oriented_boxes names"
+                        )
+                for insert_name in body.inserts:
+                    if insert_name not in oriented_box_names:
+                        raise ValueError(
+                            "particle_generation body inserts entries must reference existing "
                             "geometries.oriented_boxes names"
                         )
             for c in self.particle_generation.settings.relaxation_constraints:
