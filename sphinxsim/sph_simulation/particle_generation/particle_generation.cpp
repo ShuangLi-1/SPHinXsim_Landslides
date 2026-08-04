@@ -185,12 +185,12 @@ void ParticleGeneration ::addAllBodies(
         }
         bodies_config_.all_bodies_.push_back(common_body_config);
 
-        StdVec<OrientedBox *> blocks;
-        if (bd.contains("blocks"))
+        StdVec<OrientedBox *> blockers;
+        if (bd.contains("blockers"))
         {
-            for (const auto &block : bd.at("blocks"))
+            for (const auto &blocker : bd.at("blockers"))
             {
-                blocks.push_back(&config_manager.getEntity<OrientedBox>(block.get<std::string>()));
+                blockers.push_back(&config_manager.getEntity<OrientedBox>(blocker.get<std::string>()));
             }
         }
 
@@ -213,7 +213,7 @@ void ParticleGeneration ::addAllBodies(
         }
 #endif
 
-        real_body.generateParticles<BaseParticles, Lattice>(blocks, inserts);
+        real_body.generateParticles<BaseParticles, Lattice>(blockers, inserts);
     }
 }
 //=================================================================================================//

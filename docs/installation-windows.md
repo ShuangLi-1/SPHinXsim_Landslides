@@ -39,7 +39,6 @@ git clone https://github.com/microsoft/vcpkg.git ..\vcpkg
   spdlog `
   gtest `
   pybind11 `
-  vtk `
   nlohmann-json
 ```
 

@@ -84,7 +84,7 @@
       "bodies": [
         {
           "name": "MultiPhaseBody",
-          "blocks": ["FillLevel"],
+          "blockers": ["FillLevel"],
           "box_shape_inserts": ["EmitterInsert"]
         },
         {

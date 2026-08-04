@@ -644,13 +644,13 @@ class TestSimulationConfig:
                 ]
             )
 
-    def test_particle_generation_blocks_accept_existing_oriented_box(self):
+    def test_particle_generation_blockers_accept_existing_oriented_box(self):
         cfg = _make_minimal_fluid_config(
             particle_generation={
                 "build_and_run": False,
                 "settings": {
                     "bodies": [
-                        {"name": "WaterBody", "blocks": ["Inlet"]},
+                        {"name": "WaterBody", "blockers": ["Inlet"]},
                         {"name": "WallBoundary", "solid_body": {}},
                     ],
                     "relaxation_parameters": {"total_iterations": 1000},
@@ -658,16 +658,16 @@ class TestSimulationConfig:
             }
         )
         assert cfg.particle_generation.settings is not None
-        assert cfg.particle_generation.settings.bodies[0].blocks == ["Inlet"]
+        assert cfg.particle_generation.settings.bodies[0].blockers == ["Inlet"]
 
-    def test_particle_generation_blocks_reject_unknown_oriented_box(self):
-        with pytest.raises(ValidationError, match="blocks entries must reference existing"):
+    def test_particle_generation_blockers_reject_unknown_oriented_box(self):
+        with pytest.raises(ValidationError, match="blockers entries must reference existing"):
             _make_minimal_fluid_config(
                 particle_generation={
                     "build_and_run": False,
                     "settings": {
                         "bodies": [
-                            {"name": "WaterBody", "blocks": ["MissingBox"]},
+                            {"name": "WaterBody", "blockers": ["MissingBox"]},
                             {"name": "WallBoundary", "solid_body": {}},
                         ],
                         "relaxation_parameters": {"total_iterations": 1000},
