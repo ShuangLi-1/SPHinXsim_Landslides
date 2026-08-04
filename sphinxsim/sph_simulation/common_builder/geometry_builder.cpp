@@ -155,6 +155,25 @@ TransformGeometryBox GeometryBuilder::fetch_or_parseBox(
     }
 }
 //=================================================================================================//
+#ifdef SPHINXSYS_3D
+TransformGeometryCylinder GeometryBuilder::fetch_or_parseCylinder(
+    const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config)
+{
+    if (config.contains("primitive"))
+    {
+        return TransformGeometryCylinder(config_manager.getEntity<TransformGeometryCylinder>(
+            config.at("primitive").get<std::string>()));
+    }
+    else
+    {
+        Real radius = scaling_config.jsonToReal(config.at("radius"), "Length");
+        Real half_height = scaling_config.jsonToReal(config.at("half_height"), "Length");
+        Transform transform = scaling_config.jsonToTransform(config.at("transform"));
+        return TransformGeometryCylinder(transform, radius, half_height);
+    }
+}
+#endif
+//=================================================================================================//
 SystemDomainConfig GeometryBuilder::parseSystemDomainConfig(
     const ScalingConfig &scaling_config, const json &config)
 {
@@ -351,6 +370,14 @@ Shape *GeometryBuilder::addShape(
         return shape;
     }
 #else
+    if (type == "cylinder")
+    {
+        TransformGeometryCylinder cylinder = fetch_or_parseCylinder(scaling_config, config_manager, config);
+        GeometricShapeCylinder *shape = config_manager.emplaceEntity<GeometricShapeCylinder>(name, cylinder, name);
+        shape->writeGeometricShapeCylinderToVtp(scaling_factor);
+        return shape;
+    }
+
     if (type == "triangle_mesh")
     {
         Vec3d translation = Vec3d::Zero();
