@@ -85,11 +85,19 @@
         {
           "name": "MultiPhaseBody",
           "blockers": ["FillLevel"],
-          "box_shape_inserts": ["EmitterInsert"]
+          "box_shape_inserts": ["EmitterInsert"],
+          "relaxation": { "dependent_bodies": ["WallBoundary"] }
         },
         {
           "name": "WallBoundary",
           "solid_body": {}
+        }
+      ],
+      "relaxation_constraints": [
+        {
+          "body_name": "MultiPhaseBody",
+          "oriented_box": "FillLevel",
+          "type": "normal"
         }
       ],
       "relaxation_parameters": {

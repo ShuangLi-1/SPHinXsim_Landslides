@@ -410,8 +410,7 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
         {
             auto &body_part = real_body.addBodyPart<BodyRegionByParticle>(*insert);
             relaxation_constraints.add(
-                &main_methods.template addStateDynamics<ConstantConstraintCK, Vecd>(
-                    body_part, "KernelGradientIntegral", Vecd::Zero()));
+                &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
         }
     }
 
@@ -432,8 +431,7 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
         else
         {
             relaxation_constraints.add(
-                &main_methods.template addStateDynamics<ConstantConstraintCK, Vecd>(
-                    body_part, "KernelGradientIntegral", Vecd::Zero()));
+                &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
         }
     }
     return relaxation_constraints;
