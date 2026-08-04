@@ -470,6 +470,25 @@ class TestSimulationConfig:
 
         assert len(cfg.geometries.system_domain.lower_bound) == 3
         assert all(shape.type.value != "multipolygon" for shape in cfg.geometries.shapes)
+        assert any(shape.type.value == "cylinder" for shape in cfg.geometries.shapes)
+
+    def test_2d_config_rejects_cylinder_shape(self):
+        data = _make_minimal_fluid_config().model_dump(mode="json", exclude_none=True)
+        data["geometries"]["shapes"].append(
+            {
+                "name": "EmitterCylinder",
+                "type": "cylinder",
+                "radius": 0.05,
+                "half_height": 0.025,
+                "transform": {
+                    "translation": [0.5, 1.5],
+                    "rotation_angle": 0.0,
+                },
+            }
+        )
+
+        with pytest.raises(ValidationError, match="cylinder shapes are 3D-only"):
+            SimulationConfig.model_validate(data)
 
     def test_3d_repose_angle_fixture_uses_plastic_continuum(self):
         data_path = Path("tests/test_simulation/test_3d_simulation/data/repose_angle.json")
@@ -686,6 +705,39 @@ class TestSimulationConfig:
                     },
                 }
             )
+
+    def test_particle_generation_box_shape_inserts_reject_non_box_shape(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
+        data = json.loads(data_path.read_text())
+        data["particle_generation"]["settings"]["bodies"][0]["box_shape_inserts"] = ["WallBoundary"]
+
+        with pytest.raises(ValidationError, match="box-compatible shapes"):
+            SimulationConfig.model_validate(data)
+
+    def test_particle_generation_cylinder_shape_inserts_accept_existing_cylinder_shape(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
+        data = json.loads(data_path.read_text())
+
+        cfg = SimulationConfig.model_validate(data)
+
+        assert cfg.particle_generation.settings is not None
+        assert cfg.particle_generation.settings.bodies[0].cylinder_shape_inserts == ["EmitterCylinder"]
+
+    def test_particle_generation_cylinder_shape_inserts_reject_unknown_shape(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
+        data = json.loads(data_path.read_text())
+        data["particle_generation"]["settings"]["bodies"][0]["cylinder_shape_inserts"] = ["MissingShape"]
+
+        with pytest.raises(ValidationError, match="cylinder_shape_inserts entries must reference existing"):
+            SimulationConfig.model_validate(data)
+
+    def test_particle_generation_cylinder_shape_inserts_reject_non_cylinder_shape(self):
+        data_path = Path("tests/test_simulation/test_3d_simulation/data/dambreak.json")
+        data = json.loads(data_path.read_text())
+        data["particle_generation"]["settings"]["bodies"][0]["cylinder_shape_inserts"] = ["WallInnerBox"]
+
+        with pytest.raises(ValidationError, match="must reference cylinder shapes"):
+            SimulationConfig.model_validate(data)
 
     def test_particle_generation_body_unknown_field_warns_and_is_preserved(self):
         with pytest.warns(UserWarning, match="contains unknown keys that are preserved"):
