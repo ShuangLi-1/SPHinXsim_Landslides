@@ -17,8 +17,8 @@
       {
         "name": "EmitterCylinder",
         "type": "cylinder",
-        "radius": 0.05,
-        "half_height": 0.025,
+        "radius": 0.1,
+        "half_height": 0.1,
         "transform": {
           "translation": [0.5, 1.5, 0.25],
           "rotation_angle": 0.7854,
@@ -43,6 +43,18 @@
         "sub_shapes": ["WallOuterBox", "WallInnerBox"],
         "operations": ["union", "subtraction"]
       }
+    ],
+    "oriented_boxes": [
+      {
+        "name": "Emitter",
+        "type": "region",
+        "half_size": [0.1, 0.125, 0.125],
+        "transform": {
+          "translation": [0.5, 1.5, 0.25],
+          "rotation_angle": 0.7854,
+          "rotation_axis": [0.0, 0.0, 1.0]
+        }
+      }
     ]
   },
 
@@ -51,7 +63,8 @@
     "settings": {
       "bodies": [
         {
-          "name": "WaterBody"
+          "name": "WaterBody",
+          "cylinder_shape_inserts": ["EmitterCylinder"]
         },
         {
           "name": "WallBoundary",
@@ -70,7 +83,8 @@
       "material": {
         "type": "weakly_compressible_fluid",
         "density": 1.0
-      }
+      },
+      "particle_reserve_factor": 1.0
     }
   ],
 
@@ -79,6 +93,19 @@
       "name": "WallBoundary",
       "material": {
         "type": "rigid_body"
+      }
+    }
+  ],
+
+  "fluid_boundary_conditions": [
+    {
+      "body_name": "WaterBody",
+      "oriented_box": "Emitter",
+      "type": "emitter",
+      "inflow_speed": 2.0,
+      "on_schedule": {
+        "switch_on_time": 1.0,
+        "duration": 5.0
       }
     }
   ],
@@ -103,7 +130,7 @@
 
   "solver_parameters": {
     "end_time": 20.0,
-    "output_interval": 0.01,
+    "output_interval": 0.1,
     "screen_interval": 100,
     "fluid_dynamics": {
       "acoustic_cfl": 0.6,
