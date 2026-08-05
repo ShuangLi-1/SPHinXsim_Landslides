@@ -53,6 +53,7 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
         [&]()
         {
             randomize_particle_position.exec();
+            relaxation_pipeline_.run_hooks(RelaxationHookPoint::Initialization);
             dummy_cell_linked_list.exec();
 
             UnsignedInt ite_p = 0;
@@ -194,7 +195,8 @@ void ParticleGeneration ::addAllBodies(
             }
         }
 
-        StdVec<Shape *> inserts;
+        StdVec<Shape *> &inserts =
+            *config_manager.emplaceEntity<StdVec<Shape *>>(body_name + "inserts", StdVec<Shape *>{});
         if (bd.contains("box_shape_inserts"))
         {
             for (const auto &insert : bd.at("box_shape_inserts"))
@@ -399,6 +401,20 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
     MainMethods &main_methods, const json &config)
 {
     ParticleDynamicsGroup &relaxation_constraints = main_methods.addParticleDynamicsGroup();
+
+    for (const auto &body_config : bodies_config_.all_bodies_)
+    {
+        const std::string body_name = body_config.name_;
+        RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
+        StdVec<Shape *> &inserts = config_manager.getEntity<StdVec<Shape *>>(body_name + "inserts");
+        for (const auto &insert : inserts)
+        {
+            auto &body_part = real_body.addBodyPart<BodyRegionByParticle>(*insert);
+            relaxation_constraints.add(
+                &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
+        }
+    }
+
     for (const auto &rc : config)
     {
         const std::string body_name = rc.at("body_name").get<std::string>();
@@ -412,12 +428,15 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
             relaxation_constraints.add(
                 &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
                     body_part, "KernelGradientIntegral", 0));
+
+            auto &initial_fix = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+            relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
+                                             { initial_fix.exec(); });
         }
         else
         {
             relaxation_constraints.add(
-                &main_methods.template addStateDynamics<ConstantConstraintCK, Vecd>(
-                    body_part, "KernelGradientIntegral", Vecd::Zero()));
+                &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
         }
     }
     return relaxation_constraints;
