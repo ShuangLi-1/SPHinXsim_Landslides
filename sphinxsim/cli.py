@@ -696,11 +696,56 @@ class _ShellPreviewRuntime:
         content = QtWidgets.QWidget(dock)
         content.setObjectName("sphinxsim-json-editor-content")
         content.setStyleSheet(
-            "QWidget#sphinxsim-json-editor-content { background: #e9e9e9; color: #202020; }"
-            "QLabel { color: #202020; }"
-            "QPushButton { min-height: 28px; padding: 2px 12px; border: 1px solid #9d9d9d; border-radius: 3px; "
-            "background: #d2d2d2; color: #171717; font-weight: 600; }"
-            "QPushButton:hover { background: #c1c1c1; }"
+            "QWidget#sphinxsim-json-editor-content {"
+            "    background: #e9e9e9;"
+            "    color: #202020;"
+            "}"
+            "QLabel {"
+            "    color: #202020;"
+            "}"
+            "QToolButton {"
+            "    min-height: 24px;"
+            "    padding: 2px 5px;"
+            "    border: 1px solid transparent;"
+            "    border-radius: 3px;"
+            "    background: transparent;"
+            "    color: #303030;"
+            "}"
+            "QToolButton:hover {"
+            "    background: #d2d2d2;"
+            "    border: 1px solid #b0b0b0;"
+            "    color: #171717;"
+            "}"
+            "QToolButton:pressed {"
+            "    background: #c4c4c4;"
+            "    border: 1px solid #969696;"
+            "    color: #101010;"
+            "}"
+            "QToolButton:disabled {"
+            "    background: transparent;"
+            "    border: 1px solid transparent;"
+            "    color: #7a7a7a;"
+            "}"
+            "QPushButton {"
+            "    min-height: 28px;"
+            "    padding: 2px 12px;"
+            "    border: 1px solid #9d9d9d;"
+            "    border-radius: 3px;"
+            "    background: #d2d2d2;"
+            "    color: #171717;"
+            "    font-weight: 600;"
+            "}"
+            "QPushButton:hover {"
+            "    background: #c1c1c1;"
+            "}"
+            "QPushButton:pressed {"
+            "    background: #b5b5b5;"
+            "}"
+            "QPushButton:disabled {"
+            "    background: #dedede;"
+            "    border: 1px solid #bdbdbd;"
+            "    color: #777777;"
+            "}"
         )
         layout = QtWidgets.QVBoxLayout(content)
         layout.setContentsMargins(8, 8, 8, 8)
@@ -714,8 +759,10 @@ class _ShellPreviewRuntime:
             "min-height: 27px; padding: 1px 7px; border: 1px solid #a6a6a6; border-radius: 3px; "
             "background: #f7f7f7; color: #202020;"
         )
-        tools_row = QtWidgets.QHBoxLayout()
-        tools_row.setSpacing(4)
+        tools_grid = QtWidgets.QGridLayout()
+        tools_grid.setHorizontalSpacing(4)
+        tools_grid.setVerticalSpacing(4)
+        tools_grid.setContentsMargins(0, 0, 0, 0)
         expand_button = QtWidgets.QToolButton(content)
         expand_button.setText("Expand")
         collapse_button = QtWidgets.QToolButton(content)
@@ -734,7 +781,7 @@ class _ShellPreviewRuntime:
         move_up_button.setText("Move up")
         move_down_button = QtWidgets.QToolButton(content)
         move_down_button.setText("Move down")
-        for button in (
+        tool_buttons = (
             expand_button,
             collapse_button,
             revert_button,
@@ -744,10 +791,23 @@ class _ShellPreviewRuntime:
             remove_item_button,
             move_up_button,
             move_down_button,
-        ):
-            button.setToolButtonStyle(QtCore.Qt.ToolButtonStyle.ToolButtonTextOnly)
-            tools_row.addWidget(button)
-        tools_row.addStretch(1)
+        )
+        for index, button in enumerate(tool_buttons):
+            button.setToolButtonStyle(
+                QtCore.Qt.ToolButtonStyle.ToolButtonTextOnly
+            )
+            button.setMinimumWidth(0)
+            button.setSizePolicy(
+                QtWidgets.QSizePolicy.Policy.Expanding,
+                QtWidgets.QSizePolicy.Policy.Fixed,
+            )
+            row = 0 if index < 5 else 1
+            column = index if index < 5 else index - 5
+            tools_grid.addWidget(button, row, column)
+            button.setVisible(False)
+
+        for column in range(5):
+            tools_grid.setColumnStretch(column, 1)
         tree = QtWidgets.QTreeWidget(content)
         tree.setObjectName("sphinxsim-json-editor-tree")
         tree.setColumnCount(2)
@@ -756,7 +816,7 @@ class _ShellPreviewRuntime:
         tree.setAlternatingRowColors(True)
         tree.setUniformRowHeights(True)
         tree.setIndentation(16)
-        tree.setColumnWidth(0, 175)
+        tree.setColumnWidth(0, 145)
         tree.header().setStretchLastSection(True)
         tree.setStyleSheet(
             "QTreeWidget { border: 1px solid #a6a6a6; border-radius: 3px; background: #eeeeee; color: #202020; }"
@@ -781,17 +841,47 @@ class _ShellPreviewRuntime:
         button_row.addWidget(apply_button)
         layout.addWidget(hint)
         layout.addWidget(filter_box)
-        layout.addLayout(tools_row)
         layout.addWidget(tree, 1)
         layout.addWidget(status)
         layout.addLayout(button_row)
         dock.setWidget(content)
         app_window.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, dock)
-        dock.resize(520, max(500, int(getattr(self.plotter, "window_size", (1400, 800))[1])))
-        try:
-            app_window.resizeDocks([dock], [520], QtCore.Qt.Orientation.Horizontal)
-        except Exception:
-            pass
+
+        json_editor_initial_width = 360
+        json_editor_minimum_width = 260
+
+        dock.setMinimumWidth(json_editor_minimum_width)
+        dock.setMaximumWidth(16777215)
+        content.setMinimumWidth(0)
+        content.setMaximumWidth(16777215)
+        tree.setMinimumWidth(0)
+        tree.setMaximumWidth(16777215)
+
+        dock.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Preferred,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        content.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+        tree.setSizePolicy(
+            QtWidgets.QSizePolicy.Policy.Expanding,
+            QtWidgets.QSizePolicy.Policy.Expanding,
+        )
+
+        def _set_initial_json_editor_width() -> None:
+            try:
+                app_window.resizeDocks(
+                    [dock],
+                    [json_editor_initial_width],
+                    QtCore.Qt.Orientation.Horizontal,
+                )
+            except Exception:
+                pass
+
+        QtCore.QTimer.singleShot(0, _set_initial_json_editor_width)
+        QtCore.QTimer.singleShot(100, _set_initial_json_editor_width)
 
         editor_state: dict[str, Any] = {
             "payload": {},
