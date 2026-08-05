@@ -186,7 +186,9 @@ void ParticleGeneration ::addAllBodies(
         }
         bodies_config_.all_bodies_.push_back(common_body_config);
 
-        StdVec<OrientedBox *> blockers;
+        StdVec<OrientedBox *> &blockers = *config_manager.emplaceEntity<
+            StdVec<OrientedBox *>>(body_name + "Blockers", StdVec<OrientedBox *>{});
+
         if (bd.contains("blockers"))
         {
             for (const auto &blocker : bd.at("blockers"))
@@ -195,8 +197,9 @@ void ParticleGeneration ::addAllBodies(
             }
         }
 
-        StdVec<Shape *> &inserts =
-            *config_manager.emplaceEntity<StdVec<Shape *>>(body_name + "inserts", StdVec<Shape *>{});
+        StdVec<Shape *> &inserts = *config_manager.emplaceEntity<
+            StdVec<Shape *>>(body_name + "Inserts", StdVec<Shape *>{});
+
         if (bd.contains("box_shape_inserts"))
         {
             for (const auto &insert : bd.at("box_shape_inserts"))
@@ -406,7 +409,21 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
     {
         const std::string body_name = body_config.name_;
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
-        StdVec<Shape *> &inserts = config_manager.getEntity<StdVec<Shape *>>(body_name + "inserts");
+
+        StdVec<OrientedBox *> &blockers = config_manager.getEntity<StdVec<OrientedBox *>>(body_name + "Blockers");
+        for (const auto &blocker : blockers)
+        {
+            auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(*blocker);
+            relaxation_constraints.add(
+                &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
+                    body_part, "KernelGradientIntegral", 0));
+
+            auto &initial_constraint = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+            relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
+                                             { initial_constraint.exec(); });
+        }
+
+        StdVec<Shape *> &inserts = config_manager.getEntity<StdVec<Shape *>>(body_name + "Inserts");
         for (const auto &insert : inserts)
         {
             auto &body_part = real_body.addBodyPart<BodyRegionByParticle>(*insert);
@@ -429,9 +446,9 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
                 &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
                     body_part, "KernelGradientIntegral", 0));
 
-            auto &initial_fix = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+            auto &initial_constraint = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
             relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
-                                             { initial_fix.exec(); });
+                                             { initial_constraint.exec(); });
         }
         else
         {

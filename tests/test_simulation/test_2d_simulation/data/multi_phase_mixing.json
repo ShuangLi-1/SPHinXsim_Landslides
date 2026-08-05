@@ -93,13 +93,6 @@
           "solid_body": {}
         }
       ],
-      "relaxation_constraints": [
-        {
-          "body_name": "MultiPhaseBody",
-          "oriented_box": "FillLevel",
-          "type": "normal"
-        }
-      ],
       "relaxation_parameters": {
         "total_iterations": 1000
       }
