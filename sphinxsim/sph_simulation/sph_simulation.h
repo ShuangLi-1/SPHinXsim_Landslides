@@ -96,11 +96,11 @@ class SPHSimulation
     StagePipeline<InitializationHookPoint> initialization_pipeline_;
     StagePipeline<SimulationHookPoint> simulation_pipeline_;
     std::unique_ptr<RecordingBuilder> recording_builder_ptr_;
-    std::unique_ptr<ParticleGeneration> particle_generation_ptr_;
     std::unique_ptr<SPHSystem> sph_system_ptr_;
     std::unique_ptr<SPHSolver> sph_solver_ptr_;
     UniquePtrsKeeper<Contact<>> structure_contacts_keeper_;
     bool geometry_built_{false};
+    bool particles_generated_{false};
     bool executable_simulation_state_ready_{false};
     json loadConfig();
 };

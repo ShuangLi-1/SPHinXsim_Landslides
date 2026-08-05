@@ -76,10 +76,11 @@ void SPHSimulation::generateParticles()
     json config = loadConfig().at("particle_generation");
     if (config.at("build_and_run").get<bool>())
     {
-        particle_generation_ptr_ = std::make_unique<ParticleGeneration>();
-        particle_generation_ptr_->buildParticleGeneration(*this, config.at("settings"));
-        particle_generation_ptr_->runRelaxation();
+        ParticleGeneration particle_generation;
+        particle_generation.buildParticleGeneration(*this, config.at("settings"));
+        particle_generation.runRelaxation();
     }
+    particles_generated_ = true;
 }
 //=================================================================================================//
 void SPHSimulation::buildGeometries()
@@ -94,10 +95,10 @@ void SPHSimulation::buildGeometries()
 //=================================================================================================//
 void SPHSimulation::buildSimulation()
 {
-    if (!particle_generation_ptr_)
+    if (!particles_generated_)
     {
-        std::cerr << "SPHSimulation::buildSimulation: ParticleGeneration not found. "
-                     "Call createParticlesGeneration() before buildSimulation().\n";
+        std::cerr << "SPHSimulation::buildSimulation: particles not generated. "
+                     "Call generateParticles() before buildSimulation().\n";
         exit(1);
     }
 
