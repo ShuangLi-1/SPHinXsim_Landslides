@@ -390,7 +390,8 @@ def cmd_run(args: argparse.Namespace) -> int:
     # Write the Pydantic-validated config to a temp file before passing to C++.
     validated_config_path: str | None = None
     tmp_cfg = tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", delete=False, prefix="sphinxsim_run_"
+        mode="w", suffix=".json", delete=False, prefix="sphinxsim_run_",
+        dir=str(config_path.parent),
     )
     try:
         tmp_cfg.write(config.model_dump_json(indent=2, exclude_none=True))
@@ -402,6 +403,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     try:
         sim = sph.SPHSimulation(validated_config_path)
+        print(f"Preview runtime config written to: {validated_config_path}")
 
         # Create temp directory in project root, not relative to cwd
         output_dir = PROJECT_ROOT / ".build-temp" / "test_simulation"

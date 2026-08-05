@@ -13,7 +13,8 @@ namespace SPH
 SPHSimulation::SPHSimulation(const fs::path &config_path)
     : config_path_(config_path), recording_builder_ptr_(std::make_unique<RecordingBuilder>())
 {
-    IO::initEnvironment();
+    IOEnvironment &io_env = IO::initEnvironment();
+    io_env.resetInputFolder((config_path_.parent_path()).string(), true);
 }
 //=================================================================================================//
 SPHSimulation::~SPHSimulation() = default;
