@@ -63,6 +63,9 @@ class GeometryBuilder
     //----------------------------------------------------------------------
     // static functions for geometry construction used in simulation builder
     //----------------------------------------------------------------------
+    static std::map<std::string, std::pair<std::vector<double>, std::vector<double>>>
+    getShapeBoundsFromConfigManager(EntityManager &config_manager);
+
     static void createGeometries(EntityManager &config_manager, const json &config);
     static BoundingBoxd parseBoundingBox(const ScalingConfig &scaling_config, const json &config);
     static TransformGeometryBox parseBox(const ScalingConfig &scaling_config, const json &config);

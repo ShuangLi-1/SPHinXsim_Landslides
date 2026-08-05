@@ -56,6 +56,7 @@ class SPHSimulation
     ~SPHSimulation();
     void resetOutputRoot(const fs::path &output_root, bool keep_existing = false);
     void buildGeometries();
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> getShapeBounds();
     void generateParticles();
     void buildSimulation();
     void initializeSimulation();
