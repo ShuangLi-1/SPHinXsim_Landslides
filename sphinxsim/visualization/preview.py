@@ -343,43 +343,6 @@ class ConfigVisualizer:
             color="cyan",
         )
 
-    def _runtime_config_payload(self) -> dict[str, Any]:
-        """Return a runtime payload with input paths resolved from config dir."""
-        payload = self.config.model_dump(exclude_none=True)
-        if self.config_path is None:
-            return payload
-
-        config_dir = self.config_path.parent
-        geometries = payload.get("geometries", {})
-        shapes = geometries.get("shapes", [])
-        if not isinstance(shapes, list):
-            return payload
-
-        def _absolutize(path_value: Any) -> Any:
-            if not isinstance(path_value, str) or not path_value:
-                return path_value
-            path = Path(path_value)
-            if path.is_absolute():
-                return str(path)
-            return str((config_dir / path).resolve())
-
-        for shape in shapes:
-            if not isinstance(shape, dict):
-                continue
-            if shape.get("type") == "triangle_mesh":
-                shape["file_name"] = _absolutize(shape.get("file_name"))
-            if shape.get("type") == "multipolygon":
-                polygons = shape.get("polygons", [])
-                if not isinstance(polygons, list):
-                    continue
-                for polygon in polygons:
-                    if not isinstance(polygon, dict):
-                        continue
-                    if polygon.get("type") == "data_file":
-                        polygon["file_name"] = _absolutize(polygon.get("file_name"))
-
-        return payload
-
     def _try_build_geometries(self, ndim: int, with_particles: bool = False) -> Path | None:
         """Run buildGeometries() and return the VTP output directory, or None.
 
@@ -418,9 +381,9 @@ class ConfigVisualizer:
                 suffix=".json",
                 prefix="sphinxsim_preview_",
                 delete=False,
-                dir=str(vtp_output_dir),
+                dir=str(self.config_path.parent),
             )
-            json.dump(self._runtime_config_payload(), tmp, indent=2)
+            json.dump(self.config.model_dump(exclude_none=True), tmp, indent=2)
             tmp.close()
             runtime_config_path = Path(tmp.name)
 
