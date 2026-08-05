@@ -163,7 +163,7 @@
   "extra_state_recording": [
     {
       "name": "MultiPhaseBody",
-      "variables": [{ "real_type": ["Density"] }]
+      "variables": [{ "real_type": ["Density", "Compression"] }]
     }
   ],
 

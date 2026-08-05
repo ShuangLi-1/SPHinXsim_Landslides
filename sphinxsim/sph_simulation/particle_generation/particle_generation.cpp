@@ -53,6 +53,7 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
         [&]()
         {
             randomize_particle_position.exec();
+            relaxation_pipeline_.run_hooks(RelaxationHookPoint::Initialization);
             dummy_cell_linked_list.exec();
 
             UnsignedInt ite_p = 0;
@@ -427,6 +428,10 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
             relaxation_constraints.add(
                 &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
                     body_part, "KernelGradientIntegral", 0));
+
+            auto &initial_fix = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+            relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
+                                             { initial_fix.exec(); });
         }
         else
         {
