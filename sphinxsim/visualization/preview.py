@@ -79,6 +79,53 @@ def _body_colour(body_name: str, config: "SimulationConfig") -> tuple[float, flo
     return _UNKNOWN_COLOUR
 
 
+def _legend_entries_for_config(
+    config: "SimulationConfig",
+    particle_body_names: set[str] | None = None,
+) -> list[tuple[str, tuple[float, float, float]]]:
+    """Return semantic legend entries for the bodies currently displayed.
+
+    The legend must describe the validated configuration rather than infer a
+    material class from a colour. In particular, a fluid body with material
+    type ``weakly_compressible_fluid`` is not a granular body.
+    """
+    from sphinxsim.visualization.annotations import collect_preview_body_information
+
+    entries: list[tuple[str, tuple[float, float, float]]] = []
+    seen: set[tuple[str, tuple[float, float, float]]] = set()
+
+    for info in collect_preview_body_information(config):
+        body_type = str(info.get("body_type", ""))
+        material_model = str(info.get("material_model") or "Material")
+        colour = _FLUID_COLOUR if body_type == "Fluid body" else _CONTINUUM_COLOUR
+        key = (material_model, colour)
+        if key not in seen:
+            entries.append(key)
+            seen.add(key)
+
+    # Particle overlays can be displayed without a corresponding material
+    # entry. Name these from the actual body instead of calling them granular.
+    for body_name in sorted(particle_body_names or set()):
+        colour = _body_colour(body_name, config)
+        if any(body.name == body_name for body in config.fluid_bodies):
+            label = "Fluid particles"
+        elif any(body.name == body_name for body in config.continuum_bodies):
+            label = "Continuum particles"
+        elif any(body.name == body_name for body in config.solid_bodies):
+            label = "Rigid-boundary particles"
+        else:
+            label = f"Particles: {body_name}"
+        key = (label, colour)
+        if key not in seen:
+            entries.append(key)
+            seen.add(key)
+
+    if config.solid_bodies:
+        entries.append(("Rigid boundary", _SOLID_COLOUR))
+
+    return entries
+
+
 # ---------------------------------------------------------------------------
 # Geometry helpers
 # ---------------------------------------------------------------------------
@@ -1022,28 +1069,10 @@ class ConfigVisualizer:
             )
 
         # --- Legend ---
-        legend_entries = []
-        from sphinxsim.visualization.annotations import collect_preview_body_information
-
-        seen_materials: set[tuple[str, tuple[float, float, float]]] = set()
-        for info in collect_preview_body_information(config):
-            if info.get("material_type") == "fluid":
-                legend_name = str(info.get("material_model") or "Fluid material")
-                colour = _FLUID_COLOUR
-            else:
-                legend_name = "Granular material"
-                colour = _CONTINUUM_COLOUR
-            key = (legend_name, colour)
-            if key not in seen_materials:
-                legend_entries.append([legend_name, colour, "rectangle"])
-                seen_materials.add(key)
-        if particle_vtps and not legend_entries:
-            legend_entries.append(["Granular material", _CONTINUUM_COLOUR, "rectangle"])
-        if config.solid_bodies:
-            legend_entries.append(["Rigid boundary", _SOLID_COLOUR, "rectangle"])
+        legend_entries = _legend_entries_for_config(config, set(particle_vtps))
         legend = plotter.add_legend(
             [
-                (entry[0], [int(c * 255) for c in entry[1]], entry[2])
+                (entry[0], [int(c * 255) for c in entry[1]], "rectangle")
                 for entry in legend_entries
             ],
             # A larger legend viewport gives the rectangular material swatches

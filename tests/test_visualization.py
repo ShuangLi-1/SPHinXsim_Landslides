@@ -263,6 +263,18 @@ class TestPreviewMaterialInformation:
         assert particle_resolution_label(config) == ("Particle spacing", "0.002 m")
 
 
+class TestPreviewLegend:
+    def test_fluid_legend_uses_material_model_not_granular_label(self, fluid_config):
+        from sphinxsim.visualization.preview import _legend_entries_for_config
+
+        entries = _legend_entries_for_config(fluid_config)
+        labels = [label for label, _ in entries]
+
+        assert "Weakly compressible fluid" in labels
+        assert "Granular material" not in labels
+        assert "Rigid boundary" in labels
+
+
 class TestOrientedBoxLabel:
     def test_label_includes_name_and_type(self, fluid_config):
         from sphinxsim.visualization.annotations import oriented_box_label
