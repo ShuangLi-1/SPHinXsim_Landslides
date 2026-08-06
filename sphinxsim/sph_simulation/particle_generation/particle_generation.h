@@ -121,7 +121,7 @@ class ParticleGeneration
     ParticleDynamicsGroup &addBodyNormalDirection(
         RelaxationSystem &relaxation_system, EntityManager &config_manager, MainMethods &main_methods);
 
-    ParticleDynamicsGroup &addRelaxationConstraints(
+    void addRelaxationConstraintsIfPresent(
         RelaxationSystem &relaxation_system, EntityManager &config_manager,
         MainMethods &main_methods, const json &config);
 };

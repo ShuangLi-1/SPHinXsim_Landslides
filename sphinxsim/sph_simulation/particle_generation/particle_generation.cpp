@@ -82,14 +82,7 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Define optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-    if (config.contains("relaxation_constraints"))
-    {
-        auto &relaxation_constraints = addRelaxationConstraints(
-            relaxation_system, config_manager, main_methods, config.at("relaxation_constraints"));
-        relaxation_pipeline_.insert_hook(RelaxationHookPoint::Constraints, [&]()
-                                         { relaxation_constraints.exec(); });
-    }
-
+    addRelaxationConstraintsIfPresent(relaxation_system, config_manager, main_methods, config);
     //----------------------------------------------------------------------
     //	Run on CPU after relaxation finished and output results.
     //----------------------------------------------------------------------
@@ -399,7 +392,7 @@ ParticleDynamicsGroup &ParticleGeneration::addBodyNormalDirection(
     return normal_direction_update;
 }
 //=================================================================================================//
-ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
+void ParticleGeneration::addRelaxationConstraintsIfPresent(
     RelaxationSystem &relaxation_system, EntityManager &config_manager,
     MainMethods &main_methods, const json &config)
 {
@@ -432,31 +425,37 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
         }
     }
 
-    for (const auto &rc : config)
+    if (config.contains("relaxation_constraints"))
     {
-        const std::string body_name = rc.at("body_name").get<std::string>();
-        RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
-        OrientedBox &constraint_region = config_manager.getEntity<
-            OrientedBox>(rc.at("oriented_box").get<std::string>());
-        auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(constraint_region);
-        std::string type = rc.at("type").get<std::string>();
-        if (type == "normal")
-        {
-            relaxation_constraints.add(
-                &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
-                    body_part, "KernelGradientIntegral", 0));
 
-            auto &initial_constraint = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
-            relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
-                                             { initial_constraint.exec(); });
-        }
-        else
+        for (const auto &rc : config.at("relaxation_constraints"))
         {
-            relaxation_constraints.add(
-                &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
+            const std::string body_name = rc.at("body_name").get<std::string>();
+            RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
+            OrientedBox &constraint_region = config_manager.getEntity<
+                OrientedBox>(rc.at("oriented_box").get<std::string>());
+            auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(constraint_region);
+            std::string type = rc.at("type").get<std::string>();
+            if (type == "normal")
+            {
+                relaxation_constraints.add(
+                    &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
+                        body_part, "KernelGradientIntegral", 0));
+
+                auto &initial_constraint = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+                relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
+                                                 { initial_constraint.exec(); });
+            }
+            else
+            {
+                relaxation_constraints.add(
+                    &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
+            }
         }
     }
-    return relaxation_constraints;
+
+    relaxation_pipeline_.insert_hook(RelaxationHookPoint::Constraints, [&]()
+                                     { relaxation_constraints.exec(); });
 }
 //=================================================================================================//
 } // namespace SPH
