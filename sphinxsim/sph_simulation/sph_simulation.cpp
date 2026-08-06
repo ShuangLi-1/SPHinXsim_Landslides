@@ -94,6 +94,11 @@ void SPHSimulation::buildGeometries()
     executable_simulation_state_ready_ = false;
 }
 //=================================================================================================//
+std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> SPHSimulation::getShapeBounds()
+{
+    return GeometryBuilder::getShapeBoundsFromConfigManager(config_manager_);
+}
+//=================================================================================================//
 void SPHSimulation::buildSimulation()
 {
     if (!particles_generated_)

@@ -49,8 +49,14 @@ void GeometryBuilder::buildGeometries()
 //=================================================================================================//
 std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> GeometryBuilder::getShapeBounds()
 {
+    return getShapeBoundsFromConfigManager(config_manager_);
+}
+//=================================================================================================//
+std::map<std::string, std::pair<std::vector<double>, std::vector<double>>>
+GeometryBuilder::getShapeBoundsFromConfigManager(EntityManager &config_manager)
+{
     std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> result;
-    for (Shape *shape : config_manager_.entitiesWith<Shape>())
+    for (Shape *shape : config_manager.entitiesWith<Shape>())
     {
         BoundingBoxd bounds = shape->getBounds();
         std::vector<double> lower(bounds.lower_.data(), bounds.lower_.data() + bounds.lower_.size());

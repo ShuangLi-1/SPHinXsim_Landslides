@@ -387,14 +387,15 @@ class ConfigVisualizer:
             tmp.close()
             runtime_config_path = Path(tmp.name)
 
-            builder = sph.GeometryBuilder(str(runtime_config_path))
-            builder.resetInOutputRoot(str(vtp_output_dir))
-            builder.buildGeometries()
+            if not with_particles:
+                builder = sph.GeometryBuilder(str(runtime_config_path))
+                builder.resetInOutputRoot(str(vtp_output_dir))
+                builder.buildGeometries()
 
-            try:
-                self._shape_bounds_cache = builder.getShapeBounds()
-            except Exception:
-                self._shape_bounds_cache = None
+                try:
+                    self._shape_bounds_cache = builder.getShapeBounds()
+                except Exception:
+                    self._shape_bounds_cache = None
 
             # Optionally generate particles so preview can overlay the latest
             # body particle clouds if particle_generation is enabled.
@@ -403,6 +404,11 @@ class ConfigVisualizer:
                 sim.resetOutputRoot(str(vtp_output_dir), True)
                 sim.buildGeometries()
                 sim.generateParticles()
+
+                try:
+                    self._shape_bounds_cache = sim.getShapeBounds()
+                except Exception:
+                    self._shape_bounds_cache = None               
         except Exception:
             self._shape_bounds_cache = None
             return None

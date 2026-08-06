@@ -45,7 +45,8 @@ BaseDynamics<void> &FluidDynamicsBuilder::buildDensityRegularization(
         { 
             auto lower_limit = minimum_compression.exec();
             auto upper_limit = maximum_compression.exec();
-            if (lower_limit.first < 0.95 || upper_limit.first > 1.05)
+            if (lower_limit.first < 0.95 || upper_limit.first > 1.05 ||
+                std::isnan(lower_limit.first) || std::isnan(upper_limit.first))
             {
                 std::cout << "\n------------------------------------------------------------" << std::endl;
                 std::cout << "Error: Compression is out of range!" << std::endl;
