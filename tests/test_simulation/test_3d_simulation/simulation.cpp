@@ -128,7 +128,7 @@ TEST_P(Json, run)
     SPHSimulation sim(config);
     sim.resetOutputRoot(fs::path("./") / config.stem(), true);
     sim.buildGeometries();
-    sim.generateParticles();
+    sim.generateParticles(true);
     sim.buildSimulation();
     sim.initializeSimulation();
     sim.run();

@@ -118,6 +118,19 @@ TEST(simulations, has_json)
     ASSERT_FALSE(json_files.empty()) << "No JSON examples found in ./input";
 }
 
+TEST(simulations, particle_generation_can_be_skipped)
+{
+    const auto json_files = collectJsonConfigs("./input");
+    ASSERT_FALSE(json_files.empty()) << "No JSON examples found in ./input";
+
+    const fs::path config = json_files.front();
+    SPH::SPHSimulation sim(config);
+    sim.resetOutputRoot(fs::path("./skip_particle_generation"), true);
+    sim.buildGeometries();
+
+    EXPECT_NO_THROW(sim.generateParticles(false));
+}
+
 TEST_P(Json, run)
 {
     const fs::path config = GetParam();
@@ -126,7 +139,7 @@ TEST_P(Json, run)
     SPH::SPHSimulation sim(config);
     sim.resetOutputRoot(fs::path("./") / config.stem(), true);
     sim.buildGeometries();
-    sim.generateParticles();
+    sim.generateParticles(true);
     sim.buildSimulation();
     sim.initializeSimulation();
     sim.run();
