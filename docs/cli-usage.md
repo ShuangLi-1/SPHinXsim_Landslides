@@ -144,6 +144,8 @@ Notes:
 - In shell mode, `preview` keeps a persistent window and returns control to the prompt. Running `preview` again updates the same window.
 - For responsive persistent preview, install `pyvistaqt` and a Qt backend (`PySide6` or `PyQt5`).
 - In the Qt-backed preview, edit settings in the searchable right-side property tree and use **Apply and refresh** or `Ctrl+S`; only then are changes validated, saved, and rendered.
+- To switch configurations while the Preview window remains open, run `load OTHER.json` followed by `preview`; the property editor is rebound to the newly loaded file.
+- If the persistent Preview window is closed, run `preview` again to create a new window.
 
 ## Geometry update workflow
 

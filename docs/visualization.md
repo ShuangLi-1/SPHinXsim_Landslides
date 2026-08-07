@@ -131,6 +131,8 @@ Notes:
   you use **Apply and refresh** or `Ctrl+S`; it validates and atomically saves
   the currently loaded JSON file before rebuilding the preview. Loading a
   different configuration and running `preview` rebinds the editor to that file.
+  If the persistent Preview window is closed, running `preview` again creates a
+  fresh window and reattaches the editor.
 
 ```
 sphinxsim> load config.json
