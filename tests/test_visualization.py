@@ -60,7 +60,6 @@ def _minimal_fluid_config() -> dict:
             ],
         },
         "particle_generation": {
-            "build_and_run": True,
             "settings": {
                 "bodies": [
                     {"name": "WaterBody"},

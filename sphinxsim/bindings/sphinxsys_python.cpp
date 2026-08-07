@@ -43,7 +43,9 @@ PYBIND11_MODULE(MODULE_NAME, m)
         .def("getShapeBounds", &SPHSimulation::getShapeBounds,
              "Return dict of shape_name -> (lower_bound, upper_bound) after buildGeometries()")
         .def("generateParticles", &SPHSimulation::generateParticles,
-             "Generate particles for all bodies from configuration")
+             py::arg("build_and_run") = true,
+             "Generate particles for all bodies from configuration when build_and_run is true; "
+             "otherwise use existing reload files")
         .def("buildSimulation", &SPHSimulation::buildSimulation,
              "Build simulation (relations, dynamics, etc.) from JSON configuration")
         .def("initializeSimulation", &SPHSimulation::initializeSimulation,

@@ -65,7 +65,7 @@ EntityManager &SPHSimulation::getConfigManager()
     return config_manager_;
 }
 //=================================================================================================//
-void SPHSimulation::generateParticles()
+void SPHSimulation::generateParticles(bool build_and_run)
 {
     if (!geometry_built_)
     {
@@ -75,7 +75,7 @@ void SPHSimulation::generateParticles()
     }
 
     json config = loadConfig().at("particle_generation");
-    if (config.at("build_and_run").get<bool>())
+    if (build_and_run)
     {
         ParticleGeneration particle_generation;
         particle_generation.buildParticleGeneration(*this, config.at("settings"));
