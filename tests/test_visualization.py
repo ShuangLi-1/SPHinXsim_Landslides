@@ -1194,6 +1194,87 @@ class TestShellPreview:
         assert visualizer_paths == [config_a, config_b]
         assert [call.args[1] for call in refresh_editor.call_args_list] == [config_a, config_b]
 
+    def test_shell_runtime_recreates_preview_after_user_closes_window(self, tmp_path, monkeypatch):
+        """Closing the native Qt window must allow the same config to reopen."""
+        from sphinxsim import cli as cli_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+        config_path = tmp_path / "config.json"
+
+        class FakeVisualizer:
+            _bounds_sim = None
+
+            def __init__(self, *args, **kwargs):
+                pass
+
+            def _spatial_dim(self):
+                return 2
+
+            def _populate_plotter(self, plotter, vtp_dir, latest_particle_vtps):
+                return None
+
+            def _configure_default_view(self, plotter, ndim):
+                return None
+
+            def _add_config_info_text(self, plotter, config_info, ndim):
+                return None
+
+            def _try_build_geometries(self, ndim, with_particles=False):
+                return None
+
+            def _discover_latest_particle_vtps(self, vtp_dir):
+                return {}
+
+        class FakeSignal:
+            def __init__(self):
+                self.callback = None
+
+            def connect(self, callback):
+                self.callback = callback
+
+            def emit(self):
+                assert self.callback is not None
+                self.callback()
+
+        class FakeBackgroundPlotter:
+            instances: list["FakeBackgroundPlotter"] = []
+
+            def __init__(self, **kwargs):
+                self.app_window = SimpleNamespace(signal_close=FakeSignal())
+                self.instances.append(self)
+
+            def clear(self):
+                return None
+
+            def add_axes(self):
+                return None
+
+            def show_grid(self, **kwargs):
+                return None
+
+            def render(self):
+                return None
+
+        runtime = cli_mod._ShellPreviewRuntime()
+        monkeypatch.setattr(runtime, "_install_json_editor", MagicMock())
+        monkeypatch.setitem(sys.modules, "pyvista", SimpleNamespace())
+        monkeypatch.setitem(sys.modules, "pyvistaqt", SimpleNamespace(BackgroundPlotter=FakeBackgroundPlotter))
+        monkeypatch.setattr(cli_mod, "PROJECT_ROOT", tmp_path)
+
+        with patch("sphinxsim.visualization.preview.ConfigVisualizer", FakeVisualizer):
+            assert runtime.show_or_update(cfg, resolved_config_path=config_path, with_particles=False) == 0
+            first_plotter = runtime.plotter
+            assert first_plotter is FakeBackgroundPlotter.instances[0]
+
+            first_plotter.app_window.signal_close.emit()
+            assert runtime.plotter is None
+            assert runtime.last_signature is None
+
+            assert runtime.show_or_update(cfg, resolved_config_path=config_path, with_particles=False) == 0
+
+        assert len(FakeBackgroundPlotter.instances) == 2
+        assert runtime.plotter is FakeBackgroundPlotter.instances[1]
+
     def test_shell_runtime_hover_enlarges_annotation_font(self):
         from sphinxsim import cli as cli_mod
 

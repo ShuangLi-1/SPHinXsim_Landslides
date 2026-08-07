@@ -657,16 +657,39 @@ class _ShellPreviewRuntime:
         self._hover_observer_tag: Any | None = None
         self._json_editor: Any | None = None
 
-    def close(self) -> None:
+    def _reset_preview_state(self) -> None:
+        """Forget all state associated with a closed preview window."""
         self._remove_hover_observer()
-        if self.plotter is None:
-            return
-        try:
-            self.plotter.close()
-        except Exception:
-            pass
         self.plotter = None
         self._json_editor = None
+        self.last_signature = None
+        self._using_background_plotter = False
+
+    def _on_preview_window_closed(self, *_args: Any) -> None:
+        """Handle a user closing the Qt window outside the shell command loop."""
+        self._reset_preview_state()
+
+    def _watch_preview_window_close(self) -> None:
+        """Synchronize pyvistaqt's native close signal with this runtime."""
+        if self.plotter is None:
+            return
+        app_window = getattr(self.plotter, "app_window", None)
+        signal_close = getattr(app_window, "signal_close", None)
+        if signal_close is None:
+            return
+        try:
+            signal_close.connect(self._on_preview_window_closed)
+        except Exception:
+            pass
+
+    def close(self) -> None:
+        plotter = self.plotter
+        if plotter is not None:
+            try:
+                plotter.close()
+            except Exception:
+                pass
+        self._reset_preview_state()
 
     def _install_json_editor(
         self,
@@ -1650,6 +1673,7 @@ class _ShellPreviewRuntime:
                     )
 
             if created_plotter and self._using_background_plotter:
+                self._watch_preview_window_close()
                 self._install_json_editor(
                     config,
                     config_path=resolved_config_path,
