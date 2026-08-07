@@ -127,10 +127,10 @@ Notes:
 - In the Qt-backed persistent window, the right-side configuration editor
   presents JSON fields as a searchable property tree: setting names on the
   left and editable value boxes on the right. It uses type-appropriate controls
-  for booleans, numbers, and common enumerations; list entries can be added,
-  duplicated, removed, and reordered from the editor toolbar. A change applies
-  only when you use **Apply and refresh** or `Ctrl+S`; it validates and
-  atomically saves the loaded JSON file before rebuilding the preview.
+  for booleans, numbers, and common enumerations. A change applies only when
+  you use **Apply and refresh** or `Ctrl+S`; it validates and atomically saves
+  the currently loaded JSON file before rebuilding the preview. Loading a
+  different configuration and running `preview` rebinds the editor to that file.
 
 ```
 sphinxsim> load config.json

@@ -1131,6 +1131,69 @@ class TestShellPreview:
 
         assert rc == 0
 
+    def test_shell_runtime_rebinds_editor_when_preview_path_changes(self, tmp_path, monkeypatch):
+        """An existing editor must follow the newly loaded shell config file."""
+        from sphinxsim import cli as cli_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+        config_a = tmp_path / "preview-a.json"
+        config_b = tmp_path / "preview-b.json"
+        visualizer_paths: list[Path] = []
+
+        class FakeVisualizer:
+            _bounds_sim = None
+
+            def __init__(self, _config, _project_root, *, config_path, off_screen):
+                visualizer_paths.append(config_path)
+
+            def _spatial_dim(self):
+                return 2
+
+            def _populate_plotter(self, plotter, vtp_dir, latest_particle_vtps):
+                return None
+
+            def _configure_default_view(self, plotter, ndim):
+                return None
+
+            def _add_config_info_text(self, plotter, config_info, ndim):
+                return None
+
+            def _try_build_geometries(self, ndim, with_particles=False):
+                return None
+
+            def _discover_latest_particle_vtps(self, vtp_dir):
+                return {}
+
+        class FakePlotter:
+            def clear(self):
+                return None
+
+            def add_axes(self):
+                return None
+
+            def show_grid(self, **kwargs):
+                return None
+
+            def render(self):
+                return None
+
+        runtime = cli_mod._ShellPreviewRuntime()
+        runtime.plotter = FakePlotter()
+        runtime._using_background_plotter = True
+        refresh_editor = MagicMock()
+        runtime._json_editor = {"refresh": refresh_editor}
+
+        monkeypatch.setitem(sys.modules, "pyvista", SimpleNamespace())
+        monkeypatch.setitem(sys.modules, "pyvistaqt", SimpleNamespace(BackgroundPlotter=object))
+        monkeypatch.setattr(cli_mod, "PROJECT_ROOT", tmp_path)
+
+        with patch("sphinxsim.visualization.preview.ConfigVisualizer", FakeVisualizer):
+            assert runtime.show_or_update(cfg, resolved_config_path=config_a, with_particles=False) == 0
+            assert runtime.show_or_update(cfg, resolved_config_path=config_b, with_particles=False) == 0
+
+        assert visualizer_paths == [config_a, config_b]
+        assert [call.args[1] for call in refresh_editor.call_args_list] == [config_a, config_b]
+
     def test_shell_runtime_hover_enlarges_annotation_font(self):
         from sphinxsim import cli as cli_mod
 

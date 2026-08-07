@@ -675,8 +675,14 @@ class _ShellPreviewRuntime:
         config_path: Path,
         with_particles: bool,
     ) -> None:
-        """Attach an Apply-only property editor to the Qt-backed preview window."""
-        if self.plotter is None or self._json_editor is not None:
+        """Create or rebind the Apply-only property editor for a preview config."""
+        if self.plotter is None:
+            return
+
+        if self._json_editor is not None:
+            refresh = self._json_editor.get("refresh")
+            if callable(refresh):
+                refresh(config, config_path, with_particles)
             return
 
         try:
@@ -885,6 +891,8 @@ class _ShellPreviewRuntime:
 
         editor_state: dict[str, Any] = {
             "payload": {},
+            "config_path": config_path,
+            "with_particles": with_particles,
             "fields": [],
             "original_json": "",
             "undo_stack": [],
@@ -1134,8 +1142,9 @@ class _ShellPreviewRuntime:
             revert_button.setEnabled(bool(editor_state["undo_stack"]))
 
         def reload_from_disk() -> None:
+            active_config_path = editor_state["config_path"]
             try:
-                source = config_path.read_text(encoding="utf-8")
+                source = active_config_path.read_text(encoding="utf-8")
                 SimulationConfig(**json.loads(source))
             except (OSError, ValidationError, json.JSONDecodeError) as exc:
                 status.setText(f"Could not reload configuration: {exc}")
@@ -1207,6 +1216,8 @@ class _ShellPreviewRuntime:
             update_array_actions()
 
         def apply_changes() -> None:
+            active_config_path = editor_state["config_path"]
+            active_with_particles = editor_state["with_particles"]
             _clear_field_errors()
             try:
                 before_edit = json.dumps(editor_state["payload"], ensure_ascii=False)
@@ -1233,9 +1244,9 @@ class _ShellPreviewRuntime:
                 return
 
             try:
-                canonical_json = _write_validated_config(config_path, updated_config)
+                canonical_json = _write_validated_config(active_config_path, updated_config)
             except OSError as exc:
-                status.setText(f"Could not save {config_path.name}: {exc}")
+                status.setText(f"Could not save {active_config_path.name}: {exc}")
                 return
 
             editor_state["undo_stack"].append(before_edit)
@@ -1244,8 +1255,8 @@ class _ShellPreviewRuntime:
             status.setText("Saved and rebuilding preview geometry…")
             result = self.show_or_update(
                 updated_config,
-                resolved_config_path=config_path,
-                with_particles=with_particles,
+                resolved_config_path=active_config_path,
+                with_particles=active_with_particles,
                 force=True,
             )
             status.setText(
@@ -1268,8 +1279,20 @@ class _ShellPreviewRuntime:
         move_down_button.clicked.connect(lambda: edit_array("down"))
         tree.currentItemChanged.connect(lambda *_args: update_array_actions())
         filter_box.textChanged.connect(filter_items)
-        populate_editor(dump_simulation_config_json(config, indent=2), reset_history=True)
-        update_array_actions()
+        def refresh_editor(
+            current_config: SimulationConfig,
+            current_config_path: Path,
+            current_with_particles: bool,
+        ) -> None:
+            """Replace the editor session when shell ``preview`` changes files."""
+            editor_state["config_path"] = current_config_path
+            editor_state["with_particles"] = current_with_particles
+            editor_state["expanded_paths"] = set()
+            filter_box.clear()
+            populate_editor(dump_simulation_config_json(current_config, indent=2), reset_history=True)
+            update_array_actions()
+
+        refresh_editor(config, config_path, with_particles)
         self._json_editor = {
             "dock": dock,
             "tree": tree,
@@ -1277,6 +1300,7 @@ class _ShellPreviewRuntime:
             "status": status,
             "shortcut": shortcut,
             "undo_shortcut": undo_shortcut,
+            "refresh": refresh_editor,
         }
 
     def pump_ui_events(self) -> None:
@@ -1512,6 +1536,7 @@ class _ShellPreviewRuntime:
         self,
         config: SimulationConfig,
         *,
+        resolved_config_path: Path,
         with_particles: bool,
     ) -> bool:
         if with_particles:
@@ -1519,6 +1544,7 @@ class _ShellPreviewRuntime:
 
         payload = {
             "config": config.model_dump(exclude_none=True),
+            "config_path": str(resolved_config_path.resolve()),
             "with_particles": with_particles,
         }
         signature = json.dumps(payload, sort_keys=True)
@@ -1544,7 +1570,17 @@ class _ShellPreviewRuntime:
             )
             return 1
 
-        unchanged = self._is_unchanged(config, with_particles=with_particles)
+        unchanged = self._is_unchanged(
+            config,
+            resolved_config_path=resolved_config_path,
+            with_particles=with_particles,
+        )
+        if self.plotter is not None and self._using_background_plotter:
+            self._install_json_editor(
+                config,
+                config_path=resolved_config_path,
+                with_particles=with_particles,
+            )
         if not force and unchanged:
             print("ℹ️ Preview unchanged; keeping existing window.")
             return 0
@@ -1573,6 +1609,7 @@ class _ShellPreviewRuntime:
                 os.environ.setdefault("QT_QPA_PLATFORM", "xcb")
             import pyvista as pv
             pyvistaqt_error: Exception | None = None
+            created_plotter = False
             try:
                 from pyvistaqt import BackgroundPlotter  # type: ignore[import]
             except Exception as exc:
@@ -1580,6 +1617,7 @@ class _ShellPreviewRuntime:
                 pyvistaqt_error = exc
 
             if self.plotter is None:
+                created_plotter = True
                 if BackgroundPlotter is not None:
                     self.plotter = BackgroundPlotter(
                         title="SPHinXsim - Configuration Preview",
@@ -1593,11 +1631,6 @@ class _ShellPreviewRuntime:
                         update_app_icon=False,
                     )
                     self._using_background_plotter = True
-                    self._install_json_editor(
-                        config,
-                        config_path=resolved_config_path,
-                        with_particles=with_particles,
-                    )
                 else:
                     self.plotter = pv.Plotter(
                         title="SPHinXsim - Configuration Preview",
@@ -1615,6 +1648,13 @@ class _ShellPreviewRuntime:
                         "   (or use PyQt5 instead of PySide6)",
                         file=sys.stderr,
                     )
+
+            if created_plotter and self._using_background_plotter:
+                self._install_json_editor(
+                    config,
+                    config_path=resolved_config_path,
+                    with_particles=with_particles,
+                )
 
             self.plotter.clear()
             configure_layout = getattr(visualizer, "_configure_layout", None)
