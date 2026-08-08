@@ -41,7 +41,7 @@
   },
 
   "particle_generation": {
-    "build_and_run": false,
+    "build_and_run": true,
     "settings": {
       "bodies": [
         {
@@ -117,7 +117,7 @@
     "screen_interval": 100,
     "restart": {
       "save_interval": 400,
-      "restore_step": 400,
+      "restore_step": 0,
       "summary_enabled": true
     },
     "continuum_dynamics": {

@@ -139,6 +139,8 @@ class SimulationBuilder
 
     void buildInitialConditionIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildRestartFromFileIfPresent(
+        SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
