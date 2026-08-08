@@ -85,7 +85,7 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     void buildContactRepulsionIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, ContactRelationType &contact_relation);
 
-    void buildInitialConditionsIfPresent(
+    void buildRestartFromFileIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
     template <class InnerRelationType, class ContactRelationType>

@@ -64,7 +64,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Initial condition if present.
     //----------------------------------------------------------------------
-    buildInitialConditionsIfPresent(sim, main_methods, config);
+    buildInitialConditionIfPresent(sim, main_methods, config);
+    buildRestartFromFileIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
@@ -214,7 +215,7 @@ ContinuumSolverParameters ContinuumSimulationBuilder::parseContinuumSolverParame
     return parameters;
 }
 //=================================================================================================//
-void ContinuumSimulationBuilder::buildInitialConditionsIfPresent(
+void ContinuumSimulationBuilder::buildRestartFromFileIfPresent(
     SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     EntityManager &config_manager = sim.getConfigManager();
