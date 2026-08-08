@@ -428,11 +428,7 @@ class ParticleGenerationSettingsConfig(BaseModel):
 class ParticleGenerationConfig(BaseModel):
     settings: Optional[ParticleGenerationSettingsConfig] = None
 
-    @model_validator(mode="after")
-    def _validate_settings(self) -> "ParticleGenerationConfig":
-        if self.settings is None:
-            raise ValueError("particle_generation.settings is required")
-        return self
+
 
 class VariableConfig(BaseModel):
     real_type: Optional[str] = None

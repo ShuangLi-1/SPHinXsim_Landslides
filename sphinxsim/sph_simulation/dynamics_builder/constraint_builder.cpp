@@ -7,12 +7,9 @@
 namespace SPH
 {
 //=================================================================================================//
-void ConstraintBuilder::buildConstraintsIfPresent(
+void ConstraintBuilder::addConstraints(
     SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
-    if (!config.contains("body_constraints"))
-        return;
-
     SPHSystem &sph_system = sim.getSPHSystem();
     for (const auto &constraint_config : config.at("body_constraints"))
     {

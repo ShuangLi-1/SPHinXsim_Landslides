@@ -66,7 +66,12 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
-    ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
+    if (config.contains("body_constraints"))
+    {
+        ConstraintBuilder &constraint_builder =
+            *config_manager.emplaceEntity<ConstraintBuilder>("ConstraintBuilder");
+        constraint_builder.addConstraints(sim, main_methods, config);
+    }
     buildExternalForceIfPresent(sim, main_methods, continuum_body, config);
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------

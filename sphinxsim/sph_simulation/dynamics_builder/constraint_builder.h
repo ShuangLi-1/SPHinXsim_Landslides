@@ -39,11 +39,10 @@ class RealBody;
 class ConstraintBuilder
 {
   public:
-    static void buildConstraintsIfPresent(SPHSimulation &sim, MainMethods &method_container, const json &config);
+    void addConstraints(SPHSimulation &sim, MainMethods &method_container, const json &config);
 
   private:
-    static void addConstraint(
-        SPHSimulation &sim, MainMethods &method_container, RealBody &real_body, const json &config);
+    void addConstraint(SPHSimulation &sim, MainMethods &method_container, RealBody &real_body, const json &config);
 };
 } // namespace SPH
 #endif // CONSTRAINT_BUILDER_H
