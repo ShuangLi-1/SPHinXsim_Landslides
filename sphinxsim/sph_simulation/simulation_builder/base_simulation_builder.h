@@ -57,6 +57,8 @@ enum class InitializationHookPoint
 {
     InitialCondition,
     AfterInitialCondition,
+    RestartFromFile,
+    UpdateConfigurationAfterRestart,
     InitialObservation,
     InitialParticleIndicationTagging,
     InitialAfterLinearCorrectionMatrix,

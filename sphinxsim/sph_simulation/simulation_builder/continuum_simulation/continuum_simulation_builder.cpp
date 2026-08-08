@@ -38,11 +38,13 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     // update body relations, are defined first.
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
-    auto &solid_cell_linked_list = main_methods.addCellLinkedListDynamics(solid_bodies);
-    auto &continuum_update_configuration =
+
+    auto &update_configuration =
         main_methods.addParticleDynamicsGroup()
+            .add(&main_methods.addCellLinkedListDynamics(solid_bodies))
             .add(&main_methods.addCellLinkedListDynamics(continuum_body))
             .add(&main_methods.addRelationDynamics(continuum_inner, continuum_solid_contact));
+    config_manager.addEntity<BaseDynamics<void>>("UpdateConfiguration", &update_configuration);
 
     auto &continuum_advection_step_setup = main_methods.addStateDynamics<
         fluid_dynamics::AdvectionStepSetup>(continuum_body);
@@ -62,7 +64,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Initial condition if present.
     //----------------------------------------------------------------------
-    buildInitialConditionIfPresent(sim, main_methods, config);
+    buildInitialConditionsIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
@@ -98,12 +100,15 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     initialization_pipeline.main_steps.push_back(
         [&]()
         {
-            solid_cell_linked_list.exec();
-            continuum_update_configuration.exec();
+            update_configuration.exec();
+
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::RestartFromFile);
+            initialization_pipeline.run_hooks(InitializationHookPoint::UpdateConfigurationAfterRestart);
 
             continuum_advection_step_setup.exec();
             continuum_linear_correction_matrix.exec();
@@ -157,8 +162,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
 
-                solid_cell_linked_list.exec();
-                continuum_update_configuration.exec();
+                update_configuration.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 continuum_advection_step_setup.exec();
                 continuum_linear_correction_matrix.exec();
@@ -237,10 +241,16 @@ void ContinuumSimulationBuilder::buildInitialConditionsIfPresent(
         if (restart_config.restore_step_ != 0)
         {
             initialization_pipeline.insert_hook(
-                InitializationHookPoint::InitialCondition, [&]()
+                InitializationHookPoint::RestartFromFile, [&]()
                 { 
                     time_stepper.setRestartStep(restart_config.restore_step_);
                     restart_io.readRestartFiles(restart_config.restore_step_); });
+
+            BaseDynamics<void> &update_configuration =
+                config_manager.getEntity<BaseDynamics<void>>("UpdateConfiguration");
+            initialization_pipeline.insert_hook(
+                InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
+                { update_configuration.exec(); });
         }
     }
 }
