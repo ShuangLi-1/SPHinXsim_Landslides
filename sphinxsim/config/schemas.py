@@ -426,8 +426,14 @@ class ParticleGenerationSettingsConfig(BaseModel):
 
 
 class ParticleGenerationConfig(BaseModel):
+    build_and_run: bool
     settings: Optional[ParticleGenerationSettingsConfig] = None
 
+    @model_validator(mode="after")
+    def _validate_settings(self) -> "ParticleGenerationConfig":
+        if self.build_and_run and self.settings is None:
+            raise ValueError("particle_generation.settings is required when build_and_run is true")
+        return self
 
 
 class VariableConfig(BaseModel):

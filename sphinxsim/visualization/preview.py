@@ -398,8 +398,8 @@ class ConfigVisualizer:
                     self._shape_bounds_cache = None
 
             # Optionally generate particles so preview can overlay the latest
-            # body particle clouds when requested.
-            if with_particles:
+            # body particle clouds if particle_generation is enabled.
+            if with_particles and self.config.particle_generation.build_and_run:
                 sim = sph.SPHSimulation(str(runtime_config_path))
                 sim.resetOutputRoot(str(vtp_output_dir), True)
                 sim.buildGeometries()
