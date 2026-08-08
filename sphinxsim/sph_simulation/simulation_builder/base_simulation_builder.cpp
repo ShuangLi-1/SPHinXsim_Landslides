@@ -162,7 +162,7 @@ void SimulationBuilder::buildExternalForceIfPresent(
                 real_body, Gravity(scaling_config.jsonToVecd(config.at("gravity"), "Acceleration")));
 
         initialization_pipeline.insert_hook(
-            InitializationHookPoint::InitialCondition, [&]()
+            InitializationHookPoint::AfterInitialCondition, [&]()
             { constant_gravity.exec(); });
     }
 }

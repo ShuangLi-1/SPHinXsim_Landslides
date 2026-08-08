@@ -66,12 +66,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
-    if (config.contains("body_constraints"))
-    {
-        ConstraintBuilder &constraint_builder =
-            *config_manager.emplaceEntity<ConstraintBuilder>("ConstraintBuilder");
-        constraint_builder.addConstraints(sim, main_methods, config);
-    }
+    ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
     buildExternalForceIfPresent(sim, main_methods, continuum_body, config);
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
@@ -105,13 +100,13 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         {
             solid_cell_linked_list.exec();
             continuum_update_configuration.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
+            initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
 
             continuum_advection_step_setup.exec();
             continuum_linear_correction_matrix.exec();
-
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterLinearCorrectionMatrix);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialObservation);

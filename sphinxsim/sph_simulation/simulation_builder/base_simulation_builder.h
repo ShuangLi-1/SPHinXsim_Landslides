@@ -56,6 +56,7 @@ enum class SimulationHookPoint
 enum class InitializationHookPoint
 {
     InitialCondition,
+    AfterInitialCondition,
     InitialObservation,
     InitialParticleIndicationTagging,
     InitialAfterLinearCorrectionMatrix,
