@@ -36,6 +36,7 @@
   },
 
   "particle_generation": {
+    "build_and_run": true,
     "settings": {
       "bodies": [
         {

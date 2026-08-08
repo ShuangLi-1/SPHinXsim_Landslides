@@ -61,6 +61,7 @@ def _valid_data() -> dict:
             ],
         },
         "particle_generation": {
+            "build_and_run": True,
             "settings": {
                 "bodies": [
                     {"name": "WaterBody"},

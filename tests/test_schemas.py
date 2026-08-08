@@ -40,6 +40,7 @@ def _make_minimal_fluid_config(**overrides) -> SimulationConfig:
             ],
         },
         "particle_generation": {
+            "build_and_run": False,
             "settings": {
                 "bodies": [
                     {"name": "WaterBody"},
@@ -114,6 +115,7 @@ def _make_minimal_continuum_config(**overrides) -> SimulationConfig:
             ],
         },
         "particle_generation": {
+            "build_and_run": False,
             "settings": {
                 "bodies": [
                     {"name": "ContinuumBody"},
@@ -441,6 +443,7 @@ class TestSimulationConfig:
         ]
 
         particle_generation = {
+            "build_and_run": False,
             "settings": {
                 "bodies": [
                     {"name": "TetraBody"},
@@ -644,6 +647,7 @@ class TestSimulationConfig:
     def test_particle_generation_blockers_accept_existing_oriented_box(self):
         cfg = _make_minimal_fluid_config(
             particle_generation={
+                "build_and_run": False,
                 "settings": {
                     "bodies": [
                         {"name": "WaterBody", "blockers": ["Inlet"]},
@@ -660,6 +664,7 @@ class TestSimulationConfig:
         with pytest.raises(ValidationError, match="blockers entries must reference existing"):
             _make_minimal_fluid_config(
                 particle_generation={
+                    "build_and_run": False,
                     "settings": {
                         "bodies": [
                             {"name": "WaterBody", "blockers": ["MissingBox"]},
@@ -673,6 +678,7 @@ class TestSimulationConfig:
     def test_particle_generation_box_shape_inserts_accept_existing_shape(self):
         cfg = _make_minimal_fluid_config(
             particle_generation={
+                "build_and_run": False,
                 "settings": {
                     "bodies": [
                         {"name": "WaterBody", "box_shape_inserts": ["WallBoundary"]},
@@ -689,6 +695,7 @@ class TestSimulationConfig:
         with pytest.raises(ValidationError, match="box_shape_inserts entries must reference existing"):
             _make_minimal_fluid_config(
                 particle_generation={
+                    "build_and_run": False,
                     "settings": {
                         "bodies": [
                             {"name": "WaterBody", "box_shape_inserts": ["MissingShape"]},
@@ -736,6 +743,7 @@ class TestSimulationConfig:
         with pytest.warns(UserWarning, match="contains unknown keys that are preserved"):
             cfg = _make_minimal_fluid_config(
                 particle_generation={
+                    "build_and_run": False,
                     "settings": {
                         "bodies": [
                             {"name": "WaterBody", "unknown_key": ["Inlet"]},
