@@ -214,7 +214,7 @@ void MaterialBuilder::addThermalProperties(
     if (!config.contains("thermal_boundary"))
     {
         auto &sph_body_config = config_manager.getEntity<SPHBodyConfig>(sph_body.Name());
-        sph_body_config.has_dynamics_ = true;
+        sph_body_config.setHasDynamics();
 
         Real d_coeff_ref = scaling_config.jsonToReal(
             config.at("thermal_conductivity"), "ThermalConductivity");

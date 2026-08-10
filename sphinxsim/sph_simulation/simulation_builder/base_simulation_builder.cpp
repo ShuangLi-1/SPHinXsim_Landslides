@@ -77,11 +77,24 @@ void SimulationBuilder::buildContinuumBodies(
     }
 }
 //=================================================================================================//
-void SimulationBuilder::setStaticSolidConfig(SPHBodyConfig &solid_config)
+void SPHBodyConfig::setStatic()
 {
-    solid_config.is_moving_ = false;
-    solid_config.has_dynamics_ = false;
-    solid_config.is_interactive_ = false;
+    is_moving_ = false;
+    has_dynamics_ = false;
+    is_interactive_ = false;
+}
+//=================================================================================================//
+void SPHBodyConfig::setDeformable()
+{
+    is_moving_ = true;
+    has_dynamics_ = true;
+    is_interactive_ = true;
+}
+//=================================================================================================//
+void SPHBodyConfig::setHasDynamics()
+{
+    has_dynamics_ = true;
+    is_interactive_ = true;
 }
 //=================================================================================================//
 void SimulationBuilder::buildSolidBodies(
@@ -94,7 +107,7 @@ void SimulationBuilder::buildSolidBodies(
             *config_manager.emplaceEntity<SPHBodyConfig>(name);
         solid_bodies_config_.push_back(&solid_body_config);
         solid_body_config.name_ = name;
-        setStaticSolidConfig(solid_body_config);
+        solid_body_config.setStatic();
 
         if (sb.contains("is_moving"))
             solid_body_config.is_moving_ = sb.at("is_moving").get<bool>();
@@ -107,7 +120,7 @@ void SimulationBuilder::buildSolidBodies(
         auto &solid_body = sph_system.addBody<SolidBody>(solid_shape, name);
         material_builder_ptr_->addMaterial(config_manager, solid_body, sb.at("material"));
         if(!config_manager.hasEntity<Solid>(name + "RigidBody"))
-            solid_body_config.has_dynamics_ = true;
+            solid_body_config.setDeformable();
             
         BaseParticles &reload_particles = solid_body.generateParticles<BaseParticles, Reload>(name);
         reload_particles.reloadExtraVariable<Vecd>("NormalDirection");

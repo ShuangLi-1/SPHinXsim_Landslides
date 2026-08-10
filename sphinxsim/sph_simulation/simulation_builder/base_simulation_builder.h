@@ -104,6 +104,10 @@ struct SPHBodyConfig
     int is_moving_ = true;
     bool has_dynamics_ = true;
     bool is_interactive_ = true;
+    
+    void setStatic();
+    void setDeformable();
+    void setHasDynamics();
 };
 
 struct VariableConfig
@@ -158,7 +162,6 @@ class SimulationBuilder
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
     SolverCommonConfig parseSolverCommonConfig(const ScalingConfig &scaling_config, const json &config);
-    void setStaticSolidConfig(SPHBodyConfig &solid_config);
 
     template <class IdentifierType>
     BaseDynamics<void> &addVariableAssignment(
