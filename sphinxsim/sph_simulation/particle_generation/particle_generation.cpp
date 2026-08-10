@@ -258,14 +258,14 @@ void ParticleGeneration::defineBodyRelations(RelaxationSystem &relaxation_system
 }
 //=================================================================================================//
 ParticleDynamicsGroup &ParticleGeneration::randomizeParticlePositions(
-    RelaxationSystem &relaxation_system, MainMethods &main_methods)
+    RelaxationSystem &relaxation_system, HostMethods &host_methods)
 {
-    auto &randomize_particle_position = main_methods.addParticleDynamicsGroup();
+    auto &randomize_particle_position = host_methods.addParticleDynamicsGroup();
     for (const auto &body_config : bodies_config_.relaxation_bodies_)
     {
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_config.name_);
         randomize_particle_position.add(
-            &main_methods.template addStateDynamics<RandomizeParticlePositionCK>(real_body));
+            &host_methods.template addStateDynamics<RandomizeParticlePositionCK>(real_body));
     }
     return randomize_particle_position;
 }
@@ -377,15 +377,15 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationPositionUpdate(
 }
 //=================================================================================================//
 ParticleDynamicsGroup &ParticleGeneration::addBodyNormalDirection(
-    RelaxationSystem &relaxation_system, EntityManager &config_manager, MainMethods &main_methods)
+    RelaxationSystem &relaxation_system, EntityManager &config_manager, HostMethods &host_methods)
 {
-    ParticleDynamicsGroup &normal_direction_update = main_methods.addParticleDynamicsGroup();
+    ParticleDynamicsGroup &normal_direction_update = host_methods.addParticleDynamicsGroup();
     for (const auto &body_config : bodies_config_.all_bodies_)
     {
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_config.name_);
         if (body_config.is_solid_body_)
         {
-            normal_direction_update.add(&main_methods.template addStateDynamics<NormalFromBodyShapeCK>(real_body));
+            normal_direction_update.add(&host_methods.template addStateDynamics<NormalFromBodyShapeCK>(real_body));
             real_body.getBaseParticles().template addEvolvingVariable<Vecd>("NormalDirection");
         }
     }
