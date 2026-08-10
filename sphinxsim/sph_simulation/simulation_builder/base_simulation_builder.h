@@ -97,6 +97,12 @@ class SPHBody;
 template <class ReturnType>
 class BaseDynamics;
 
+struct SPHBodyConfig
+{
+    std::string name_;
+    std::string adaptation_;
+};
+
 struct VariableConfig
 {
     std::string type_;
