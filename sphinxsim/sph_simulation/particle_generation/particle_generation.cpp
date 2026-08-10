@@ -387,6 +387,7 @@ ParticleDynamicsGroup &ParticleGeneration::addBodyNormalDirection(
         {
             normal_direction_update.add(&host_methods.template addStateDynamics<NormalFromBodyShapeCK>(real_body));
             real_body.getBaseParticles().template addEvolvingVariable<Vecd>("NormalDirection");
+            real_body.getBaseParticles().template addEvolvingVariable<Real>("SignedDistance");
         }
     }
     return normal_direction_update;
