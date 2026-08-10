@@ -101,6 +101,9 @@ struct SPHBodyConfig
 {
     std::string name_;
     std::string adaptation_;
+    int is_moving_ = true;
+    bool has_dynamics_ = true;
+    bool is_interactive_ = true;
 };
 
 struct VariableConfig
@@ -135,6 +138,10 @@ class SimulationBuilder
     static void parseScheduledEvents(SPHSimulation &sim, const json &config, bool &on_flag);
 
   protected:
+    StdVec<SPHBodyConfig *> fluid_bodies_config_;
+    StdVec<SPHBodyConfig *> continuum_bodies_config_;
+    StdVec<SPHBodyConfig *> solid_bodies_config_;
+
     void buildFluidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildContinuumBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
@@ -151,6 +158,7 @@ class SimulationBuilder
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
     SolverCommonConfig parseSolverCommonConfig(const ScalingConfig &scaling_config, const json &config);
+    void setStaticSolidConfig(SPHBodyConfig &solid_config);
 
     template <class IdentifierType>
     BaseDynamics<void> &addVariableAssignment(

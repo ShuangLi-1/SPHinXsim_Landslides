@@ -42,8 +42,10 @@ template <class T>
 class BaseDynamics;
 class RecordingBuilder;
 
-struct GenerationBodyConfig : SPHBodyConfig
+struct GenerationBodyConfig
 {
+    std::string name_;
+    std::string adaptation_;
     bool is_relaxation_body_ = false;
     bool is_solid_body_ = false;
 };

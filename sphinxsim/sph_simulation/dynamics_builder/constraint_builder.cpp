@@ -12,7 +12,7 @@ void ConstraintBuilder::buildConstraintsIfPresent(
 {
     if (!config.contains("body_constraints"))
         return;
-    
+
     SPHSystem &sph_system = sim.getSPHSystem();
     for (const auto &constraint_config : config.at("body_constraints"))
     {
@@ -29,6 +29,13 @@ void ConstraintBuilder::addConstraint(
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
     StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
+
+    auto &sph_body_config = config_manager.getEntity<SPHBodyConfig>(real_body.Name());
+    if (sph_body_config.is_moving_ == false)
+    {
+        throw std::runtime_error(
+            "ConstraintBuilder::ConstraintBuilder: constrained body must be moving: ");
+    };
 
     const std::string type = config.at("type").get<std::string>();
 

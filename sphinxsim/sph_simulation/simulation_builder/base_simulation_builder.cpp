@@ -38,6 +38,11 @@ void SimulationBuilder::buildFluidBodies(
     for (const auto &fb : config)
     {
         const std::string name = fb.at("name").get<std::string>();
+        SPHBodyConfig &fluid_body_config =
+            *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        fluid_bodies_config_.push_back(&fluid_body_config);
+        fluid_body_config.name_ = name;
+
         Shape &fluid_shape = config_manager.getEntity<Shape>(name);
         auto &fluid_body = sph_system.addBody<FluidBody>(fluid_shape, name);
         material_builder_ptr_->addMaterial(config_manager, fluid_body, fb.at("material"));
@@ -60,11 +65,23 @@ void SimulationBuilder::buildContinuumBodies(
     for (const auto &cb : config)
     {
         const std::string name = cb.at("name").get<std::string>();
+        SPHBodyConfig &continuum_body_config =
+            *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        continuum_bodies_config_.push_back(&continuum_body_config);
+        continuum_body_config.name_ = name;
+
         Shape &shape = config_manager.getEntity<Shape>(name);
         auto &continuum_body = sph_system.addBody<RealBody>(shape, name);
         material_builder_ptr_->addMaterial(config_manager, continuum_body, cb.at("material"));
         continuum_body.generateParticles<BaseParticles, Reload>(name);
     }
+}
+//=================================================================================================//
+void SimulationBuilder::setStaticSolidConfig(SPHBodyConfig &solid_config)
+{
+    solid_config.is_moving_ = false;
+    solid_config.has_dynamics_ = false;
+    solid_config.is_interactive_ = false;
 }
 //=================================================================================================//
 void SimulationBuilder::buildSolidBodies(
@@ -73,9 +90,25 @@ void SimulationBuilder::buildSolidBodies(
     for (const auto &sb : config)
     {
         const std::string name = sb.at("name").get<std::string>();
+        SPHBodyConfig &solid_body_config =
+            *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        solid_bodies_config_.push_back(&solid_body_config);
+        solid_body_config.name_ = name;
+        setStaticSolidConfig(solid_body_config);
+
+        if (sb.contains("is_moving"))
+            solid_body_config.is_moving_ = sb.at("is_moving").get<bool>();
+        if (sb.contains("has_dynamics"))
+            solid_body_config.has_dynamics_ = sb.at("has_dynamics").get<bool>();
+        if (sb.contains("is_interactive_"))
+            solid_body_config.is_interactive_ = sb.at("is_interactive").get<bool>();
+
         Shape &solid_shape = config_manager.getEntity<Shape>(name);
         auto &solid_body = sph_system.addBody<SolidBody>(solid_shape, name);
         material_builder_ptr_->addMaterial(config_manager, solid_body, sb.at("material"));
+        if(!config_manager.hasEntity<Solid>(name + "RigidBody"))
+            solid_body_config.has_dynamics_ = true;
+            
         BaseParticles &reload_particles = solid_body.generateParticles<BaseParticles, Reload>(name);
         reload_particles.reloadExtraVariable<Vecd>("NormalDirection");
     }
