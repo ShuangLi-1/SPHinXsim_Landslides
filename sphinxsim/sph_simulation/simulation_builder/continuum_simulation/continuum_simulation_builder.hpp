@@ -155,44 +155,40 @@ void ContinuumSimulationBuilder::buildContactRepulsionIfPresent(
     auto &config_manager = sim.getConfigManager();
     std::string body_name = contact_relation.getSPHBody().Name();
     if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+        return;
+
+    if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum") ||
+        config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
     {
+
+        auto &contact_repulsion_factor = main_methods.template addInteractionDynamics<
+            solid_dynamics::RepulsionFactor>(contact_relation);
+
+        auto &continuum_solver_parameters = config_manager.getEntity<
+            ContinuumSolverParameters>("ContinuumSolverParameters");
+        auto &contact_repulsion_force =
+            main_methods.template addInteractionDynamicsWithUpdate<
+                solid_dynamics::RepulsionForceCK, Wall>(
+                contact_relation, continuum_solver_parameters.contact_numerical_damping_);
+
+        auto &initialization_pipeline = sim.getInitializationPipeline();
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [&]()
+            { contact_repulsion_factor.exec(); });
+
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BeforeMainPhysicalTimeStep, [&]()
+            { contact_repulsion_force.exec(); });
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
+            { contact_repulsion_factor.exec(); });
+
         return;
     }
 
-    if (!config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum") &&
-        !config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
-    {
-        throw std::runtime_error(
-            "ContinuumSimulationBuilder::buildContactRepulsionIfPresent: no supported material type found!");
-    }
-
-    auto &continuum_solver_parameters = config_manager.getEntity<
-        ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &contact_repulsion_factor = main_methods.addParticleDynamicsGroup();
-    contact_repulsion_factor.add(
-        &main_methods.template addInteractionDynamics<
-            solid_dynamics::RepulsionFactor>(contact_relation));
-
-    auto &contact_repulsion_force = main_methods.addParticleDynamicsGroup();
-    contact_repulsion_force.add(
-        &main_methods.template addInteractionDynamicsWithUpdate<
-            solid_dynamics::RepulsionForceCK, Wall>(
-            contact_relation, continuum_solver_parameters.contact_numerical_damping_));
-
-    auto *repulsion_factor = &contact_repulsion_factor;
-    auto *repulsion_force = &contact_repulsion_force;
-    auto &initialization_pipeline = sim.getInitializationPipeline();
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [repulsion_factor]()
-        { repulsion_factor->exec(); });
-
-    auto &simulation_pipeline = sim.getSimulationPipeline();
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::BeforeMainPhysicalTimeStep, [repulsion_force]()
-        { repulsion_force->exec(); });
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::AfterLinearCorrectionMatrix, [repulsion_factor]()
-        { repulsion_factor->exec(); });
+    throw std::runtime_error(
+        "ContinuumSimulationBuilder::buildContactRepulsionIfPresent: no supported material type found!");
 }
 //=================================================================================================//
 template <class InnerRelationType, class ContactRelationType>
