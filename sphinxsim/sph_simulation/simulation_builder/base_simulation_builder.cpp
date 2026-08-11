@@ -78,6 +78,7 @@ void SimulationBuilder::buildSolidBodies(
         material_builder_ptr_->addMaterial(config_manager, solid_body, sb.at("material"));
         BaseParticles &reload_particles = solid_body.generateParticles<BaseParticles, Reload>(name);
         reload_particles.reloadExtraVariable<Vecd>("NormalDirection");
+        reload_particles.reloadExtraVariable<Real>("SignedDistance");
     }
 }
 //=================================================================================================//

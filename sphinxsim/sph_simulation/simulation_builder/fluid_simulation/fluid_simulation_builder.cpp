@@ -141,11 +141,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         auto &update_average_velocity =
             main_methods.addStateDynamics<UpdateAverageVelocityAndAccelerationCK>(elastic_body);
 
-        // The structure's reference normals and signed distance, needed by the
-        // coupling forces and by the per step normal update.
-        auto &elastic_initial_normal =
-            main_methods.addStateDynamics<NormalFromBodyShapeCK>(elastic_body);
-
         auto &elastic_configuration =
             main_methods.addParticleDynamicsGroup()
                 .add(&main_methods.addCellLinkedListDynamics(elastic_body))
@@ -220,7 +215,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             InitializationHookPoint::InitialCondition, [&]()
             {
                 elastic_configuration.exec();
-                elastic_initial_normal.exec();
                 elastic_correction_matrix.exec();
                 elastic_normal_direction.exec(); });
     }
