@@ -124,6 +124,7 @@ void SimulationBuilder::buildSolidBodies(
             
         BaseParticles &reload_particles = solid_body.generateParticles<BaseParticles, Reload>(name);
         reload_particles.reloadExtraVariable<Vecd>("NormalDirection");
+        reload_particles.reloadExtraVariable<Real>("SignedDistance");
     }
 }
 //=================================================================================================//

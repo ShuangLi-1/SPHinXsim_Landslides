@@ -103,7 +103,7 @@ class ParticleGeneration
     void defineBodyRelations(RelaxationSystem &relaxation_system);
     std::string getContactRelationName(const RelaxationBodyConfig &body_config);
 
-    ParticleDynamicsGroup &randomizeParticlePositions(RelaxationSystem &relaxation_system, MainMethods &main_methods);
+    ParticleDynamicsGroup &randomizeParticlePositions(RelaxationSystem &relaxation_system, HostMethods &host_methods);
 
     ParticleDynamicsGroup &addDummyBodiesCellLinkedListDynamics(
         RelaxationSystem &relaxation_system, MainMethods &main_methods);
@@ -120,7 +120,7 @@ class ParticleGeneration
         RelaxationSystem &relaxation_system, EntityManager &config_manager, MainMethods &main_methods);
 
     ParticleDynamicsGroup &addBodyNormalDirection(
-        RelaxationSystem &relaxation_system, EntityManager &config_manager, MainMethods &main_methods);
+        RelaxationSystem &relaxation_system, EntityManager &config_manager, HostMethods &host_methods);
 
     void addRelaxationConstraintsIfPresent(
         RelaxationSystem &relaxation_system, EntityManager &config_manager,
