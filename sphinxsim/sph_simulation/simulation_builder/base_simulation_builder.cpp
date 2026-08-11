@@ -35,13 +35,15 @@ void SimulationBuilder::buildFluidBodies(
     SPHSystem &sph_system, EntityManager &config_manager, const json &config)
 {
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+    StdVec<SPHBodyConfig *> &fluid_bodies_config =
+        *config_manager.emplaceEntity<StdVec<SPHBodyConfig *>>("FluidBodiesConfig");
+
     for (const auto &fb : config)
     {
         const std::string name = fb.at("name").get<std::string>();
-        SPHBodyConfig &fluid_body_config =
-            *config_manager.emplaceEntity<SPHBodyConfig>(name);
-        fluid_bodies_config_.push_back(&fluid_body_config);
-        fluid_body_config.name_ = name;
+        SPHBodyConfig &body_config = *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        fluid_bodies_config.push_back(&body_config);
+        body_config.name_ = name;
 
         Shape &fluid_shape = config_manager.getEntity<Shape>(name);
         auto &fluid_body = sph_system.addBody<FluidBody>(fluid_shape, name);
@@ -62,13 +64,15 @@ void SimulationBuilder::buildFluidBodies(
 void SimulationBuilder::buildContinuumBodies(
     SPHSystem &sph_system, EntityManager &config_manager, const json &config)
 {
+    StdVec<SPHBodyConfig *> &continuum_bodies_config =
+        *config_manager.emplaceEntity<StdVec<SPHBodyConfig *>>("ContinuumBodiesConfig");
+
     for (const auto &cb : config)
     {
         const std::string name = cb.at("name").get<std::string>();
-        SPHBodyConfig &continuum_body_config =
-            *config_manager.emplaceEntity<SPHBodyConfig>(name);
-        continuum_bodies_config_.push_back(&continuum_body_config);
-        continuum_body_config.name_ = name;
+        SPHBodyConfig &body_config = *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        continuum_bodies_config.push_back(&body_config);
+        body_config.name_ = name;
 
         Shape &shape = config_manager.getEntity<Shape>(name);
         auto &continuum_body = sph_system.addBody<RealBody>(shape, name);
@@ -100,28 +104,30 @@ void SPHBodyConfig::setHasDynamics()
 void SimulationBuilder::buildSolidBodies(
     SPHSystem &sph_system, EntityManager &config_manager, const json &config)
 {
+    StdVec<SPHBodyConfig *> &solid_bodies_config =
+        *config_manager.emplaceEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+
     for (const auto &sb : config)
     {
         const std::string name = sb.at("name").get<std::string>();
-        SPHBodyConfig &solid_body_config =
-            *config_manager.emplaceEntity<SPHBodyConfig>(name);
-        solid_bodies_config_.push_back(&solid_body_config);
-        solid_body_config.name_ = name;
-        solid_body_config.setStatic();
+        SPHBodyConfig &body_config = *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        solid_bodies_config.push_back(&body_config);
+        body_config.name_ = name;
+        body_config.setStatic();
 
         if (sb.contains("is_moving"))
-            solid_body_config.is_moving_ = sb.at("is_moving").get<bool>();
+            body_config.is_moving_ = sb.at("is_moving").get<bool>();
         if (sb.contains("has_dynamics"))
-            solid_body_config.has_dynamics_ = sb.at("has_dynamics").get<bool>();
+            body_config.has_dynamics_ = sb.at("has_dynamics").get<bool>();
         if (sb.contains("is_interactive_"))
-            solid_body_config.is_interactive_ = sb.at("is_interactive").get<bool>();
+            body_config.is_interactive_ = sb.at("is_interactive").get<bool>();
 
         Shape &solid_shape = config_manager.getEntity<Shape>(name);
         auto &solid_body = sph_system.addBody<SolidBody>(solid_shape, name);
         material_builder_ptr_->addMaterial(config_manager, solid_body, sb.at("material"));
-        if(!config_manager.hasEntity<Solid>(name + "RigidBody"))
-            solid_body_config.setDeformable();
-            
+        if (!config_manager.hasEntity<Solid>(name + "RigidBody"))
+            body_config.setDeformable();
+
         BaseParticles &reload_particles = solid_body.generateParticles<BaseParticles, Reload>(name);
         reload_particles.reloadExtraVariable<Vecd>("NormalDirection");
         reload_particles.reloadExtraVariable<Real>("SignedDistance");
