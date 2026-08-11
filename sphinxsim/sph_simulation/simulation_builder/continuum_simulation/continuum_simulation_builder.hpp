@@ -36,8 +36,8 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
     {
         using RiemannSolverType = RiemannSolver<PlasticContinuum, PlasticContinuum, TruncatedLinear>;
         return main_methods.template addInteractionDynamicsOneLevel<
-                        continuum_dynamics::PlasticAcousticStep1stHalf,
-                        RiemannSolverType, NoKernelCorrectionCK>(inner_relation)
+                               continuum_dynamics::PlasticAcousticStep1stHalf,
+                               RiemannSolverType, NoKernelCorrectionCK>(inner_relation)
             .template addPostContactInteraction<Wall, RiemannSolverType, NoKernelCorrectionCK>(contact_relation);
     }
 
@@ -73,9 +73,9 @@ BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
         auto &continuum_solver_parameters = config_manager.getEntity<
             ContinuumSolverParameters>("ContinuumSolverParameters");
         return main_methods.template addInteractionDynamicsOneLevel<
-                        continuum_dynamics::PlasticAcousticStep2ndHalf,
-                        RiemannSolverType, NoKernelCorrectionCK>(
-            inner_relation, continuum_solver_parameters.plastic_riemann_dissipation_factor_)
+                               continuum_dynamics::PlasticAcousticStep2ndHalf,
+                               RiemannSolverType, NoKernelCorrectionCK>(
+                               inner_relation, continuum_solver_parameters.plastic_riemann_dissipation_factor_)
             .template addPostContactInteraction<Wall, RiemannSolverType, NoKernelCorrectionCK>(contact_relation);
     }
 
@@ -87,54 +87,43 @@ template <class InnerRelationType>
 void ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent(
     SPHSimulation &sim, MainMethods &main_methods, InnerRelationType &inner_relation)
 {
-    auto &config_manager = sim.getConfigManager();
-    auto add_shear_force_hook = [&](ParticleDynamicsGroup &continuum_shear_force)
-    {
-        auto *shear_force = &continuum_shear_force;
-        auto *time_stepper = &sim.getSPHSolver().getTimeStepper();
-        auto &simulation_pipeline = sim.getSimulationPipeline();
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::BeforeMainPhysicalTimeStep, [shear_force, time_stepper]()
-            { shear_force->exec(time_stepper->getGlobalTimeStepSize()); });
-    };
-
     std::string body_name = inner_relation.getSPHBody().Name();
+    auto &config_manager = sim.getConfigManager();
+
+    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+        return;
+
+    auto &time_stepper = sim.getSPHSolver().getTimeStepper();
+    auto &continuum_shear_force = main_methods.addParticleDynamicsGroup();
+    auto &simulation_pipeline = sim.getSimulationPipeline();
+    simulation_pipeline.insert_hook(
+        SimulationHookPoint::BeforeMainPhysicalTimeStep, [&]()
+        {   Real dt = time_stepper.getGlobalTimeStepSize(); 
+            continuum_shear_force.exec(dt); });
+
+    continuum_shear_force.add(&main_methods.template addInteractionDynamics<
+                               LinearGradient, Vecd>(inner_relation, "Velocity"));
+
+    auto &continuum_solver_parameters = config_manager.getEntity<
+        ContinuumSolverParameters>("ContinuumSolverParameters");
+
     if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
     {
-        auto &continuum_solver_parameters = config_manager.getEntity<
-            ContinuumSolverParameters>("ContinuumSolverParameters");
-        auto &continuum_shear_force = main_methods.addParticleDynamicsGroup();
         continuum_shear_force
-            .add(&main_methods.template addInteractionDynamics<
-                  LinearGradient, Vecd>(inner_relation, "Velocity"))
             .add(&main_methods.template addInteractionDynamicsOneLevel<
-                 continuum_dynamics::ShearIntegration, GeneralContinuum>(
-                 inner_relation, continuum_solver_parameters.hourglass_factor_,
-                 continuum_solver_parameters.shear_stress_damping_));
-
-        add_shear_force_hook(continuum_shear_force);
+                  continuum_dynamics::ShearIntegration, GeneralContinuum>(
+                inner_relation, continuum_solver_parameters.hourglass_factor_,
+                continuum_solver_parameters.shear_stress_damping_));
         return;
     }
 
     if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
     {
-        auto &continuum_solver_parameters = config_manager.getEntity<
-            ContinuumSolverParameters>("ContinuumSolverParameters");
-        auto &continuum_shear_force = main_methods.addParticleDynamicsGroup();
         continuum_shear_force
-            .add(&main_methods.template addInteractionDynamics<
-                  LinearGradient, Vecd>(inner_relation, "Velocity"))
             .add(&main_methods.template addInteractionDynamicsOneLevel<
-                 continuum_dynamics::ShearIntegration, J2Plasticity>(
-                 inner_relation, continuum_solver_parameters.hourglass_factor_,
-                 continuum_solver_parameters.shear_stress_damping_));
-
-        add_shear_force_hook(continuum_shear_force);
-        return;
-    }
-
-    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
-    {
+                  continuum_dynamics::ShearIntegration, J2Plasticity>(
+                inner_relation, continuum_solver_parameters.hourglass_factor_,
+                continuum_solver_parameters.shear_stress_damping_));
         return;
     }
 
