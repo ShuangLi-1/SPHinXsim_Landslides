@@ -199,9 +199,7 @@ void ContinuumSimulationBuilder::buildDensityRegularizationIfPresent(
 {
     EntityManager &config_manager = sim.getConfigManager();
     if (!config_manager.hasEntity<PlasticContinuum>(continuum_body.Name() + "PlasticContinuum"))
-    {
         return;
-    }
 
     auto &continuum_solver_parameters = config_manager.getEntity<
         ContinuumSolverParameters>("ContinuumSolverParameters");
@@ -210,16 +208,15 @@ void ContinuumSimulationBuilder::buildDensityRegularizationIfPresent(
             sim, main_methods, inner_relation, contact_relation,
             continuum_solver_parameters.surface_type_);
 
-    auto *density_regularization_ptr = &density_regularization;
     auto &initialization_pipeline = sim.getInitializationPipeline();
     initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialParticleIndicationTagging, [density_regularization_ptr]()
-        { density_regularization_ptr->exec(); });
+        InitializationHookPoint::InitialParticleIndicationTagging, [&]()
+        { density_regularization.exec(); });
 
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
-        SimulationHookPoint::ParticleIndicationTagging, [density_regularization_ptr]()
-        { density_regularization_ptr->exec(); });
+        SimulationHookPoint::ParticleIndicationTagging, [&]()
+        { density_regularization.exec(); });
 }
 //=================================================================================================//
 template <class InnerRelationType>
@@ -229,25 +226,23 @@ void ContinuumSimulationBuilder::buildStressDiffusionIfPresent(
     BodyStatesRecording &body_state_recorder)
 {
     EntityManager &config_manager = sim.getConfigManager();
-    if (!config_manager.hasEntity<PlasticContinuum>(continuum_body.Name() + "PlasticContinuum"))
+    if (config_manager.hasEntity<PlasticContinuum>(continuum_body.Name() + "PlasticContinuum"))
     {
-        return;
+        auto &stress_diffusion = main_methods.template addInteractionDynamics<
+            continuum_dynamics::StressDiffusionCK>(inner_relation);
+
+        body_state_recorder.addDerivedVariableRecording<
+            StateDynamics<execution::ParallelPolicy, continuum_dynamics::VerticalStressCK>>(continuum_body);
+        body_state_recorder.addDerivedVariableRecording<
+            StateDynamics<execution::ParallelPolicy, continuum_dynamics::AccDeviatoricPlasticStrainCK>>(continuum_body);
+
+        auto &time_stepper = sim.getSPHSolver().getTimeStepper();
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BeforeMainPhysicalTimeStep, [&]()
+            {   Real dt = time_stepper.getGlobalTimeStepSize();
+                stress_diffusion.exec(dt); });
     }
-
-    auto &stress_diffusion = main_methods.template addInteractionDynamics<
-        continuum_dynamics::StressDiffusionCK>(inner_relation);
-
-    body_state_recorder.addDerivedVariableRecording<
-        StateDynamics<execution::ParallelPolicy, continuum_dynamics::VerticalStressCK>>(continuum_body);
-    body_state_recorder.addDerivedVariableRecording<
-        StateDynamics<execution::ParallelPolicy, continuum_dynamics::AccDeviatoricPlasticStrainCK>>(continuum_body);
-
-    auto *stress_diffusion_ptr = &stress_diffusion;
-    auto *time_stepper = &sim.getSPHSolver().getTimeStepper();
-    auto &simulation_pipeline = sim.getSimulationPipeline();
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::BeforeMainPhysicalTimeStep, [stress_diffusion_ptr, time_stepper]()
-        { stress_diffusion_ptr->exec(time_stepper->getGlobalTimeStepSize()); });
 }
 //=================================================================================================//
 } // namespace SPH
