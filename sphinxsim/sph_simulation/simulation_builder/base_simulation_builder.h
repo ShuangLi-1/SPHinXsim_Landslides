@@ -49,6 +49,7 @@ enum class SimulationHookPoint
     ExtraOutput,
     ParticleSort,
     ParticleIndicationTagging,
+    UpdateConfiguration,
     AfterLinearCorrectionMatrix,
     NumHooks
 };
@@ -57,6 +58,7 @@ enum class InitializationHookPoint
 {
     InitialCondition,
     AfterInitialCondition,
+    InitialUpdateConfiguration,
     RestartFromFile,
     UpdateConfigurationAfterRestart,
     InitialObservation,
@@ -104,7 +106,7 @@ struct SPHBodyConfig
     int is_moving_ = true;
     bool has_dynamics_ = true;
     bool is_interactive_ = true;
-    
+
     void setStatic();
     void setDeformable();
     void setHasDynamics();
@@ -149,6 +151,7 @@ class SimulationBuilder
     void buildFluidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildContinuumBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
+    void buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     RestartConfig parseRestartConfig(const json &config);
 
     void buildExternalForceIfPresent(
@@ -162,6 +165,11 @@ class SimulationBuilder
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
     SolverCommonConfig parseSolverCommonConfig(const ScalingConfig &scaling_config, const json &config);
+
+    void buildCellLinkedListDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildFluidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildContinuumRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildSolidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
     template <class IdentifierType>
     BaseDynamics<void> &addVariableAssignment(
