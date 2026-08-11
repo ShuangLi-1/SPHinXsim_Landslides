@@ -2,6 +2,7 @@
 
 #include "base_simulation_builder.hpp"
 #include "constraint_builder.h"
+#include "continuum_dynamics_builder.h"
 
 namespace SPH
 {
@@ -21,43 +22,26 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     buildContinuumBodies(sph_system, config_manager, config.at("continuum_bodies"));
     buildSolidBodies(sph_system, config_manager, config.at("solid_bodies"));
     //----------------------------------------------------------------------
-    //	Define body relation map.
-    //	The relations give the topological connections within a body
-    //  or with other bodies within interaction range.
-    //  Generally, we first define all the inner relations, then the contact relations.
-    //----------------------------------------------------------------------
-    auto &continuum_body = *sph_system.collectBodies<RealBody>().front(); // assume only one continuum body for now
-    StdVec<SolidBody *> solid_bodies = sph_system.collectBodies<SolidBody>();
-
-    auto &continuum_inner = sph_system.addInnerRelation(continuum_body);
-    auto &continuum_solid_contact = sph_system.addContactRelation(continuum_body, solid_bodies);
-    //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
+    buildUpdateConfiguration(sim, main_methods, config);
 
-    auto &update_configuration =
-        main_methods.addParticleDynamicsGroup()
-            .add(&main_methods.addCellLinkedListDynamics(solid_bodies))
-            .add(&main_methods.addCellLinkedListDynamics(continuum_body))
-            .add(&main_methods.addRelationDynamics(continuum_inner, continuum_solid_contact));
-    config_manager.addEntity<BaseDynamics<void>>("UpdateConfiguration", &update_configuration);
-
-    auto &continuum_advection_step_setup = main_methods.addStateDynamics<
-        fluid_dynamics::AdvectionStepSetup>(continuum_body);
-    auto &continuum_update_particle_position = main_methods.addStateDynamics<
-        fluid_dynamics::UpdateParticlePosition>(continuum_body);
+    auto &continuum_advection_step_setup =
+        ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
+    auto &continuum_update_particle_position =
+        ContinuumDynamicsBuilder::addUpdateParticlePosition(sim, main_methods);
 
     auto &continuum_acoustic_step_1st_half =
-        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
+        ContinuumDynamicsBuilder::addAcousticStep1stHalf(sim, main_methods);
     auto &continuum_acoustic_step_2nd_half =
-        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
+        ContinuumDynamicsBuilder::addAcousticStep2ndHalf(sim, main_methods);
 
     auto &continuum_linear_correction_matrix =
-        addLinearCorrectionMatrix(config_manager, main_methods, continuum_inner);
+        ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
 
     buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
     buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
@@ -101,8 +85,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     initialization_pipeline.main_steps.push_back(
         [&]()
         {
-            update_configuration.exec();
-
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialUpdateConfiguration);
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
@@ -163,7 +146,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
 
-                update_configuration.exec();
+                simulation_pipeline.run_hooks(SimulationHookPoint::UpdateConfiguration);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
                 continuum_advection_step_setup.exec();
                 continuum_linear_correction_matrix.exec();

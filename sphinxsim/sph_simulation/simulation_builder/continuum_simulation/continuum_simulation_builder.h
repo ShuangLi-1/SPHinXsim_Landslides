@@ -41,18 +41,6 @@ class BaseDynamics;
 class BodyStatesRecording;
 class SPHBody;
 
-struct ContinuumSolverParameters
-{
-    Real acoustic_cfl_{0.4};
-    Real advection_cfl_{0.2};
-    Real linear_correction_matrix_coeff_{0.5};
-    Real contact_numerical_damping_{0.5};
-    Real shear_stress_damping_{0.0};
-    Real hourglass_factor_{2.0};
-    Real plastic_riemann_dissipation_factor_{20.0 * (Real)Dimensions};
-    std::string surface_type_ = "free_surface";
-};
-
 class ContinuumSimulationBuilder : public SimulationBuilder
 {
   public:
