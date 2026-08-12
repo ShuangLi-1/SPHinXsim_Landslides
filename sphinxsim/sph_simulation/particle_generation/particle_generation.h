@@ -42,9 +42,10 @@ template <class T>
 class BaseDynamics;
 class RecordingBuilder;
 
-struct CommonBodyConfig
+struct GenerationBodyConfig
 {
     std::string name_;
+    std::string adaptation_;
     bool is_relaxation_body_ = false;
     bool is_solid_body_ = false;
 };
@@ -58,7 +59,7 @@ struct RelaxationBodyConfig
 
 struct AllBodiesConfig
 {
-    std::vector<CommonBodyConfig> all_bodies_;
+    std::vector<GenerationBodyConfig> all_bodies_;
     std::vector<RelaxationBodyConfig> relaxation_bodies_; // particles in these bodies will be relaxed
 };
 struct RelaxationParameters

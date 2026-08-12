@@ -1,7 +1,8 @@
-#include "continuum_simulation_builder.hpp"
+#include "continuum_simulation_builder.h"
 
-#include "base_simulation_builder.hpp"
 #include "constraint_builder.h"
+#include "recording_builder.h"
+#include "sph_simulation.h"
 
 namespace SPH
 {
@@ -21,46 +22,26 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     buildContinuumBodies(sph_system, config_manager, config.at("continuum_bodies"));
     buildSolidBodies(sph_system, config_manager, config.at("solid_bodies"));
     //----------------------------------------------------------------------
-    //	Define body relation map.
-    //	The relations give the topological connections within a body
-    //  or with other bodies within interaction range.
-    //  Generally, we first define all the inner relations, then the contact relations.
-    //----------------------------------------------------------------------
-    auto &continuum_body = *sph_system.collectBodies<RealBody>().front(); // assume only one continuum body for now
-    StdVec<SolidBody *> solid_bodies = sph_system.collectBodies<SolidBody>();
-
-    auto &continuum_inner = sph_system.addInnerRelation(continuum_body);
-    auto &continuum_solid_contact = sph_system.addContactRelation(continuum_body, solid_bodies);
-    //----------------------------------------------------------------------
     // Define the main numerical methods used in the simulation.
     // Note that there may be data dependence on the sequence of constructions.
     // Generally, the configuration dynamics, such as update cell linked list,
     // update body relations, are defined first.
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
+    buildUpdateConfiguration(sim, main_methods, config);
 
-    auto &update_configuration =
-        main_methods.addParticleDynamicsGroup()
-            .add(&main_methods.addCellLinkedListDynamics(solid_bodies))
-            .add(&main_methods.addCellLinkedListDynamics(continuum_body))
-            .add(&main_methods.addRelationDynamics(continuum_inner, continuum_solid_contact));
-    config_manager.addEntity<BaseDynamics<void>>("UpdateConfiguration", &update_configuration);
+    auto &continuum_advection_step_setup = ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
+    auto &continuum_update_particle_position = ContinuumDynamicsBuilder::addUpdateParticlePosition(sim, main_methods);
 
-    auto &continuum_advection_step_setup = main_methods.addStateDynamics<
-        fluid_dynamics::AdvectionStepSetup>(continuum_body);
-    auto &continuum_update_particle_position = main_methods.addStateDynamics<
-        fluid_dynamics::UpdateParticlePosition>(continuum_body);
+    auto &continuum_acoustic_step_1st_half = ContinuumDynamicsBuilder::addAcousticStep1stHalf(sim, main_methods);
+    auto &continuum_acoustic_step_2nd_half = ContinuumDynamicsBuilder::addAcousticStep2ndHalf(sim, main_methods);
 
-    auto &continuum_acoustic_step_1st_half =
-        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
-    auto &continuum_acoustic_step_2nd_half =
-        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
-
-    auto &continuum_linear_correction_matrix =
-        addLinearCorrectionMatrix(config_manager, main_methods, continuum_inner);
-
-    buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
-    buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
+    auto &continuum_linear_correction_matrix = ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
+    //----------------------------------------------------------------------
+    // Optional methods that depend on the presence of certain features in the simulation.
+    //----------------------------------------------------------------------
+    ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(sim, main_methods);
+    ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
     // Initial condition if present.
     //----------------------------------------------------------------------
@@ -70,25 +51,19 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     // Constraints carried at last due to possible third-party dependencies.
     //----------------------------------------------------------------------
     ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
-    buildExternalForceIfPresent(sim, main_methods, continuum_body, config);
+    buildExternalForceIfPresent(sim, main_methods, config);
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
-    buildDensityRegularizationIfPresent(
-        sim, main_methods, continuum_body, continuum_inner, continuum_solid_contact);
-    buildStressDiffusionIfPresent(
-        sim, main_methods, continuum_body, continuum_inner, body_state_recorder);
+    ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(sim, main_methods, body_state_recorder);
     //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------
-    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &continuum_advection_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
-    auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
+    auto &continuum_advection_time_step = ContinuumDynamicsBuilder::addAdvectionTimeStep(sim, main_methods);
+    auto &continuum_acoustic_time_step = ContinuumDynamicsBuilder::addAcousticTimeStep(sim, main_methods);
     auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
     auto &time_stepper = sph_solver.getTimeStepper();
     auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());
@@ -101,9 +76,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     initialization_pipeline.main_steps.push_back(
         [&]()
         {
-            update_configuration.exec();
-
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialUpdateConfiguration);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
@@ -163,8 +136,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
 
-                update_configuration.exec();
-                simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
+                simulation_pipeline.run_hooks(SimulationHookPoint::UpdateConfiguration);
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterUpdateConfiguration);
                 continuum_advection_step_setup.exec();
                 continuum_linear_correction_matrix.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::AfterLinearCorrectionMatrix);

@@ -181,7 +181,7 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         }
         // applied to initialization
         initialization_pipeline.insert_hook(
-            InitializationHookPoint::InitialParticleIndicationTagging, [&]()
+            InitializationHookPoint::AfterInitialCondition, [&]()
             { bi_directional_bd.tagBufferParticles(); });
 
         initialization_pipeline.insert_hook(
@@ -221,7 +221,7 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         fluid_solver_config.particle_deletion_ = true; // enable particle deletion
 
         simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleIndicationTagging, [&]()
+            SimulationHookPoint::AfterUpdateConfiguration, [&]()
             { bi_directional_bd.tagBufferParticles(); });
 
         return;

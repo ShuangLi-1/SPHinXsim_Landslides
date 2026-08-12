@@ -79,6 +79,7 @@
   "solid_bodies": [
     {
       "name": "MillingTool",
+      "is_moving": true,
       "material": {
         "type": "rigid_body"
       }

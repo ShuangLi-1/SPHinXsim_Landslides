@@ -155,14 +155,14 @@ void ParticleGeneration ::addAllBodies(
     {
         std::string body_name = bd.at("name").get<std::string>();
 
-        CommonBodyConfig common_body_config;
-        common_body_config.name_ = body_name;
+        GenerationBodyConfig generation_body_config;
+        generation_body_config.name_ = body_name;
         Shape &shape = config_manager.getEntity<Shape>(body_name);
         auto &real_body = relaxation_system.addBody<RealBody>(shape, body_name);
 
         if (bd.contains("relaxation"))
         {
-            common_body_config.is_relaxation_body_ = true;
+            generation_body_config.is_relaxation_body_ = true;
             RelaxationBodyConfig relax_body_config = parseRelaxationBodyConfig(body_name, bd.at("relaxation"));
             if (relax_body_config.with_level_set_)
             {
@@ -175,9 +175,9 @@ void ParticleGeneration ::addAllBodies(
 
         if (bd.contains("solid_body"))
         {
-            common_body_config.is_solid_body_ = true;
+            generation_body_config.is_solid_body_ = true;
         }
-        bodies_config_.all_bodies_.push_back(common_body_config);
+        bodies_config_.all_bodies_.push_back(generation_body_config);
 
         StdVec<OrientedBox *> &blockers = *config_manager.emplaceEntity<
             StdVec<OrientedBox *>>(body_name + "Blockers", StdVec<OrientedBox *>{});
