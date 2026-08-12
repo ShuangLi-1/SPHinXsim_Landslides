@@ -56,6 +56,7 @@ class SPHSimulation
     ~SPHSimulation();
     void resetOutputRoot(const fs::path &output_root, bool keep_existing = false);
     void buildGeometries();
+    std::map<std::string, std::pair<std::vector<double>, std::vector<double>>> getShapeBounds();
     void generateParticles();
     void buildSimulation();
     void initializeSimulation();
@@ -70,6 +71,7 @@ class SPHSimulation
     friend class ContinuumSimulationBuilder;
     friend class ConstraintBuilder;
     friend class FluidDynamicsBuilder;
+    friend class ContinuumDynamicsBuilder;
     friend class ThermalDynamicsBuilder;
     friend class SolidDynamicsBuilder;
     friend class RecordingBuilder;
@@ -96,11 +98,11 @@ class SPHSimulation
     StagePipeline<InitializationHookPoint> initialization_pipeline_;
     StagePipeline<SimulationHookPoint> simulation_pipeline_;
     std::unique_ptr<RecordingBuilder> recording_builder_ptr_;
-    std::unique_ptr<ParticleGeneration> particle_generation_ptr_;
     std::unique_ptr<SPHSystem> sph_system_ptr_;
     std::unique_ptr<SPHSolver> sph_solver_ptr_;
     UniquePtrsKeeper<Contact<>> structure_contacts_keeper_;
     bool geometry_built_{false};
+    bool particles_generated_{false};
     bool executable_simulation_state_ready_{false};
     json loadConfig();
 };

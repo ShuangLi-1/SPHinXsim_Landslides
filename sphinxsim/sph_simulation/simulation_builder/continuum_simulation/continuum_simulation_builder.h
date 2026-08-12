@@ -21,53 +21,36 @@
  *                                                                           *
  * ------------------------------------------------------------------------- */
 /**
- * @file 	geometric_element_and_shape_3d.h
- * @brief tbd.
- * @author Xiangyu Hu
+ * @file    continuum_simulation_builder.h
+ * @brief   TBD.
+ * @author  Xiangyu Hu
  */
 
-#ifndef GEOMETRIC_ELEMENT_AND_SHAPE_3D_H
-#define GEOMETRIC_ELEMENT_AND_SHAPE_3D_H
+#ifndef CONTINUUM_SIMULATION_BUILDER_H
+#define CONTINUUM_SIMULATION_BUILDER_H
 
-#include "data_type.h"
-#include "transform_geometry.hpp"
+#include "base_simulation_builder.h"
+#include "continuum_dynamics_builder.h"
+#include "sph_solver.h"
 
 namespace SPH
 {
-class GeometricCylinder
+class EntityManager;
+class ParticleDynamicsGroup;
+template <class T>
+class BaseDynamics;
+class BodyStatesRecording;
+class SPHBody;
+
+class ContinuumSimulationBuilder : public SimulationBuilder
 {
   public:
-    explicit GeometricCylinder(Real radius, Real halflength);
-    ~GeometricCylinder(){};
+    void buildSimulation(SPHSimulation &sim, const json &config) override;
+    virtual void parseSolverParameters(EntityManager &config_manager, const json &config) override;
 
-    Real getRadius() const { return radius_; };
-    Real getHalfLength() const { return halflength_; };
-    bool checkContain(const Vec3d &probe_point)
-    {
-        if (ABS(probe_point[0]) > halflength_)
-            return false;
-        return probe_point.tail(Dimensions - 1).norm() <= radius_;
-    };
-
-    Vec3d findClosestPoint(const Vec3d &probe_point);
-    BoundingBox3d findBounds();
-
-  protected:
-    Real radius_;
-    Real halflength_;
-};
-
-using TransformGeometryCylinder = TransformGeometry<GeometricCylinder>;
-
-class GeometricShapeCylinder : public TransformShape<GeometricCylinder>
-{
-  public:
-    GeometricShapeCylinder(const Transform &transform, Real radius, Real halflength,
-                           const std::string &name = "GeometricShapeCylinder");
-    GeometricShapeCylinder(const TransformGeometryCylinder &transformed_cylinder,
-                           const std::string &name = "GeometricShapeCylinder");                       
-    void writeGeometricShapeCylinderToVtp(Real scale_factor);                       
-    virtual ~GeometricShapeCylinder(){};
+  private:
+    ContinuumSolverParameters parseContinuumSolverParameters(
+        const ScalingConfig &scaling_config, const json &config);
 };
 } // namespace SPH
-#endif // GEOMETRIC_ELEMENT_AND_SHAPE_3D_H
+#endif // CONTINUUM_SIMULATION_BUILDER_H

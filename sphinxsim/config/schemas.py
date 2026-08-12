@@ -52,6 +52,7 @@ class BodyShapeType(str, Enum):
     EXPANDED_BOX = "expanded_box"
     COMPLEX_SHAPE = "complex_shape"
     MULTIPOLYGON = "multipolygon"
+    CYLINDER = "cylinder"
     TRIANGLE_MESH = "triangle_mesh"
 
 
@@ -214,6 +215,9 @@ class ShapeConfig(BaseModel):
 
     polygons: Optional[List[MultiPolygonEntryConfig]] = None
 
+    radius: Optional[float] = Field(default=None, gt=0)
+    half_height: Optional[float] = Field(default=None, gt=0)
+
     file_name: Optional[str] = None
     translation: Optional[List[float]] = Field(default=None, min_length=3, max_length=3)
     scale: Optional[float] = Field(default=None, gt=0)
@@ -249,6 +253,11 @@ class ShapeConfig(BaseModel):
         if self.type == BodyShapeType.MULTIPOLYGON:
             if not self.polygons:
                 raise ValueError("multipolygon shape requires non-empty polygons")
+            return self
+
+        if self.type == BodyShapeType.CYLINDER:
+            if self.radius is None or self.half_height is None or self.transform is None:
+                raise ValueError("cylinder shape requires radius, half_height and transform")
             return self
 
         if self.type == BodyShapeType.TRIANGLE_MESH:
@@ -367,8 +376,9 @@ class ParticleGenerationBodyConfig(BaseModel):
     model_config = ConfigDict(extra="allow")
 
     name: str = Field(..., min_length=1)
-    blocks: List[str] = Field(default_factory=list)
-    inserts: List[str] = Field(default_factory=list)
+    blockers: List[str] = Field(default_factory=list)
+    box_shape_inserts: List[str] = Field(default_factory=list)
+    cylinder_shape_inserts: List[str] = Field(default_factory=list)
     solid_body: Optional[dict] = None
     relaxation: Optional[RelaxationBodyConfig] = None
 
@@ -974,6 +984,7 @@ class SimulationConfig(BaseModel):
             )
 
         shape_names = {shape.name for shape in self.geometries.shapes}
+        shape_types_by_name = {shape.name: shape.type for shape in self.geometries.shapes}
         oriented_box_names = {ab.name for ab in self.geometries.oriented_boxes}
 
         for section_name, bodies in (
@@ -1047,17 +1058,37 @@ class SimulationConfig(BaseModel):
                     raise ValueError(
                         f"particle_generation body '{body.name}' must match a shape name in geometries.shapes"
                     )
-                for block_name in body.blocks:
-                    if block_name not in oriented_box_names:
+                for blocker_name in body.blockers:
+                    if blocker_name not in oriented_box_names:
                         raise ValueError(
-                            "particle_generation body blocks entries must reference existing "
+                            "particle_generation body blockers entries must reference existing "
                             "geometries.oriented_boxes names"
                         )
-                for insert_name in body.inserts:
-                    if insert_name not in oriented_box_names:
+                for insert_name in body.box_shape_inserts:
+                    if insert_name not in shape_names:
                         raise ValueError(
-                            "particle_generation body inserts entries must reference existing "
-                            "geometries.oriented_boxes names"
+                            "particle_generation body box_shape_inserts entries must reference existing "
+                            "geometries.shapes names"
+                        )
+                    if shape_types_by_name[insert_name] not in (
+                        BodyShapeType.BOX,
+                        BodyShapeType.BOUNDING_BOX,
+                        BodyShapeType.EXPANDED_BOX,
+                    ):
+                        raise ValueError(
+                            "particle_generation body box_shape_inserts entries must reference "
+                            "box-compatible shapes (box, bounding_box, expanded_box)"
+                        )
+                for insert_name in body.cylinder_shape_inserts:
+                    if insert_name not in shape_names:
+                        raise ValueError(
+                            "particle_generation body cylinder_shape_inserts entries must reference existing "
+                            "geometries.shapes names"
+                        )
+                    if shape_types_by_name[insert_name] != BodyShapeType.CYLINDER:
+                        raise ValueError(
+                            "particle_generation body cylinder_shape_inserts entries must reference "
+                            "cylinder shapes"
                         )
             for c in self.particle_generation.settings.relaxation_constraints:
                 if c.body_name not in shape_names:
@@ -1174,6 +1205,8 @@ class SimulationConfig(BaseModel):
         elif dim == 2:
             if any(shape.type == BodyShapeType.TRIANGLE_MESH for shape in self.geometries.shapes):
                 raise ValueError("triangle_mesh shapes are 3D-only; use 2D shapes for 2D configurations")
+            if any(shape.type == BodyShapeType.CYLINDER for shape in self.geometries.shapes):
+                raise ValueError("cylinder shapes are 3D-only; use 2D shapes for 2D configurations")
 
         all_plastic_continuum = bool(self.continuum_bodies) and all(
             body.material.type == MaterialType.PLASTIC_CONTINUUM

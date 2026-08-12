@@ -53,6 +53,7 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
         [&]()
         {
             randomize_particle_position.exec();
+            relaxation_pipeline_.run_hooks(RelaxationHookPoint::Initialization);
             dummy_cell_linked_list.exec();
 
             UnsignedInt ite_p = 0;
@@ -81,14 +82,7 @@ void ParticleGeneration::buildParticleGeneration(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     // Define optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-    if (config.contains("relaxation_constraints"))
-    {
-        auto &relaxation_constraints = addRelaxationConstraints(
-            relaxation_system, config_manager, main_methods, config.at("relaxation_constraints"));
-        relaxation_pipeline_.insert_hook(RelaxationHookPoint::Constraints, [&]()
-                                         { relaxation_constraints.exec(); });
-    }
-
+    addRelaxationConstraintsIfPresent(relaxation_system, config_manager, main_methods, config);
     //----------------------------------------------------------------------
     //	Run on CPU after relaxation finished and output results.
     //----------------------------------------------------------------------
@@ -161,14 +155,14 @@ void ParticleGeneration ::addAllBodies(
     {
         std::string body_name = bd.at("name").get<std::string>();
 
-        CommonBodyConfig common_body_config;
-        common_body_config.name_ = body_name;
+        GenerationBodyConfig generation_body_config;
+        generation_body_config.name_ = body_name;
         Shape &shape = config_manager.getEntity<Shape>(body_name);
         auto &real_body = relaxation_system.addBody<RealBody>(shape, body_name);
 
         if (bd.contains("relaxation"))
         {
-            common_body_config.is_relaxation_body_ = true;
+            generation_body_config.is_relaxation_body_ = true;
             RelaxationBodyConfig relax_body_config = parseRelaxationBodyConfig(body_name, bd.at("relaxation"));
             if (relax_body_config.with_level_set_)
             {
@@ -181,28 +175,43 @@ void ParticleGeneration ::addAllBodies(
 
         if (bd.contains("solid_body"))
         {
-            common_body_config.is_solid_body_ = true;
+            generation_body_config.is_solid_body_ = true;
         }
-        bodies_config_.all_bodies_.push_back(common_body_config);
+        bodies_config_.all_bodies_.push_back(generation_body_config);
 
-        StdVec<OrientedBox *> blocks;
-        if (bd.contains("blocks"))
+        StdVec<OrientedBox *> &blockers = *config_manager.emplaceEntity<
+            StdVec<OrientedBox *>>(body_name + "Blockers", StdVec<OrientedBox *>{});
+
+        if (bd.contains("blockers"))
         {
-            for (const auto &block : bd.at("blocks"))
+            for (const auto &blocker : bd.at("blockers"))
             {
-                blocks.push_back(&config_manager.getEntity<OrientedBox>(block.get<std::string>()));
+                blockers.push_back(&config_manager.getEntity<OrientedBox>(blocker.get<std::string>()));
             }
         }
 
-        StdVec<OrientedBox *> inserts;
-        if (bd.contains("inserts"))
+        StdVec<Shape *> &inserts = *config_manager.emplaceEntity<
+            StdVec<Shape *>>(body_name + "Inserts", StdVec<Shape *>{});
+
+        if (bd.contains("box_shape_inserts"))
         {
-            for (const auto &insert : bd.at("inserts"))
+            for (const auto &insert : bd.at("box_shape_inserts"))
             {
-                inserts.push_back(&config_manager.getEntity<OrientedBox>(insert.get<std::string>()));
+                inserts.push_back(&config_manager.getEntity<GeometricShapeBox>(insert.get<std::string>()));
             }
         }
-        real_body.generateParticles<BaseParticles, Lattice>(blocks, inserts);
+
+#ifdef SPHINXSYS_3D
+        if (bd.contains("cylinder_shape_inserts"))
+        {
+            for (const auto &insert : bd.at("cylinder_shape_inserts"))
+            {
+                inserts.push_back(&config_manager.getEntity<GeometricShapeCylinder>(insert.get<std::string>()));
+            }
+        }
+#endif
+
+        real_body.generateParticles<BaseParticles, Lattice>(blockers, inserts);
     }
 }
 //=================================================================================================//
@@ -249,14 +258,14 @@ void ParticleGeneration::defineBodyRelations(RelaxationSystem &relaxation_system
 }
 //=================================================================================================//
 ParticleDynamicsGroup &ParticleGeneration::randomizeParticlePositions(
-    RelaxationSystem &relaxation_system, MainMethods &main_methods)
+    RelaxationSystem &relaxation_system, HostMethods &host_methods)
 {
-    auto &randomize_particle_position = main_methods.addParticleDynamicsGroup();
+    auto &randomize_particle_position = host_methods.addParticleDynamicsGroup();
     for (const auto &body_config : bodies_config_.relaxation_bodies_)
     {
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_config.name_);
         randomize_particle_position.add(
-            &main_methods.template addStateDynamics<RandomizeParticlePositionCK>(real_body));
+            &host_methods.template addStateDynamics<RandomizeParticlePositionCK>(real_body));
     }
     return randomize_particle_position;
 }
@@ -368,48 +377,86 @@ ParticleDynamicsGroup &ParticleGeneration::addRelaxationPositionUpdate(
 }
 //=================================================================================================//
 ParticleDynamicsGroup &ParticleGeneration::addBodyNormalDirection(
-    RelaxationSystem &relaxation_system, EntityManager &config_manager, MainMethods &main_methods)
+    RelaxationSystem &relaxation_system, EntityManager &config_manager, HostMethods &host_methods)
 {
-    ParticleDynamicsGroup &normal_direction_update = main_methods.addParticleDynamicsGroup();
+    ParticleDynamicsGroup &normal_direction_update = host_methods.addParticleDynamicsGroup();
     for (const auto &body_config : bodies_config_.all_bodies_)
     {
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_config.name_);
         if (body_config.is_solid_body_)
         {
-            normal_direction_update.add(&main_methods.template addStateDynamics<NormalFromBodyShapeCK>(real_body));
+            normal_direction_update.add(&host_methods.template addStateDynamics<NormalFromBodyShapeCK>(real_body));
             real_body.getBaseParticles().template addEvolvingVariable<Vecd>("NormalDirection");
+            real_body.getBaseParticles().template addEvolvingVariable<Real>("SignedDistance");
         }
     }
     return normal_direction_update;
 }
 //=================================================================================================//
-ParticleDynamicsGroup &ParticleGeneration::addRelaxationConstraints(
+void ParticleGeneration::addRelaxationConstraintsIfPresent(
     RelaxationSystem &relaxation_system, EntityManager &config_manager,
     MainMethods &main_methods, const json &config)
 {
     ParticleDynamicsGroup &relaxation_constraints = main_methods.addParticleDynamicsGroup();
-    for (const auto &rc : config)
+
+    for (const auto &body_config : bodies_config_.all_bodies_)
     {
-        const std::string body_name = rc.at("body_name").get<std::string>();
+        const std::string body_name = body_config.name_;
         RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
-        OrientedBox &constraint_region = config_manager.getEntity<
-            OrientedBox>(rc.at("oriented_box").get<std::string>());
-        auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(constraint_region);
-        std::string type = rc.at("type").get<std::string>();
-        if (type == "normal")
+
+        StdVec<OrientedBox *> &blockers = config_manager.getEntity<StdVec<OrientedBox *>>(body_name + "Blockers");
+        for (const auto &blocker : blockers)
         {
+            auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(*blocker);
             relaxation_constraints.add(
                 &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
                     body_part, "KernelGradientIntegral", 0));
+
+            auto &initial_constraint = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+            relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
+                                             { initial_constraint.exec(); });
         }
-        else
+
+        StdVec<Shape *> &inserts = config_manager.getEntity<StdVec<Shape *>>(body_name + "Inserts");
+        for (const auto &insert : inserts)
         {
+            auto &body_part = real_body.addBodyPart<BodyRegionByParticle>(*insert);
             relaxation_constraints.add(
-                &main_methods.template addStateDynamics<ConstantConstraintCK, Vecd>(
-                    body_part, "KernelGradientIntegral", Vecd::Zero()));
+                &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
         }
     }
-    return relaxation_constraints;
+
+    if (config.contains("relaxation_constraints"))
+    {
+
+        for (const auto &rc : config.at("relaxation_constraints"))
+        {
+            const std::string body_name = rc.at("body_name").get<std::string>();
+            RealBody &real_body = relaxation_system.getBodyByName<RealBody>(body_name);
+            OrientedBox &constraint_region = config_manager.getEntity<
+                OrientedBox>(rc.at("oriented_box").get<std::string>());
+            auto &body_part = real_body.addBodyPart<OrientedBoxByParticle>(constraint_region);
+            std::string type = rc.at("type").get<std::string>();
+            if (type == "normal")
+            {
+                relaxation_constraints.add(
+                    &main_methods.template addStateDynamics<OrientedBoxConstraint, CovariantVectorAxis>(
+                        body_part, "KernelGradientIntegral", 0));
+
+                auto &initial_constraint = main_methods.template addStateDynamics<FixConstraintCK>(body_part);
+                relaxation_pipeline_.insert_hook(RelaxationHookPoint::Initialization, [&]()
+                                                 { initial_constraint.exec(); });
+            }
+            else
+            {
+                relaxation_constraints.add(
+                    &main_methods.template addStateDynamics<FixConstraintCK>(body_part));
+            }
+        }
+    }
+
+    relaxation_pipeline_.insert_hook(RelaxationHookPoint::Constraints, [&]()
+                                     { relaxation_constraints.exec(); });
 }
 //=================================================================================================//
 } // namespace SPH

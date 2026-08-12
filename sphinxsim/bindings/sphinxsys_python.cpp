@@ -40,6 +40,8 @@ PYBIND11_MODULE(MODULE_NAME, m)
              "Override output/restart/reload root folder. Call before building simulation.")
         .def("buildGeometries", &SPHSimulation::buildGeometries,
              "Build geometries from JSON configuration file")
+        .def("getShapeBounds", &SPHSimulation::getShapeBounds,
+             "Return dict of shape_name -> (lower_bound, upper_bound) after buildGeometries()")
         .def("generateParticles", &SPHSimulation::generateParticles,
              "Generate particles for all bodies from configuration")
         .def("buildSimulation", &SPHSimulation::buildSimulation,

@@ -28,7 +28,7 @@
         "half_size": [0.05, 0.025],
         "transform": {
           "translation": [0.5, 1.5],
-          "rotation_angle": 0.0
+          "rotation_angle": 0.7854
         }
       }
     ],
@@ -38,6 +38,11 @@
         "type": "bounding_box",
         "lower_bound": [0.0, 0.0],
         "upper_bound": [2.0, 0.5]
+      },
+      {
+        "name": "EmitterInsert",
+        "type": "box",
+        "primitive": "EmitterBox"
       },
       {
         "name": "WallBoundary",
@@ -79,8 +84,9 @@
       "bodies": [
         {
           "name": "MultiPhaseBody",
-          "blocks": ["FillLevel"],
-          "inserts": ["Emitter"]
+          "blockers": ["FillLevel"],
+          "box_shape_inserts": ["EmitterInsert"],
+          "relaxation": { "dependent_bodies": ["WallBoundary"] }
         },
         {
           "name": "WallBoundary",
@@ -150,7 +156,7 @@
   "extra_state_recording": [
     {
       "name": "MultiPhaseBody",
-      "variables": [{ "real_type": ["Density"] }]
+      "variables": [{ "real_type": ["Density", "Compression"] }]
     }
   ],
 

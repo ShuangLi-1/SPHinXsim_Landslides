@@ -63,6 +63,9 @@ class GeometryBuilder
     //----------------------------------------------------------------------
     // static functions for geometry construction used in simulation builder
     //----------------------------------------------------------------------
+    static std::map<std::string, std::pair<std::vector<double>, std::vector<double>>>
+    getShapeBoundsFromConfigManager(EntityManager &config_manager);
+
     static void createGeometries(EntityManager &config_manager, const json &config);
     static BoundingBoxd parseBoundingBox(const ScalingConfig &scaling_config, const json &config);
     static TransformGeometryBox parseBox(const ScalingConfig &scaling_config, const json &config);
@@ -82,6 +85,12 @@ class GeometryBuilder
     static void addPrimitive(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
     static TransformGeometryBox fetch_or_parseBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+
+#ifdef SPHINXSYS_3D
+    static TransformGeometryCylinder fetch_or_parseCylinder(
+        const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
+#endif
+
     static Shape *addShape(const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);
     static GeometricShapeBox addOrientedBox(
         const ScalingConfig &scaling_config, EntityManager &config_manager, const json &config);

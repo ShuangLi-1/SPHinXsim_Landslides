@@ -31,7 +31,7 @@
       {
         "name": "ClampingRegion",
         "type": "region",
-        "half_size": [0.08, 0.0065],
+        "half_size": [0.065, 0.0065],
         "transform": {
           "translation": [0.0, -0.0735],
           "rotation_angle": 0.0
@@ -79,6 +79,7 @@
   "solid_bodies": [
     {
       "name": "MillingTool",
+      "is_moving": true,
       "material": {
         "type": "rigid_body"
       }
@@ -116,7 +117,7 @@
     "output_interval": 0.01,
     "screen_interval": 100,
     "restart": {
-      "save_interval": 1000,
+      "save_interval": 400,
       "restore_step": 0,
       "summary_enabled": true
     },

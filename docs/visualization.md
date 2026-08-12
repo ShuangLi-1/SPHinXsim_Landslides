@@ -271,7 +271,6 @@ g = gravity_label(config)
 The visualization module is intentionally minimal for this phase.  Planned extensions include:
 
 - **SDF / level-set geometry**: rendering signed-distance-function shapes once those are added to the geometry builder.
-- **Particle cloud preview**: optional overlay of generated particle positions after `generateParticles()`.
 - **Initial condition colouring**: colour-mapping particle regions by their initial temperature, velocity, or density.
 - **BC arrow glyphs**: directional arrows for inflow/outflow boundaries.
 - **Embedded notebook support**: inline rendering for Jupyter environments.

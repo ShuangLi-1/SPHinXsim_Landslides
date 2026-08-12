@@ -141,11 +141,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         auto &update_average_velocity =
             main_methods.addStateDynamics<UpdateAverageVelocityAndAccelerationCK>(elastic_body);
 
-        // The structure's reference normals and signed distance, needed by the
-        // coupling forces and by the per step normal update.
-        auto &elastic_initial_normal =
-            main_methods.addStateDynamics<NormalFromBodyShapeCK>(elastic_body);
-
         auto &elastic_configuration =
             main_methods.addParticleDynamicsGroup()
                 .add(&main_methods.addCellLinkedListDynamics(elastic_body))
@@ -220,7 +215,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             InitializationHookPoint::InitialCondition, [&]()
             {
                 elastic_configuration.exec();
-                elastic_initial_normal.exec();
                 elastic_correction_matrix.exec();
                 elastic_normal_direction.exec(); });
     }
@@ -276,7 +270,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-    buildExternalForceIfPresent(sim, main_methods, fluid_body, config);
+    buildExternalForceIfPresent(sim, main_methods, config);
     buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods, fluid_inner, fluid_wall_contact);
     buildViscousForceIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
     ThermalDynamicsBuilder::buildThermalDynamicsIfPresent(sim, main_methods, fluid_inner, fluid_wall_contact);
@@ -304,9 +298,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
         {
             solid_cell_linked_list.exec();
             fluid_configuration.exec();
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
+            initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
+
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
             fluid_linear_correction_matrix.exec();
@@ -381,7 +376,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                     structure_configuration->exec();
 
                 fluid_configuration.exec();
-                simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterUpdateConfiguration);
                 fluid_density_regularization.exec();
                 fluid_advection_step_setup.exec();
                 fluid_linear_correction_matrix.exec();

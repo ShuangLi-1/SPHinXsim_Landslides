@@ -1,8 +1,8 @@
 #include "material_builder.h"
 
+#include "composite_solid.h"
 #include "fluid_dynamics_builder.h"
 #include "sphinxsys.h"
-#include "composite_solid.h"
 
 namespace SPH
 {
@@ -213,6 +213,9 @@ void MaterialBuilder::addThermalProperties(
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     if (!config.contains("thermal_boundary"))
     {
+        auto &sph_body_config = config_manager.getEntity<SPHBodyConfig>(sph_body.Name());
+        sph_body_config.setHasDynamics();
+
         Real d_coeff_ref = scaling_config.jsonToReal(
             config.at("thermal_conductivity"), "ThermalConductivity");
         Real cv = scaling_config.jsonToReal(
