@@ -63,7 +63,6 @@ class ContinuumDynamicsBuilder
     static BaseDynamics<Real> &addAcousticTimeStep(SPHSimulation &sim, MainMethods &main_methods);
     static void buildShearForceIntegrationIfPresent(SPHSimulation &sim, MainMethods &main_methods);
     static void buildContactRepulsionIfPresent(SPHSimulation &sim, MainMethods &main_methods);
-    static void buildDensityRegularizationIfPresent(SPHSimulation &sim, MainMethods &main_methods);
     static void buildStressDiffusionIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, BodyStatesRecording &body_state_recorder);
 

@@ -58,7 +58,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
-    ContinuumDynamicsBuilder::buildDensityRegularizationIfPresent(sim, main_methods);
     ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(sim, main_methods, body_state_recorder);
     //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
