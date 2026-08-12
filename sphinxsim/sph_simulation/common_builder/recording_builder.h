@@ -39,6 +39,9 @@ class BaseIO;
 class BodyStatesRecording;
 class SPHBody;
 
+template <class ExecutionPolicy>
+class BodyStatesRecordingToVtpCK;
+
 struct ObserverConfig
 {
     std::string name_;
@@ -50,14 +53,12 @@ class RecordingBuilder
 {
   public:
     void buildObservationIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
-
     // Reduced-quantity recording (e.g. total mechanical energy) driven from a
     // JSON "energy_recording" list, generic over body and quantity type.
     void buildEnergyRecordingIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
-
-    BodyStatesRecording &createBodyStatesRecording(
-        SPHSystem &sph_system, EntityManager &config_manager,
-        MainMethods &main_methods, const json &config);
+    void createBodyStatesRecording(SPHSystem &sph_system, EntityManager &config_manager, MainMethods &main_methods);
+    void finalizeBodyStatesRecording(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
+    static BodyStatesRecordingToVtpCK<MainExecutionPolicy> &getBodyStatesRecording(EntityManager &config_manager);
 
   private:
     std::string getObserverRelationName(const ObserverConfig &observer_config);

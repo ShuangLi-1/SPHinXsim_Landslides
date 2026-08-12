@@ -56,6 +56,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Note that there may be data dependence on the sequence of constructions.
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
+    recording_builder.createBodyStatesRecording(sph_system, config_manager, main_methods);
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
@@ -285,10 +286,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------
-    auto &body_state_recorder = recording_builder.createBodyStatesRecording(
-        sph_system, config_manager, main_methods, config);
+    recording_builder.finalizeBodyStatesRecording(sph_system, config_manager, config);
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     recording_builder.buildEnergyRecordingIfPresent(sim, main_methods, config);
+    auto &body_state_recorder = RecordingBuilder::getBodyStatesRecording(config_manager);
     //----------------------------------------------------------------------
     //	Define preparation or initialization step before the main integration.
     //----------------------------------------------------------------------

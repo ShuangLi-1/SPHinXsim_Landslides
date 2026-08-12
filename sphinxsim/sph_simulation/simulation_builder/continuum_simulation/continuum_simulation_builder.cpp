@@ -28,6 +28,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     // update body relations, are defined first.
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
+    recording_builder.createBodyStatesRecording(sph_system, config_manager, main_methods);
     buildUpdateConfiguration(sim, main_methods, config);
 
     auto &continuum_advection_step_setup = ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
@@ -42,6 +43,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(sim, main_methods);
     ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(sim, main_methods);
+    ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
     // Initial condition if present.
     //----------------------------------------------------------------------
@@ -54,11 +56,11 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     buildExternalForceIfPresent(sim, main_methods, config);
     recording_builder.buildObservationIfPresent(sim, main_methods, config);
     //----------------------------------------------------------------------
-    // Define state recording for visualization the simulation results.
+    // Finalize state recording for visualization the simulation results,
+    // including extra state variables and applying scaling
     //----------------------------------------------------------------------
-    auto &body_state_recorder = recording_builder.createBodyStatesRecording(
-        sph_system, config_manager, main_methods, config);
-    ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(sim, main_methods, body_state_recorder);
+    recording_builder.finalizeBodyStatesRecording(sph_system, config_manager, config);
+    auto &body_state_recorder = RecordingBuilder::getBodyStatesRecording(config_manager);
     //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------
