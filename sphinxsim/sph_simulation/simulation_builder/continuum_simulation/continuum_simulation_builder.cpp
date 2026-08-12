@@ -28,21 +28,17 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
     buildUpdateConfiguration(sim, main_methods, config);
-    auto &continuum_body = *sph_system.collectBodies<RealBody>().front();
 
-    auto &continuum_advection_step_setup =
-        ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
-    auto &continuum_update_particle_position =
-        ContinuumDynamicsBuilder::addUpdateParticlePosition(sim, main_methods);
+    auto &continuum_advection_step_setup = ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
+    auto &continuum_update_particle_position = ContinuumDynamicsBuilder::addUpdateParticlePosition(sim, main_methods);
 
-    auto &continuum_acoustic_step_1st_half =
-        ContinuumDynamicsBuilder::addAcousticStep1stHalf(sim, main_methods);
-    auto &continuum_acoustic_step_2nd_half =
-        ContinuumDynamicsBuilder::addAcousticStep2ndHalf(sim, main_methods);
+    auto &continuum_acoustic_step_1st_half = ContinuumDynamicsBuilder::addAcousticStep1stHalf(sim, main_methods);
+    auto &continuum_acoustic_step_2nd_half = ContinuumDynamicsBuilder::addAcousticStep2ndHalf(sim, main_methods);
 
-    auto &continuum_linear_correction_matrix =
-        ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
-
+    auto &continuum_linear_correction_matrix = ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
+    //----------------------------------------------------------------------
+    // Optional methods that depend on the presence of certain features in the simulation.
+    //----------------------------------------------------------------------
     ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(sim, main_methods);
     ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
@@ -66,11 +62,8 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------
-    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>("ContinuumSolverParameters");
-    auto &continuum_advection_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AdvectionTimeStepCK>(continuum_body, Real(1), continuum_solver_parameters.advection_cfl_);
-    auto &continuum_acoustic_time_step = main_methods.addReduceDynamics<
-        fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(continuum_body, continuum_solver_parameters.acoustic_cfl_);
+    auto &continuum_advection_time_step = ContinuumDynamicsBuilder::addAdvectionTimeStep(sim, main_methods);
+    auto &continuum_acoustic_time_step = ContinuumDynamicsBuilder::addAcousticTimeStep(sim, main_methods);
     auto &solver_common_config = config_manager.getEntity<SolverCommonConfig>("SolverCommonConfig");
     auto &time_stepper = sph_solver.getTimeStepper();
     auto &advection_step = time_stepper.addTriggerByInterval(continuum_advection_time_step.exec());

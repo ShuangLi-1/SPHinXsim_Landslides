@@ -37,10 +37,52 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addUpdateParticlePosition(
     for (const auto &cb : continuum_bodies_config)
     {
         auto &continuum_body = sph_system.getBodyByName<RealBody>(cb->name_);
-        update_particle_position.add(&main_methods.addStateDynamics<fluid_dynamics::UpdateParticlePosition>(
-            continuum_body));
+        update_particle_position.add(
+            &main_methods.addStateDynamics<fluid_dynamics::UpdateParticlePosition>(continuum_body));
     }
     return update_particle_position;
+}
+//=================================================================================================//
+BaseDynamics<Real> &ContinuumDynamicsBuilder::addAdvectionTimeStep(
+    SPHSimulation &sim, MainMethods &main_methods)
+{
+    auto &sph_system = sim.getSPHSystem();
+    auto &config_manager = sim.getConfigManager();
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
+        "ContinuumBodiesConfig");
+    auto &advection_time_step = main_methods.addReduceDynamicsGroup<ReduceMin<Real>>();
+    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>(
+        "ContinuumSolverParameters");
+
+    for (const auto &cb : continuum_bodies_config)
+    {
+        auto &continuum_body = sph_system.getBodyByName<RealBody>(cb->name_);
+        advection_time_step.add(&main_methods.addReduceDynamics<fluid_dynamics::AdvectionTimeStepCK>(
+            continuum_body, Real(1), continuum_solver_parameters.advection_cfl_));
+    }
+    return advection_time_step;
+}
+//=================================================================================================//
+BaseDynamics<Real> &ContinuumDynamicsBuilder::addAcousticTimeStep(
+    SPHSimulation &sim, MainMethods &main_methods)
+{
+    auto &sph_system = sim.getSPHSystem();
+    auto &config_manager = sim.getConfigManager();
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
+        "ContinuumBodiesConfig");
+    auto &acoustic_time_step = main_methods.addReduceDynamicsGroup<ReduceMin<Real>>();
+    auto &continuum_solver_parameters = config_manager.getEntity<ContinuumSolverParameters>(
+        "ContinuumSolverParameters");
+
+    for (const auto &cb : continuum_bodies_config)
+    {
+        auto &continuum_body = sph_system.getBodyByName<RealBody>(cb->name_);
+        acoustic_time_step.add(
+            &main_methods.addReduceDynamics<
+                fluid_dynamics::AcousticTimeStepCK<WeaklyCompressibleFluid>>(
+                continuum_body, continuum_solver_parameters.acoustic_cfl_));
+    }
+    return acoustic_time_step;
 }
 //=================================================================================================//
 BaseDynamics<void> &ContinuumDynamicsBuilder::addLinearCorrectionMatrix(
