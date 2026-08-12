@@ -1194,6 +1194,35 @@ class TestShellPreview:
         assert visualizer_paths == [config_a, config_b]
         assert [call.args[1] for call in refresh_editor.call_args_list] == [config_a, config_b]
 
+    def test_shell_runtime_preserves_editor_when_preview_reset_is_canceled(
+        self, tmp_path, monkeypatch
+    ):
+        """Canceling the warning must leave both editor and preview state untouched."""
+        from sphinxsim import cli as cli_mod
+
+        cfg = SimulationConfig(**_minimal_fluid_config())
+        config_path = tmp_path / "config.json"
+        runtime = cli_mod._ShellPreviewRuntime()
+        runtime.plotter = MagicMock()
+        runtime._using_background_plotter = True
+        refresh_editor = MagicMock(return_value=False)
+        runtime._json_editor = {"refresh": refresh_editor}
+
+        monkeypatch.setitem(sys.modules, "pyvista", SimpleNamespace())
+
+        assert (
+            runtime.show_or_update(
+                cfg,
+                resolved_config_path=config_path,
+                with_particles=False,
+            )
+            == 0
+        )
+
+        refresh_editor.assert_called_once_with(cfg, config_path, False)
+        assert runtime.last_signature is None
+        runtime.plotter.clear.assert_not_called()
+
     def test_shell_runtime_recreates_preview_after_user_closes_window(self, tmp_path, monkeypatch):
         """Closing the native Qt window must allow the same config to reopen."""
         from sphinxsim import cli as cli_mod

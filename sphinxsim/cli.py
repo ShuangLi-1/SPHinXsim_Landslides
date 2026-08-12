@@ -699,40 +699,47 @@ class _ShellPreviewRuntime:
         *,
         config_path: Path,
         with_particles: bool,
-    ) -> None:
-        """Create or rebind the Apply-only property editor for a preview config."""
+    ) -> bool:
+        """Create or rebind the save-only property editor for a preview config.
+
+        Returns ``False`` when the user cancels a refresh that would discard
+        unapplied editor changes.
+        """
         if self.plotter is None:
-            return
+            return True
 
         if self._json_editor is not None:
             refresh = self._json_editor.get("refresh")
             if callable(refresh):
-                refresh(config, config_path, with_particles)
-            return
+                return refresh(config, config_path, with_particles) is not False
+            return True
 
         try:
             from qtpy import QtCore, QtGui, QtWidgets
         except Exception:
-            return
+            return True
 
         app_window = getattr(self.plotter, "app_window", None)
         if app_window is None:
-            return
+            return True
 
         dock = QtWidgets.QDockWidget("Simulation Properties", app_window)
         dock.setObjectName("sphinxsim-json-editor")
-        dock.setAllowedAreas(
-            QtCore.Qt.DockWidgetArea.LeftDockWidgetArea | QtCore.Qt.DockWidgetArea.RightDockWidgetArea
+        dock.setStyleSheet(
+            "QDockWidget { color: #e6e8ec; background: #181a1f; }"
+            "QDockWidget::title { padding: 7px 8px; background: #202329; color: #f0f2f5; "
+            "border-bottom: 1px solid #3b4049; text-align: left; }"
         )
+        dock.setAllowedAreas(QtCore.Qt.DockWidgetArea.RightDockWidgetArea)
         content = QtWidgets.QWidget(dock)
         content.setObjectName("sphinxsim-json-editor-content")
         content.setStyleSheet(
             "QWidget#sphinxsim-json-editor-content {"
-            "    background: #e9e9e9;"
-            "    color: #202020;"
+            "    background: #181a1f;"
+            "    color: #e6e8ec;"
             "}"
             "QLabel {"
-            "    color: #202020;"
+            "    color: #d7dae0;"
             "}"
             "QToolButton {"
             "    min-height: 24px;"
@@ -740,55 +747,42 @@ class _ShellPreviewRuntime:
             "    border: 1px solid transparent;"
             "    border-radius: 3px;"
             "    background: transparent;"
-            "    color: #303030;"
+            "    color: #c8ccd4;"
             "}"
             "QToolButton:hover {"
-            "    background: #d2d2d2;"
-            "    border: 1px solid #b0b0b0;"
-            "    color: #171717;"
+            "    background: #30343c;"
+            "    border: 1px solid #4a505b;"
+            "    color: #ffffff;"
             "}"
             "QToolButton:pressed {"
-            "    background: #c4c4c4;"
-            "    border: 1px solid #969696;"
-            "    color: #101010;"
+            "    background: #3a404a;"
+            "    border: 1px solid #616a78;"
+            "    color: #ffffff;"
             "}"
             "QToolButton:disabled {"
             "    background: transparent;"
             "    border: 1px solid transparent;"
-            "    color: #7a7a7a;"
-            "}"
-            "QPushButton {"
-            "    min-height: 28px;"
-            "    padding: 2px 12px;"
-            "    border: 1px solid #9d9d9d;"
-            "    border-radius: 3px;"
-            "    background: #d2d2d2;"
-            "    color: #171717;"
-            "    font-weight: 600;"
-            "}"
-            "QPushButton:hover {"
-            "    background: #c1c1c1;"
-            "}"
-            "QPushButton:pressed {"
-            "    background: #b5b5b5;"
-            "}"
-            "QPushButton:disabled {"
-            "    background: #dedede;"
-            "    border: 1px solid #bdbdbd;"
-            "    color: #777777;"
+            "    color: #686e79;"
             "}"
         )
         layout = QtWidgets.QVBoxLayout(content)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(8)
-        hint = QtWidgets.QLabel("Edit values below. Apply (Ctrl+S) validates, saves, and refreshes the preview.")
+        hint = QtWidgets.QLabel("<b style='color:#ffffff'>Use Ctrl+S to save changes</b>")
         hint.setWordWrap(True)
+        hint.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        hint.setStyleSheet(
+            "padding: 8px 10px; border: 1px solid #3d6f9e; border-radius: 4px; "
+            "background: #1f3042; color: #cbd8e6;"
+        )
         filter_box = QtWidgets.QLineEdit(content)
         filter_box.setObjectName("sphinxsim-json-editor-filter")
         filter_box.setPlaceholderText("Filter settings…")
         filter_box.setStyleSheet(
-            "min-height: 27px; padding: 1px 7px; border: 1px solid #a6a6a6; border-radius: 3px; "
-            "background: #f7f7f7; color: #202020;"
+            "min-height: 27px; padding: 1px 7px; border: 1px solid #454b55; border-radius: 3px; "
+            "background: #24272d; color: #e6e8ec; selection-background-color: #315f8c;"
         )
         tools_grid = QtWidgets.QGridLayout()
         tools_grid.setHorizontalSpacing(4)
@@ -850,32 +844,40 @@ class _ShellPreviewRuntime:
         tree.setColumnWidth(0, 145)
         tree.header().setStretchLastSection(True)
         tree.setStyleSheet(
-            "QTreeWidget { border: 1px solid #a6a6a6; border-radius: 3px; background: #eeeeee; color: #202020; }"
-            "QHeaderView::section { padding: 5px 7px; border: 0; border-bottom: 1px solid #a6a6a6; "
-            "background: #d8d8d8; color: #171717; font-weight: 600; }"
-            "QTreeWidget::item { min-height: 30px; color: #202020; }"
-            "QTreeWidget::item:alternate { background: #e5e5e5; }"
-            "QTreeWidget::item:selected { background: #c9c9c9; color: #171717; }"
+            "QTreeWidget { border: 1px solid #454b55; border-radius: 3px; background: #202329; color: #e1e4e8; }"
+            "QHeaderView::section { padding: 5px 7px; border: 0; border-bottom: 1px solid #454b55; "
+            "background: #292d34; color: #f0f2f5; font-weight: 600; }"
+            "QTreeWidget::item { min-height: 30px; color: #e1e4e8; }"
+            "QTreeWidget::item:alternate { background: #252930; }"
+            "QTreeWidget::item:selected { background: #315f8c; color: #ffffff; }"
             "QLineEdit, QComboBox { min-height: 25px; padding: 1px 6px; "
-            "border: 1px solid #a6a6a6; border-radius: 3px; background: #f8f8f8; color: #202020; }"
-            "QLineEdit:focus, QComboBox:focus { border: 1px solid #5f5f5f; }"
-            "QLineEdit::selection { background: #bdbdbd; color: #171717; }"
-            "QComboBox QAbstractItemView { background: #f2f2f2; color: #202020; border: 1px solid #a6a6a6; "
-            "selection-background-color: #bdbdbd; selection-color: #171717; outline: 0; }"
+            "border: 1px solid #4b515c; border-radius: 3px; background: #181a1f; color: #e6e8ec; }"
+            "QLineEdit:focus, QComboBox:focus { border: 1px solid #5794cf; }"
+            "QLineEdit::selection { background: #315f8c; color: #ffffff; }"
+            "QComboBox QAbstractItemView { background: #24272d; color: #e6e8ec; border: 1px solid #4b515c; "
+            "selection-background-color: #315f8c; selection-color: #ffffff; outline: 0; }"
         )
-        status = QtWidgets.QLabel("Loaded configuration. Changes have not been applied.")
+        status = QtWidgets.QLabel("Loaded configuration. Press Ctrl+S to save changes.")
         status.setWordWrap(True)
-        status.setStyleSheet("color: #303030;")
-        apply_button = QtWidgets.QPushButton("Apply and refresh", content)
-        button_row = QtWidgets.QHBoxLayout()
-        button_row.addStretch(1)
-        button_row.addWidget(apply_button)
+        status.setAlignment(
+            QtCore.Qt.AlignmentFlag.AlignLeft | QtCore.Qt.AlignmentFlag.AlignVCenter
+        )
+        status.setStyleSheet("color: #aeb4bf;")
         layout.addWidget(hint)
         layout.addWidget(filter_box)
         layout.addWidget(tree, 1)
         layout.addWidget(status)
-        layout.addLayout(button_row)
         dock.setWidget(content)
+        # Give the right dock both right-hand corners so it spans the same full
+        # top-to-bottom extent as the preview area instead of appearing offset.
+        app_window.setCorner(
+            QtCore.Qt.Corner.TopRightCorner,
+            QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
+        )
+        app_window.setCorner(
+            QtCore.Qt.Corner.BottomRightCorner,
+            QtCore.Qt.DockWidgetArea.RightDockWidgetArea,
+        )
         app_window.addDockWidget(QtCore.Qt.DockWidgetArea.RightDockWidgetArea, dock)
 
         json_editor_initial_width = 360
@@ -984,11 +986,10 @@ class _ShellPreviewRuntime:
 
         def _mark_dirty(item: Any | None = None) -> None:
             editor_state["dirty"] = True
-            apply_button.setEnabled(True)
             revert_button.setEnabled(True)
             if item is not None:
-                item.setBackground(0, QtGui.QColor("#fff4ce"))
-            status.setText("Unsaved changes. Apply to validate and refresh.")
+                item.setBackground(0, QtGui.QColor("#594a24"))
+            status.setText("Unsaved changes. Press Ctrl+S to validate, save, and refresh.")
 
         def _clear_field_errors() -> None:
             for _, _, widget, item in editor_state["fields"]:
@@ -1009,8 +1010,8 @@ class _ShellPreviewRuntime:
                     widget.addItem(value)
                 widget.setCurrentText(value)
                 widget.view().setStyleSheet(
-                    "QAbstractItemView { background: #f2f2f2; color: #202020; "
-                    "selection-background-color: #bdbdbd; selection-color: #171717; }"
+                    "QAbstractItemView { background: #24272d; color: #e6e8ec; "
+                    "selection-background-color: #315f8c; selection-color: #ffffff; }"
                 )
                 return widget
 
@@ -1049,7 +1050,6 @@ class _ShellPreviewRuntime:
                 editor_state["original_json"] = text
                 editor_state["undo_stack"] = []
             editor_state["dirty"] = False
-            apply_button.setEnabled(False)
             revert_button.setEnabled(bool(editor_state["undo_stack"]))
             tree.clear()
 
@@ -1166,7 +1166,28 @@ class _ShellPreviewRuntime:
             reset_to_json(editor_state["undo_stack"].pop(), "Reverted the latest local edit.")
             revert_button.setEnabled(bool(editor_state["undo_stack"]))
 
+        def confirm_discard_changes(message: str) -> bool:
+            if not editor_state["dirty"]:
+                return True
+            buttons = (
+                QtWidgets.QMessageBox.StandardButton.Yes
+                | QtWidgets.QMessageBox.StandardButton.No
+            )
+            answer = QtWidgets.QMessageBox.warning(
+                content,
+                "Discard unapplied changes?",
+                message,
+                buttons,
+                QtWidgets.QMessageBox.StandardButton.No,
+            )
+            return answer == QtWidgets.QMessageBox.StandardButton.Yes
+
         def reload_from_disk() -> None:
+            if not confirm_discard_changes(
+                "The editor contains unapplied changes. Reloading from disk will discard them. Continue?"
+            ):
+                status.setText("Reload canceled. Your unapplied changes are preserved.")
+                return
             active_config_path = editor_state["config_path"]
             try:
                 source = active_config_path.read_text(encoding="utf-8")
@@ -1260,7 +1281,9 @@ class _ShellPreviewRuntime:
                 for path, _, widget, item in editor_state["fields"]:
                     if path == error_path:
                         message = str(first_error.get("msg"))
-                        widget.setStyleSheet("border: 2px solid #de350b; background: #ffebe6;")
+                        widget.setStyleSheet(
+                            "border: 2px solid #ff6b5f; background: #472522; color: #ffffff;"
+                        )
                         widget.setToolTip(message)
                         item.setToolTip(0, message)
                         tree.scrollToItem(item)
@@ -1285,10 +1308,9 @@ class _ShellPreviewRuntime:
                 force=True,
             )
             status.setText(
-                "Applied successfully." if result == 0 else "Saved, but preview refresh failed; see terminal output."
+                "Saved successfully." if result == 0 else "Saved, but preview refresh failed; see terminal output."
             )
 
-        apply_button.clicked.connect(apply_changes)
         shortcut = QtGui.QShortcut(QtGui.QKeySequence.StandardKey.Save, tree)
         shortcut.activated.connect(apply_changes)
         undo_shortcut = QtGui.QShortcut(QtGui.QKeySequence.StandardKey.Undo, content)
@@ -1308,14 +1330,20 @@ class _ShellPreviewRuntime:
             current_config: SimulationConfig,
             current_config_path: Path,
             current_with_particles: bool,
-        ) -> None:
+        ) -> bool:
             """Replace the editor session when shell ``preview`` changes files."""
+            if not confirm_discard_changes(
+                "The editor contains unapplied changes. Continuing Preview will discard them. Continue?"
+            ):
+                status.setText("Preview canceled. Your unapplied changes are preserved.")
+                return False
             editor_state["config_path"] = current_config_path
             editor_state["with_particles"] = current_with_particles
             editor_state["expanded_paths"] = set()
             filter_box.clear()
             populate_editor(dump_simulation_config_json(current_config, indent=2), reset_history=True)
             update_array_actions()
+            return True
 
         refresh_editor(config, config_path, with_particles)
         self._json_editor = {
@@ -1327,6 +1355,7 @@ class _ShellPreviewRuntime:
             "undo_shortcut": undo_shortcut,
             "refresh": refresh_editor,
         }
+        return True
 
     def pump_ui_events(self) -> None:
         """Keep the persistent preview responsive while shell work blocks."""
@@ -1595,17 +1624,20 @@ class _ShellPreviewRuntime:
             )
             return 1
 
+        if self.plotter is not None and self._using_background_plotter:
+            editor_refreshed = self._install_json_editor(
+                config,
+                config_path=resolved_config_path,
+                with_particles=with_particles,
+            )
+            if not editor_refreshed:
+                print("Preview canceled; unapplied editor changes were preserved.")
+                return 0
         unchanged = self._is_unchanged(
             config,
             resolved_config_path=resolved_config_path,
             with_particles=with_particles,
         )
-        if self.plotter is not None and self._using_background_plotter:
-            self._install_json_editor(
-                config,
-                config_path=resolved_config_path,
-                with_particles=with_particles,
-            )
         if not force and unchanged:
             print("ℹ️ Preview unchanged; keeping existing window.")
             return 0
