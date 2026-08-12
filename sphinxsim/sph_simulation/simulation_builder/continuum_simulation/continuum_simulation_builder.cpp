@@ -51,7 +51,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &continuum_linear_correction_matrix =
         ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
 
-    buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
+    ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(sim, main_methods);
     buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
     //----------------------------------------------------------------------
     // Initial condition if present.

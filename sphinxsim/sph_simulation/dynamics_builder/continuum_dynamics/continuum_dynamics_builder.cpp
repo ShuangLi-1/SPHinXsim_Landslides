@@ -1,6 +1,6 @@
 #include "continuum_dynamics_builder.h"
 
-#include "material_builder.h"
+#include "all_continuum_dynamics_ck.h"
 #include "sph_simulation.h"
 
 namespace SPH
@@ -66,6 +66,58 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addLinearCorrectionMatrix(
         }
     }
     return linear_correction_matrix;
+}
+//=================================================================================================//
+void ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods)
+{
+    auto &sph_system = sim.getSPHSystem();
+    auto &config_manager = sim.getConfigManager();
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
+        "ContinuumBodiesConfig");
+    auto &continuum_shear_force = main_methods.addParticleDynamicsGroup();
+
+    for (const auto &cb : continuum_bodies_config)
+    {
+        std::string body_name = cb->name_;
+        if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+        {
+            auto &inner_relation = sph_system.getRelationByName<Inner<Relation<RealBody>>>(body_name);
+            continuum_shear_force.add(&main_methods.template addInteractionDynamics<
+                                       LinearGradient, Vecd>(inner_relation, "Velocity"));
+
+            auto &continuum_solver_parameters = config_manager.getEntity<
+                ContinuumSolverParameters>("ContinuumSolverParameters");
+
+            if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
+            {
+                continuum_shear_force
+                    .add(&main_methods.template addInteractionDynamicsOneLevel<
+                          continuum_dynamics::ShearIntegration, GeneralContinuum>(
+                        inner_relation, continuum_solver_parameters.hourglass_factor_,
+                        continuum_solver_parameters.shear_stress_damping_));
+            }
+
+            if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
+            {
+                continuum_shear_force
+                    .add(&main_methods.template addInteractionDynamicsOneLevel<
+                          continuum_dynamics::ShearIntegration, J2Plasticity>(
+                        inner_relation, continuum_solver_parameters.hourglass_factor_,
+                        continuum_solver_parameters.shear_stress_damping_));
+            }
+        }
+    }
+
+    if (continuum_shear_force.hasDynamics())
+    {
+        auto &time_stepper = sim.getSPHSolver().getTimeStepper();
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BeforeMainPhysicalTimeStep, [&]()
+            {   Real dt = time_stepper.getGlobalTimeStepSize(); 
+                continuum_shear_force.exec(dt); });
+    }
 }
 //=================================================================================================//
 } // namespace SPH
