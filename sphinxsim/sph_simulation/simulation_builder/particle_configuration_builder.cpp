@@ -89,13 +89,14 @@ void SimulationBuilder::buildCellLinkedListDynamics(
 void SimulationBuilder::buildFluidRelationDynamics(
     SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
-    auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+    if (!config_manager.hasEntity<SPHBodiesConfig>("FluidBodiesConfig"))
+        return;
+
+    auto &sph_system = sim.getSPHSystem();
     auto &update_all_fluid_relations = main_methods.addParticleDynamicsGroup();
 
+    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
     for (const auto &fb_src : fluid_bodies_config)
     {
         auto &fluid_body = sph_system.getBodyByName<FluidBody>(fb_src->name_);
@@ -113,20 +114,28 @@ void SimulationBuilder::buildFluidRelationDynamics(
             }
         }
 
-        for (const auto &cb_tgt : continuum_bodies_config)
+        if (config_manager.hasEntity<SPHBodiesConfig>("ContinuumBodiesConfig"))
         {
-            auto &continuum_body_target = sph_system.getBodyByName<RealBody>(cb_tgt->name_);
-            auto &fluid_contact = sph_system.addContactRelation(fluid_body, continuum_body_target);
-            update_fluid_relation.add(&main_methods.addRelationDynamics(fluid_contact));
+            auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+            for (const auto &cb_tgt : continuum_bodies_config)
+            {
+                auto &continuum_body_target = sph_system.getBodyByName<RealBody>(cb_tgt->name_);
+                auto &fluid_contact = sph_system.addContactRelation(fluid_body, continuum_body_target);
+                update_fluid_relation.add(&main_methods.addRelationDynamics(fluid_contact));
+            }
         }
 
-        for (const auto &sb_tgt : solid_bodies_config)
+        if (config_manager.hasEntity<SPHBodiesConfig>("SolidBodiesConfig"))
         {
-            auto &solid_body_target = sph_system.getBodyByName<SolidBody>(sb_tgt->name_);
-            auto &fluid_contact = sph_system.addContactRelation(fluid_body, solid_body_target);
-            update_fluid_relation.add(&main_methods.addRelationDynamics(fluid_contact));
+            auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+            for (const auto &sb_tgt : solid_bodies_config)
+            {
+                auto &solid_body_target = sph_system.getBodyByName<SolidBody>(sb_tgt->name_);
+                auto &fluid_contact = sph_system.addContactRelation(fluid_body, solid_body_target);
+                update_fluid_relation.add(&main_methods.addRelationDynamics(fluid_contact));
+            }
+            update_all_fluid_relations.add(&update_fluid_relation);
         }
-        update_all_fluid_relations.add(&update_fluid_relation);
     }
 
     if (!update_all_fluid_relations.hasDynamics())
@@ -157,13 +166,14 @@ void SimulationBuilder::buildFluidRelationDynamics(
 void SimulationBuilder::buildContinuumRelationDynamics(
     SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
-    auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+    if (!config_manager.hasEntity<SPHBodiesConfig>("ContinuumBodiesConfig"))
+        return;
+
+    auto &sph_system = sim.getSPHSystem();
     auto &update_all_continuum_relations = main_methods.addParticleDynamicsGroup();
 
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
     for (const auto &cb_src : continuum_bodies_config)
     {
         auto &continuum_body = sph_system.getBodyByName<RealBody>(cb_src->name_);
@@ -180,21 +190,28 @@ void SimulationBuilder::buildContinuumRelationDynamics(
                 update_continuum_relation.add(&main_methods.addRelationDynamics(continuum_contact));
             }
         }
-
-        for (const auto &fb_tgt : fluid_bodies_config)
+        if (config_manager.hasEntity<SPHBodiesConfig>("FluidBodiesConfig"))
         {
-            auto &fluid_body_target = sph_system.getBodyByName<FluidBody>(fb_tgt->name_);
-            auto &continuum_contact = sph_system.addContactRelation(continuum_body, fluid_body_target);
-            update_continuum_relation.add(&main_methods.addRelationDynamics(continuum_contact));
+            auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+            for (const auto &fb_tgt : fluid_bodies_config)
+            {
+                auto &fluid_body_target = sph_system.getBodyByName<FluidBody>(fb_tgt->name_);
+                auto &continuum_contact = sph_system.addContactRelation(continuum_body, fluid_body_target);
+                update_continuum_relation.add(&main_methods.addRelationDynamics(continuum_contact));
+            }
         }
 
-        for (const auto &sb_tgt : solid_bodies_config)
+        if (config_manager.hasEntity<SPHBodiesConfig>("SolidBodiesConfig"))
         {
-            auto &solid_body_target = sph_system.getBodyByName<SolidBody>(sb_tgt->name_);
-            auto &continuum_contact = sph_system.addContactRelation(continuum_body, solid_body_target);
-            update_continuum_relation.add(&main_methods.addRelationDynamics(continuum_contact));
+            auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+            for (const auto &sb_tgt : solid_bodies_config)
+            {
+                auto &solid_body_target = sph_system.getBodyByName<SolidBody>(sb_tgt->name_);
+                auto &continuum_contact = sph_system.addContactRelation(continuum_body, solid_body_target);
+                update_continuum_relation.add(&main_methods.addRelationDynamics(continuum_contact));
+            }
+            update_all_continuum_relations.add(&update_continuum_relation);
         }
-        update_all_continuum_relations.add(&update_continuum_relation);
     }
 
     if (!update_all_continuum_relations.hasDynamics())
@@ -225,14 +242,15 @@ void SimulationBuilder::buildContinuumRelationDynamics(
 void SimulationBuilder::buildSolidRelationDynamics(
     SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
-    auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+    if (!config_manager.hasEntity<SPHBodiesConfig>("SolidBodiesConfig"))
+        return;
+
+    auto &sph_system = sim.getSPHSystem();
     auto &update_all_contact_relations = main_methods.addParticleDynamicsGroup();
     auto &total_lagrangian_relations = main_methods.addParticleDynamicsGroup();
 
+    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
     for (const auto &sb_src : solid_bodies_config)
     {
         auto &solid_body = sph_system.getBodyByName<SolidBody>(sb_src->name_);
@@ -257,20 +275,28 @@ void SimulationBuilder::buildSolidRelationDynamics(
                 }
             }
 
-            for (const auto &fb_tgt : fluid_bodies_config)
+            if (config_manager.hasEntity<SPHBodiesConfig>("FluidBodiesConfig"))
             {
-                auto &fluid_body_target = sph_system.getBodyByName<FluidBody>(fb_tgt->name_);
-                auto &solid_contact = sph_system.addContactRelation(solid_body, fluid_body_target);
-                update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+                for (const auto &fb_tgt : fluid_bodies_config)
+                {
+                    auto &fluid_body_target = sph_system.getBodyByName<FluidBody>(fb_tgt->name_);
+                    auto &solid_contact = sph_system.addContactRelation(solid_body, fluid_body_target);
+                    update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                }
             }
 
-            for (const auto &cb_tgt : continuum_bodies_config)
+            if (config_manager.hasEntity<SPHBodiesConfig>("ContinuumBodiesConfig"))
             {
-                auto &continuum_body_target = sph_system.getBodyByName<RealBody>(cb_tgt->name_);
-                auto &solid_contact = sph_system.addContactRelation(solid_body, continuum_body_target);
-                update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+                for (const auto &cb_tgt : continuum_bodies_config)
+                {
+                    auto &continuum_body_target = sph_system.getBodyByName<RealBody>(cb_tgt->name_);
+                    auto &solid_contact = sph_system.addContactRelation(solid_body, continuum_body_target);
+                    update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                }
+                update_all_contact_relations.add(&update_contact_relation);
             }
-            update_all_contact_relations.add(&update_contact_relation);
         }
     }
 
