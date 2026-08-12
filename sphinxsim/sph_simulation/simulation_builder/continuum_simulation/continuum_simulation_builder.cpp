@@ -1,7 +1,8 @@
-#include "continuum_simulation_builder.hpp"
+#include "continuum_simulation_builder.h"
 
 #include "constraint_builder.h"
 #include "recording_builder.h"
+#include "sph_simulation.h"
 
 namespace SPH
 {

@@ -51,26 +51,6 @@ class ContinuumSimulationBuilder : public SimulationBuilder
   private:
     ContinuumSolverParameters parseContinuumSolverParameters(
         const ScalingConfig &scaling_config, const json &config);
-
-    template <class InnerRelationType>
-    void buildShearForceIntegrationIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, InnerRelationType &inner_relation);
-
-    template <class ContactRelationType>
-    void buildContactRepulsionIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, ContactRelationType &contact_relation);
-
-    template <class InnerRelationType, class ContactRelationType>
-    void buildDensityRegularizationIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods,
-        SPHBody &continuum_body, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation);
-
-    template <class InnerRelationType>
-    void buildStressDiffusionIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods,
-        SPHBody &continuum_body, InnerRelationType &inner_relation,
-        BodyStatesRecording &body_state_recorder);
 };
 } // namespace SPH
 #endif // CONTINUUM_SIMULATION_BUILDER_H
