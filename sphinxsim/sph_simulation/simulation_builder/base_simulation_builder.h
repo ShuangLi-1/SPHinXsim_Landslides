@@ -48,7 +48,7 @@ enum class SimulationHookPoint
     Observation,
     ExtraOutput,
     ParticleSort,
-    ParticleIndicationTagging,
+    AfterUpdateConfiguration,
     UpdateConfiguration,
     AfterLinearCorrectionMatrix,
     NumHooks
@@ -62,7 +62,6 @@ enum class InitializationHookPoint
     RestartFromFile,
     UpdateConfigurationAfterRestart,
     InitialObservation,
-    InitialParticleIndicationTagging,
     InitialAfterLinearCorrectionMatrix,
     PreSimulationSanityCheck,
     NumHooks

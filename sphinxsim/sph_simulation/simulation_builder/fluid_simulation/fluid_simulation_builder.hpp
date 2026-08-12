@@ -40,23 +40,23 @@ void FluidSimulationBuilder::addMainPhysicalTimeStep(
         {
             acoustic_step_1st_half.add(
                 &main_methods.template addInteractionDynamicsOneLevel<AcousticStep1stHalf, AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
-                    .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(fluid_wall_contact));
+                     .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(fluid_wall_contact));
 
             acoustic_step_2nd_half.add(
                 &main_methods.template addInteractionDynamicsOneLevel<AcousticStep2ndHalf, AcousticRiemannSolverCK, NoKernelCorrectionCK>(inner_relation)
-                    .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(fluid_wall_contact));
+                     .template addPostContactInteraction<Wall, AcousticRiemannSolverCK, NoKernelCorrectionCK>(fluid_wall_contact));
         }
         else
         {
             acoustic_step_1st_half.add(
                 &main_methods.template addInteractionDynamicsOneLevel<
-                                AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-                    .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+                                 AcousticStep1stHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                     .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
 
             acoustic_step_2nd_half.add(
                 &main_methods.template addInteractionDynamicsOneLevel<
-                                AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
-                    .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
+                                 AcousticStep2ndHalf, RiemannSolverType, LinearCorrectionCK>(inner_relation)
+                     .template addPostContactInteraction<Wall, RiemannSolverType, LinearCorrectionCK>(fluid_wall_contact));
         }
         acoustic_time_step.add(
             &main_methods.template addReduceDynamics<AcousticTimeStepCK<WeaklyCompressibleFluid>>(sph_body, cfl));
@@ -196,7 +196,7 @@ void FluidSimulationBuilder::addTransportVelocityCorrection(
         kernel_gradient_integral.template addPostStateDynamics<TransportVelocityCorrectionCK, NoLimiter, BulkParticles>(sph_body);
         return;
     }
-    
+
     throw std::runtime_error(
         "FluidSimulationBuilder::addTransportVelocityCorrection: no supported flow type found!");
 }
@@ -244,12 +244,12 @@ void FluidSimulationBuilder::buildSurfaceIndicationIfOpenBoundary(
 
         auto &initialization_pipeline = sim.getInitializationPipeline();
         initialization_pipeline.insert_hook(
-            InitializationHookPoint::InitialParticleIndicationTagging, [&]()
+            InitializationHookPoint::AfterInitialCondition, [&]()
             { fluid_surface_indication.exec(); });
 
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleIndicationTagging, [&]()
+            SimulationHookPoint::AfterUpdateConfiguration, [&]()
             { fluid_surface_indication.exec(); });
     }
 }

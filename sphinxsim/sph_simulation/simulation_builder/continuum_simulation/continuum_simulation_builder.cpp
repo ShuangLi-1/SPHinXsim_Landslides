@@ -52,7 +52,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
 
     ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(sim, main_methods);
-    buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);
+    ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
     // Initial condition if present.
     //----------------------------------------------------------------------
@@ -94,7 +94,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
         [&]()
         {
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialUpdateConfiguration);
-            initialization_pipeline.run_hooks(InitializationHookPoint::InitialParticleIndicationTagging);
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
@@ -155,7 +154,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
                 simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::UpdateConfiguration);
-                simulation_pipeline.run_hooks(SimulationHookPoint::ParticleIndicationTagging);
+                simulation_pipeline.run_hooks(SimulationHookPoint::AfterUpdateConfiguration);
                 continuum_advection_step_setup.exec();
                 continuum_linear_correction_matrix.exec();
                 simulation_pipeline.run_hooks(SimulationHookPoint::AfterLinearCorrectionMatrix);

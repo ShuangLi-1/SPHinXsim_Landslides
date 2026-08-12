@@ -120,12 +120,12 @@ void ContinuumSimulationBuilder::buildDensityRegularizationIfPresent(
 
     auto &initialization_pipeline = sim.getInitializationPipeline();
     initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialParticleIndicationTagging, [&]()
+        InitializationHookPoint::AfterInitialCondition, [&]()
         { density_regularization.exec(); });
 
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
-        SimulationHookPoint::ParticleIndicationTagging, [&]()
+        SimulationHookPoint::AfterUpdateConfiguration, [&]()
         { density_regularization.exec(); });
 }
 //=================================================================================================//
