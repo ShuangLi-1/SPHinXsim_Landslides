@@ -1,4 +1,4 @@
-#include "continuum_acoustic_steps_builder.hpp"
+#include "continuum_interaction_builder.hpp"
 
 namespace SPH
 {

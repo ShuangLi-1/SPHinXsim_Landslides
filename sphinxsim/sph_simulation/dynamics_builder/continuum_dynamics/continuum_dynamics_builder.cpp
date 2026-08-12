@@ -120,4 +120,76 @@ void ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(
     }
 }
 //=================================================================================================//
+void ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods)
+{
+    auto &sph_system = sim.getSPHSystem();
+    auto &config_manager = sim.getConfigManager();
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
+        "ContinuumBodiesConfig");
+    auto &contact_repulsion_factor = main_methods.addParticleDynamicsGroup();
+    auto &contact_repulsion_force = main_methods.addParticleDynamicsGroup();
+    auto &continuum_solver_parameters = config_manager.getEntity<
+        ContinuumSolverParameters>("ContinuumSolverParameters");
+
+    for (const auto &cb_src : continuum_bodies_config)
+    {
+        std::string body_name = cb_src->name_;
+        if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+        {
+            for (const auto &cb_tgt : continuum_bodies_config)
+            {
+                std::string tgt_body_name = cb_tgt->name_;
+                if (body_name != tgt_body_name &&
+                    !config_manager.hasEntity<GeneralContinuum>(tgt_body_name + "PlasticContinuum"))
+                {
+                    std::string relation_name = body_name + tgt_body_name;
+                    auto &contact_relation =
+                        sph_system.getRelationByName<Contact<Relation<RealBody, RealBody>>>(relation_name);
+                    contact_repulsion_factor.add(
+                        &main_methods.template addInteractionDynamics<solid_dynamics::RepulsionFactor>(
+                            contact_relation));
+                    contact_repulsion_force.add(
+                        &main_methods.template addInteractionDynamicsWithUpdate<solid_dynamics::RepulsionForceCK>(
+                            contact_relation, continuum_solver_parameters.contact_numerical_damping_));
+                }
+            }
+
+            if (config_manager.hasEntity<SPHBodiesConfig>("SolidBodiesConfig"))
+            {
+                auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+                for (const auto &sb_tgt : solid_bodies_config)
+                {
+                    std::string relation_name = body_name + sb_tgt->name_;
+                    auto &contact_relation = sph_system.getRelationByName<
+                        Contact<Relation<RealBody, SolidBody>>>(relation_name);
+                    contact_repulsion_factor.add(
+                        &main_methods.template addInteractionDynamics<solid_dynamics::RepulsionFactor>(
+                            contact_relation));
+                    contact_repulsion_force.add(
+                        &main_methods.template addInteractionDynamicsWithUpdate<
+                            solid_dynamics::RepulsionForceCK, Wall>(
+                            contact_relation, continuum_solver_parameters.contact_numerical_damping_));
+                }
+            }
+        }
+    }
+
+    if (contact_repulsion_factor.hasDynamics())
+    {
+        auto &initialization_pipeline = sim.getInitializationPipeline();
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [&]()
+            { contact_repulsion_factor.exec(); });
+
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BeforeMainPhysicalTimeStep, [&]()
+            { contact_repulsion_force.exec(); });
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
+            { contact_repulsion_factor.exec(); });
+    }
+}
+//=================================================================================================//
 } // namespace SPH

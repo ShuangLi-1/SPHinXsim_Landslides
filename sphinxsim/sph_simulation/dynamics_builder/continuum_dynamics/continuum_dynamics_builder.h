@@ -60,6 +60,7 @@ class ContinuumDynamicsBuilder
     static BaseDynamics<void> &addAcousticStep2ndHalf(SPHSimulation &sim, MainMethods &main_methods);
     static BaseDynamics<void> &addLinearCorrectionMatrix(SPHSimulation &sim, MainMethods &main_methods);
     static void buildShearForceIntegrationIfPresent(SPHSimulation &sim, MainMethods &main_methods);
+    static void buildContactRepulsionIfPresent(SPHSimulation &sim, MainMethods &main_methods);
 
   private:
     template <class InnerRelationType>
