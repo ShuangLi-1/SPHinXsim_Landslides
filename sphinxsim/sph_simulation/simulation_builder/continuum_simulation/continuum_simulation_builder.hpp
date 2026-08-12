@@ -10,79 +10,6 @@
 namespace SPH
 {
 //=================================================================================================//
-template <class InnerRelationType, class ContactRelationType>
-BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep1stHalf(
-    EntityManager &config_manager, MainMethods &main_methods,
-    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
-{
-    std::string body_name = inner_relation.getSPHBody().Name();
-    if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
-    {
-        using RiemannSolverType = RiemannSolver<GeneralContinuum, GeneralContinuum, NoLimiter>;
-        return main_methods.template addInteractionDynamics<
-            fluid_dynamics::AcousticStep1stHalf, OneLevel,
-            RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
-    }
-
-    if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
-    {
-        using RiemannSolverType = RiemannSolver<J2Plasticity, J2Plasticity, NoLimiter>;
-        return main_methods.template addInteractionDynamics<
-            fluid_dynamics::AcousticStep1stHalf, OneLevel,
-            RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
-    }
-
-    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
-    {
-        using RiemannSolverType = RiemannSolver<PlasticContinuum, PlasticContinuum, TruncatedLinear>;
-        return main_methods.template addInteractionDynamicsOneLevel<
-                               continuum_dynamics::PlasticAcousticStep1stHalf,
-                               RiemannSolverType, NoKernelCorrectionCK>(inner_relation)
-            .template addPostContactInteraction<Wall, RiemannSolverType, NoKernelCorrectionCK>(contact_relation);
-    }
-
-    throw std::runtime_error(
-        "ContinuumSimulationBuilder::addAcousticStep1stHalf: no supported material type found!");
-}
-//=================================================================================================//
-template <class InnerRelationType, class ContactRelationType>
-BaseDynamics<void> &ContinuumSimulationBuilder::addAcousticStep2ndHalf(
-    EntityManager &config_manager, MainMethods &main_methods,
-    InnerRelationType &inner_relation, ContactRelationType &contact_relation)
-{
-    std::string body_name = inner_relation.getSPHBody().Name();
-    if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
-    {
-        using RiemannSolverType = RiemannSolver<GeneralContinuum, GeneralContinuum, NoLimiter>;
-        return main_methods.template addInteractionDynamics<
-            fluid_dynamics::AcousticStep2ndHalf, OneLevel,
-            RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
-    }
-
-    if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
-    {
-        using RiemannSolverType = RiemannSolver<J2Plasticity, J2Plasticity, NoLimiter>;
-        return main_methods.template addInteractionDynamics<
-            fluid_dynamics::AcousticStep2ndHalf, OneLevel,
-            RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
-    }
-
-    if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
-    {
-        using RiemannSolverType = RiemannSolver<PlasticContinuum, PlasticContinuum, TruncatedLinear>;
-        auto &continuum_solver_parameters = config_manager.getEntity<
-            ContinuumSolverParameters>("ContinuumSolverParameters");
-        return main_methods.template addInteractionDynamicsOneLevel<
-                               continuum_dynamics::PlasticAcousticStep2ndHalf,
-                               RiemannSolverType, NoKernelCorrectionCK>(
-                               inner_relation, continuum_solver_parameters.plastic_riemann_dissipation_factor_)
-            .template addPostContactInteraction<Wall, RiemannSolverType, NoKernelCorrectionCK>(contact_relation);
-    }
-
-    throw std::runtime_error(
-        "ContinuumSimulationBuilder::addAcousticStep2ndHalf: no supported material type found!");
-}
-//=================================================================================================//
 template <class InnerRelationType>
 void ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent(
     SPHSimulation &sim, MainMethods &main_methods, InnerRelationType &inner_relation)
@@ -129,23 +56,6 @@ void ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent(
 
     throw std::runtime_error(
         "ContinuumSimulationBuilder::buildShearForceIntegrationIfPresent: no supported material type found!");
-}
-//=================================================================================================//
-template <class InnerRelationType>
-ParticleDynamicsGroup &ContinuumSimulationBuilder::addLinearCorrectionMatrix(
-    EntityManager &config_manager, MainMethods &main_methods, InnerRelationType &inner_relation)
-{
-    auto &linear_correction_matrix = main_methods.addParticleDynamicsGroup();
-    std::string body_name = inner_relation.getSPHBody().Name();
-    if (!config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
-    {
-        auto &continuum_solver_parameters = config_manager.getEntity<
-            ContinuumSolverParameters>("ContinuumSolverParameters");
-        linear_correction_matrix.add(
-            &main_methods.template addInteractionDynamicsWithUpdate<
-                LinearCorrectionMatrix>(inner_relation, continuum_solver_parameters.linear_correction_matrix_coeff_));
-    }
-    return linear_correction_matrix;
 }
 //=================================================================================================//
 template <class ContactRelationType>

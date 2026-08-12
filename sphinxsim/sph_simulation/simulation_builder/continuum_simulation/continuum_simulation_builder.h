@@ -52,23 +52,9 @@ class ContinuumSimulationBuilder : public SimulationBuilder
     ContinuumSolverParameters parseContinuumSolverParameters(
         const ScalingConfig &scaling_config, const json &config);
 
-    template <class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addAcousticStep1stHalf(
-        EntityManager &config_manager, MainMethods &main_methods,
-        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
-
-    template <class InnerRelationType, class ContactRelationType>
-    BaseDynamics<void> &addAcousticStep2ndHalf(
-        EntityManager &config_manager, MainMethods &main_methods,
-        InnerRelationType &inner_relation, ContactRelationType &contact_relation);
-
     template <class InnerRelationType>
     void buildShearForceIntegrationIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, InnerRelationType &inner_relation);
-
-    template <class InnerRelationType>
-    ParticleDynamicsGroup &addLinearCorrectionMatrix(
-        EntityManager &config_manager, MainMethods &main_methods, InnerRelationType &inner_relation);
 
     template <class ContactRelationType>
     void buildContactRepulsionIfPresent(
