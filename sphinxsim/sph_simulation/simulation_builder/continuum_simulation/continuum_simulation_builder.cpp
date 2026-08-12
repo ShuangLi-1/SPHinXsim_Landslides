@@ -29,9 +29,6 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &main_methods = sph_solver.getMainMethodContainer();
     buildUpdateConfiguration(sim, main_methods, config);
     auto &continuum_body = *sph_system.collectBodies<RealBody>().front();
-    std::string continuum_body_name = continuum_body.Name();
-    auto &continuum_inner = sph_system.getRelationByName<
-        Inner<Relation<RealBody>>>(continuum_body_name);
 
     auto &continuum_advection_step_setup =
         ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
@@ -65,8 +62,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
     ContinuumDynamicsBuilder::buildDensityRegularizationIfPresent(sim, main_methods);
-    buildStressDiffusionIfPresent(
-        sim, main_methods, continuum_body, continuum_inner, body_state_recorder);
+    ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(sim, main_methods, body_state_recorder);
     //----------------------------------------------------------------------
     //	Define time-integration method, screen out uput and observation sample rate.
     //----------------------------------------------------------------------

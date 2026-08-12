@@ -250,6 +250,7 @@ void ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(
             stress_diffusion.add(
                 &main_methods.template addInteractionDynamics<
                     continuum_dynamics::StressDiffusionCK>(inner_relation));
+
             auto &continuum_body = sph_system.getBodyByName<RealBody>(body_name);
             body_state_recorder.addDerivedVariableRecording<
                 StateDynamics<execution::ParallelPolicy, continuum_dynamics::VerticalStressCK>>(
