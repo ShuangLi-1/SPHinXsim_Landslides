@@ -134,6 +134,11 @@ struct RestartConfig
     bool summary_enabled_{false};
 };
 
+struct GravityConfig
+{
+    Real gravity_ = 0.0;
+    StdVec<std::string> enabled_solid_bodies_{};
+};
 class SimulationBuilder
 {
   public:
@@ -144,19 +149,15 @@ class SimulationBuilder
     static void parseScheduledEvents(SPHSimulation &sim, const json &config, bool &on_flag);
 
   protected:
+    RestartConfig parseRestartConfig(const json &config);
     void buildFluidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildContinuumBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config);
-    RestartConfig parseRestartConfig(const json &config);
 
-    void buildExternalForceIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, SPHBody &sph_body, const json &config);
-
-    void buildInitialConditionIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, const json &config);
-    void buildRestartFromFileIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildExternalForceIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildInitialConditionIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void buildRestartFromFileIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
   private:
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;

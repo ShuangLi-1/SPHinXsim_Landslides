@@ -202,21 +202,58 @@ void SimulationBuilder::parseScheduledEvents(SPHSimulation &sim, const json &con
 }
 //=================================================================================================//
 void SimulationBuilder::buildExternalForceIfPresent(
-    SPHSimulation &sim, MainMethods &main_methods, SPHBody &real_body, const json &config)
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
+    if (!config.contains("gravity"))
+        return;
+
+    const json &config_gravity = config.at("gravity");
+    auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
+    auto &gravity_force = main_methods.addParticleDynamicsGroup();
+
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
-    auto &initialization_pipeline = sim.getInitializationPipeline();
+    Vecd gravity_vector = scaling_config.jsonToVecd(config_gravity, "Acceleration");
 
-    if (config.contains("gravity"))
+    if (config_manager.hasEntity<SPHBodiesConfig>("FluidBodiesConfig"))
     {
-        auto &constant_gravity =
-            main_methods.template addStateDynamics<GravityForceCK<Gravity>>(
-                real_body, Gravity(scaling_config.jsonToVecd(config.at("gravity"), "Acceleration")));
+        auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+        for (const auto &fb : fluid_bodies_config)
+        {
+            auto &fluid_body = sph_system.getBodyByName<FluidBody>(fb->name_);
+            gravity_force.add(&main_methods.template addStateDynamics<GravityForceCK<Gravity>>(
+                fluid_body, Gravity(gravity_vector)));
+        }
+    }
 
+    if (config_manager.hasEntity<SPHBodiesConfig>("ContinuumBodiesConfig"))
+    {
+        auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+        for (const auto &cb : continuum_bodies_config)
+        {
+            auto &continuum_body = sph_system.getBodyByName<RealBody>(cb->name_);
+            gravity_force.add(&main_methods.template addStateDynamics<GravityForceCK<Gravity>>(
+                continuum_body, Gravity(gravity_vector)));
+        }
+    }
+
+    if (config_gravity.contains("enabled_solid_bodies"))
+    {
+        for (const auto &sb : config_gravity.at("enabled_solid_bodies"))
+        {
+            std::string name = sb.at("body_name").get<std::string>();
+            auto &solid_body = sph_system.getBodyByName<SolidBody>(name);
+            gravity_force.add(&main_methods.template addStateDynamics<GravityForceCK<Gravity>>(
+                solid_body, Gravity(gravity_vector)));
+        }
+    }
+
+    if (gravity_force.hasDynamics())
+    {
+        auto &initialization_pipeline = sim.getInitializationPipeline();
         initialization_pipeline.insert_hook(
             InitializationHookPoint::AfterInitialCondition, [&]()
-            { constant_gravity.exec(); });
+            { gravity_force.exec(); });
     }
 }
 //=================================================================================================//
