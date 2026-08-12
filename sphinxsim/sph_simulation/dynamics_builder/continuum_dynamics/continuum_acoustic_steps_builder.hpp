@@ -41,7 +41,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAcousticStep1stHalfForOneBody(
             RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
 
         auto &sph_system = sim.getSPHSystem();
-        auto &solid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+        auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
 
         for (const auto &sb_tgt : solid_bodies_config)
         {
@@ -91,7 +91,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAcousticStep2ndHalfForOneBody(
             RiemannSolverType, NoKernelCorrectionCK>(
             inner_relation, continuum_solver_parameters.plastic_riemann_dissipation_factor_);
         auto &sph_system = sim.getSPHSystem();
-        auto &solid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+        auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
 
         for (const auto &sb_tgt : solid_bodies_config)
         {

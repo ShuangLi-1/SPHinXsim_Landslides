@@ -11,7 +11,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAdvectionStepSetup(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>(
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
         "ContinuumBodiesConfig");
     auto &advection_step_setup = main_methods.addParticleDynamicsGroup();
 
@@ -29,7 +29,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addUpdateParticlePosition(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>(
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
         "ContinuumBodiesConfig");
     auto &update_particle_position = main_methods.addParticleDynamicsGroup();
 
@@ -47,7 +47,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addLinearCorrectionMatrix(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>(
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
         "ContinuumBodiesConfig");
     auto &linear_correction_matrix = main_methods.addParticleDynamicsGroup();
 
@@ -67,20 +67,5 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addLinearCorrectionMatrix(
     }
     return linear_correction_matrix;
 }
-//=================================================================================================//
-BaseDynamics<void> &ContinuumDynamicsBuilder::addShearForceIntegration(
-    SPHSimulation &sim, MainMethods &main_methods)
-    {
-    auto &sph_system = sim.getSPHSystem();
-    auto &config_manager = sim.getConfigManager();
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>(
-        "ContinuumBodiesConfig");
-    auto &shear_force_integration = main_methods.addParticleDynamicsGroup();
-
-    for (const auto &cb : continuum_bodies_config)
-    {
-        std::string body_name = cb->name_;
-        auto &inner_relation = sph_system.getRelationByName<Inner<Relation<RealBody>>>(body_name);
-    }
 //=================================================================================================//
 } // namespace SPH

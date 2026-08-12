@@ -30,6 +30,7 @@
 #define CONTINUUM_SIMULATION_BUILDER_H
 
 #include "base_simulation_builder.h"
+#include "continuum_dynamics_builder.h"
 #include "sph_solver.h"
 
 namespace SPH

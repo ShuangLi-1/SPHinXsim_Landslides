@@ -111,6 +111,7 @@ struct SPHBodyConfig
     void setDeformable();
     void setHasDynamics();
 };
+using SPHBodiesConfig = StdVec<SPHBodyConfig *>;
 
 struct VariableConfig
 {

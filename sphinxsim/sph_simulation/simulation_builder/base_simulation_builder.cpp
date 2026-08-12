@@ -35,8 +35,8 @@ void SimulationBuilder::buildFluidBodies(
     SPHSystem &sph_system, EntityManager &config_manager, const json &config)
 {
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
-    StdVec<SPHBodyConfig *> &fluid_bodies_config =
-        *config_manager.emplaceEntity<StdVec<SPHBodyConfig *>>("FluidBodiesConfig");
+    SPHBodiesConfig &fluid_bodies_config =
+        *config_manager.emplaceEntity<SPHBodiesConfig>("FluidBodiesConfig");
 
     for (const auto &fb : config)
     {
@@ -64,8 +64,8 @@ void SimulationBuilder::buildFluidBodies(
 void SimulationBuilder::buildContinuumBodies(
     SPHSystem &sph_system, EntityManager &config_manager, const json &config)
 {
-    StdVec<SPHBodyConfig *> &continuum_bodies_config =
-        *config_manager.emplaceEntity<StdVec<SPHBodyConfig *>>("ContinuumBodiesConfig");
+    SPHBodiesConfig &continuum_bodies_config =
+        *config_manager.emplaceEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
 
     for (const auto &cb : config)
     {
@@ -104,13 +104,13 @@ void SPHBodyConfig::setHasDynamics()
 void SimulationBuilder::buildSolidBodies(
     SPHSystem &sph_system, EntityManager &config_manager, const json &config)
 {
-    StdVec<SPHBodyConfig *> &solid_bodies_config =
-        *config_manager.emplaceEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+    SPHBodiesConfig &solid_bodies_config =
+        *config_manager.emplaceEntity<SPHBodiesConfig>("SolidBodiesConfig");
 
     for (const auto &sb : config)
     {
         const std::string name = sb.at("name").get<std::string>();
-        SPHBodyConfig &body_config = *config_manager.emplaceEntity<SPHBodyConfig>(name);
+        auto &body_config = *config_manager.emplaceEntity<SPHBodyConfig>(name);
         solid_bodies_config.push_back(&body_config);
         body_config.name_ = name;
         body_config.setStatic();

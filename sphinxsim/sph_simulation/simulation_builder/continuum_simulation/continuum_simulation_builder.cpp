@@ -2,7 +2,6 @@
 
 #include "base_simulation_builder.hpp"
 #include "constraint_builder.h"
-#include "continuum_dynamics_builder.h"
 
 namespace SPH
 {
@@ -29,19 +28,28 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     auto &main_methods = sph_solver.getMainMethodContainer();
     buildUpdateConfiguration(sim, main_methods, config);
+    auto &continuum_body = *sph_system.collectBodies<RealBody>().front();
+    auto &solid_body = *sph_system.collectBodies<SolidBody>().front();
+    std::string continuum_body_name = continuum_body.Name();
+    std::string solid_body_name = solid_body.Name();
+    auto &continuum_inner = sph_system.getRelationByName<
+        Inner<Relation<RealBody>>>(continuum_body_name);
+    std::string relation_name = continuum_body_name + solid_body_name;
+    auto &continuum_solid_contact = sph_system.getRelationByName<
+        Contact<Relation<RealBody, SolidBody>>>(relation_name);
 
-    auto &continuum_advection_step_setup =
-        ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
-    auto &continuum_update_particle_position =
-        ContinuumDynamicsBuilder::addUpdateParticlePosition(sim, main_methods);
+    auto &continuum_advection_step_setup = main_methods.addStateDynamics<
+        fluid_dynamics::AdvectionStepSetup>(continuum_body);
+    auto &continuum_update_particle_position = main_methods.addStateDynamics<
+        fluid_dynamics::UpdateParticlePosition>(continuum_body);
 
     auto &continuum_acoustic_step_1st_half =
-        ContinuumDynamicsBuilder::addAcousticStep1stHalf(sim, main_methods);
+        addAcousticStep1stHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
     auto &continuum_acoustic_step_2nd_half =
-        ContinuumDynamicsBuilder::addAcousticStep2ndHalf(sim, main_methods);
+        addAcousticStep2ndHalf(config_manager, main_methods, continuum_inner, continuum_solid_contact);
 
     auto &continuum_linear_correction_matrix =
-        ContinuumDynamicsBuilder::addLinearCorrectionMatrix(sim, main_methods);
+        addLinearCorrectionMatrix(config_manager, main_methods, continuum_inner);
 
     buildShearForceIntegrationIfPresent(sim, main_methods, continuum_inner);
     buildContactRepulsionIfPresent(sim, main_methods, continuum_solid_contact);

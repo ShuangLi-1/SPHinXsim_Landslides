@@ -18,31 +18,40 @@ void SimulationBuilder::buildCellLinkedListDynamics(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
     auto &update_cell_linked_list = main_methods.addParticleDynamicsGroup();
 
-    for (const auto &fb : fluid_bodies_config)
+    if (config_manager.hasEntity<SPHBodiesConfig>("FluidBodiesConfig"))
     {
-        auto &fluid_body = sph_system.getBodyByName<FluidBody>(fb->name_);
-        update_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(fluid_body));
+        auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+        for (const auto &fb : fluid_bodies_config)
+        {
+            auto &fluid_body = sph_system.getBodyByName<FluidBody>(fb->name_);
+            update_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(fluid_body));
+        }
     }
 
-    for (const auto &cb : continuum_bodies_config)
+    if (config_manager.hasEntity<SPHBodiesConfig>("ContinuumBodiesConfig"))
     {
-        auto &continuum_body = sph_system.getBodyByName<RealBody>(cb->name_);
-        update_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(continuum_body));
+        auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+        for (const auto &cb : continuum_bodies_config)
+        {
+            auto &continuum_body = sph_system.getBodyByName<RealBody>(cb->name_);
+            update_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(continuum_body));
+        }
     }
 
     auto &static_cell_linked_list = main_methods.addParticleDynamicsGroup();
-    for (const auto &sb : solid_bodies_config)
+    if (config_manager.hasEntity<SPHBodiesConfig>("SolidBodiesConfig"))
     {
+        auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+        for (const auto &sb : solid_bodies_config)
+        {
 
-        auto &solid_body = sph_system.getBodyByName<SolidBody>(sb->name_);
-        sb->is_moving_
-            ? update_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(solid_body))
-            : static_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(solid_body));
+            auto &solid_body = sph_system.getBodyByName<SolidBody>(sb->name_);
+            sb->is_moving_
+                ? update_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(solid_body))
+                : static_cell_linked_list.add(&main_methods.addCellLinkedListDynamics(solid_body));
+        }
     }
 
     auto &initialization_pipeline = sim.getInitializationPipeline();
@@ -82,9 +91,9 @@ void SimulationBuilder::buildFluidRelationDynamics(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
     auto &update_all_fluid_relations = main_methods.addParticleDynamicsGroup();
 
     for (const auto &fb_src : fluid_bodies_config)
@@ -150,9 +159,9 @@ void SimulationBuilder::buildContinuumRelationDynamics(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
     auto &update_all_continuum_relations = main_methods.addParticleDynamicsGroup();
 
     for (const auto &cb_src : continuum_bodies_config)
@@ -218,9 +227,9 @@ void SimulationBuilder::buildSolidRelationDynamics(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &fluid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("FluidBodiesConfig");
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("ContinuumBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>("SolidBodiesConfig");
+    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>("ContinuumBodiesConfig");
+    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
     auto &update_all_contact_relations = main_methods.addParticleDynamicsGroup();
     auto &total_lagrangian_relations = main_methods.addParticleDynamicsGroup();
 

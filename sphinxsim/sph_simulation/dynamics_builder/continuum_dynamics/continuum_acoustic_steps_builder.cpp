@@ -8,7 +8,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAcousticStep1stHalf(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>(
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
         "ContinuumBodiesConfig");
     auto &acoustic_step_1st_half = main_methods.addParticleDynamicsGroup();
 
@@ -26,7 +26,7 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAcousticStep2ndHalf(
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
-    auto &continuum_bodies_config = config_manager.getEntity<StdVec<SPHBodyConfig *>>(
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
         "ContinuumBodiesConfig");
     auto &acoustic_step_2nd_half = main_methods.addParticleDynamicsGroup();
 
