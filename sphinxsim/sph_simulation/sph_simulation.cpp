@@ -5,13 +5,12 @@
 #include "geometry_builder.h"
 #include "material_builder.h"
 #include "particle_generation.h"
-#include "recording_builder.h"
 
 namespace SPH
 {
 //=================================================================================================//
 SPHSimulation::SPHSimulation(const fs::path &config_path)
-    : config_path_(config_path), recording_builder_ptr_(std::make_unique<RecordingBuilder>())
+    : config_path_(config_path)
 {
     IOEnvironment &io_env = IO::initEnvironment();
     io_env.resetInputFolder((config_path_.parent_path()).string(), true);

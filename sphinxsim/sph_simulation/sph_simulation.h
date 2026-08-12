@@ -80,7 +80,6 @@ class SPHSimulation
     SPHSolver &defineSPHSolver(SimulationBuilder &simulation_builder, const json &config);
     SPHSystem &getSPHSystem() { return *sph_system_ptr_; };
     SPHSolver &getSPHSolver() { return *sph_solver_ptr_; };
-    RecordingBuilder &getRecordingBuilder() { return *recording_builder_ptr_; };
     EntityManager &getConfigManager();
     StagePipeline<InitializationHookPoint> &getInitializationPipeline();
     StagePipeline<SimulationHookPoint> &getSimulationPipeline();
@@ -97,7 +96,6 @@ class SPHSimulation
     EntityManager config_manager_;
     StagePipeline<InitializationHookPoint> initialization_pipeline_;
     StagePipeline<SimulationHookPoint> simulation_pipeline_;
-    std::unique_ptr<RecordingBuilder> recording_builder_ptr_;
     std::unique_ptr<SPHSystem> sph_system_ptr_;
     std::unique_ptr<SPHSolver> sph_solver_ptr_;
     UniquePtrsKeeper<Contact<>> structure_contacts_keeper_;
