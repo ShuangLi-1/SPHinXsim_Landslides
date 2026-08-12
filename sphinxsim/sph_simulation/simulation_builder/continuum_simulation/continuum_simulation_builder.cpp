@@ -29,14 +29,9 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     auto &main_methods = sph_solver.getMainMethodContainer();
     buildUpdateConfiguration(sim, main_methods, config);
     auto &continuum_body = *sph_system.collectBodies<RealBody>().front();
-    auto &solid_body = *sph_system.collectBodies<SolidBody>().front();
     std::string continuum_body_name = continuum_body.Name();
-    std::string solid_body_name = solid_body.Name();
     auto &continuum_inner = sph_system.getRelationByName<
         Inner<Relation<RealBody>>>(continuum_body_name);
-    std::string relation_name = continuum_body_name + solid_body_name;
-    auto &continuum_solid_contact = sph_system.getRelationByName<
-        Contact<Relation<RealBody, SolidBody>>>(relation_name);
 
     auto &continuum_advection_step_setup =
         ContinuumDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
@@ -69,8 +64,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     auto &body_state_recorder = recording_builder.createBodyStatesRecording(
         sph_system, config_manager, main_methods, config);
-    buildDensityRegularizationIfPresent(
-        sim, main_methods, continuum_body, continuum_inner, continuum_solid_contact);
+    ContinuumDynamicsBuilder::buildDensityRegularizationIfPresent(sim, main_methods);
     buildStressDiffusionIfPresent(
         sim, main_methods, continuum_body, continuum_inner, body_state_recorder);
     //----------------------------------------------------------------------

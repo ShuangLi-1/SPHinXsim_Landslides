@@ -232,4 +232,43 @@ void ContinuumDynamicsBuilder::buildDensityRegularizationIfPresent(
     }
 }
 //=================================================================================================//
+void ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods, BodyStatesRecording &body_state_recorder)
+{
+    auto &sph_system = sim.getSPHSystem();
+    auto &config_manager = sim.getConfigManager();
+    auto &continuum_bodies_config = config_manager.getEntity<SPHBodiesConfig>(
+        "ContinuumBodiesConfig");
+    auto &stress_diffusion = main_methods.addParticleDynamicsGroup();
+
+    for (const auto &cb_src : continuum_bodies_config)
+    {
+        std::string body_name = cb_src->name_;
+        if (config_manager.hasEntity<PlasticContinuum>(body_name + "PlasticContinuum"))
+        {
+            auto &inner_relation = sph_system.getRelationByName<Inner<Relation<RealBody>>>(body_name);
+            stress_diffusion.add(
+                &main_methods.template addInteractionDynamics<
+                    continuum_dynamics::StressDiffusionCK>(inner_relation));
+            auto &continuum_body = sph_system.getBodyByName<RealBody>(body_name);
+            body_state_recorder.addDerivedVariableRecording<
+                StateDynamics<execution::ParallelPolicy, continuum_dynamics::VerticalStressCK>>(
+                continuum_body);
+            body_state_recorder.addDerivedVariableRecording<
+                StateDynamics<execution::ParallelPolicy, continuum_dynamics::AccDeviatoricPlasticStrainCK>>(
+                continuum_body);
+        }
+    }
+
+    if (stress_diffusion.hasDynamics())
+    {
+        auto &time_stepper = sim.getSPHSolver().getTimeStepper();
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::BeforeMainPhysicalTimeStep, [&]()
+            {   Real dt = time_stepper.getGlobalTimeStepSize();
+                stress_diffusion.exec(dt); });
+    }
+}
+//=================================================================================================//
 } // namespace SPH
