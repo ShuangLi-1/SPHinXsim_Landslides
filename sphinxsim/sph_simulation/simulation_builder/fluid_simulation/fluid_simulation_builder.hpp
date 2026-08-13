@@ -152,53 +152,28 @@ void FluidSimulationBuilder::buildTransportVelocityFormulationIfNotFreeSurface(
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     if (fluid_solver_config.surface_type_ != "free_surface")
     {
-        auto &transport_velocity_correction =
+        auto &kernel_gradient_integral =
             main_methods.template addInteractionDynamics<
                             KernelGradientIntegral, LinearCorrectionCK>(inner_relation)
                 .template addPostContactInteraction<Boundary, LinearCorrectionCK>(contact_relation);
 
-        addTransportVelocityCorrection(
-            transport_velocity_correction, inner_relation.getSPHBody(), fluid_solver_config);
+        BaseDynamics<void> &transport_velocity_correction =
+            addTransportVelocityCorrection(main_methods, inner_relation.getSPHBody(), fluid_solver_config);
 
         auto &initialization_pipeline = sim.getInitializationPipeline();
         initialization_pipeline.insert_hook(
             InitializationHookPoint::InitialAfterLinearCorrectionMatrix, [&]()
-            { transport_velocity_correction.exec(); });
+            {   kernel_gradient_integral.exec();
+            initialization_pipeline.run_hooks(InitializationHookPoint::InitialAfterKernelGradientIntegral);
+            transport_velocity_correction.exec(); });
 
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
             SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
-            { transport_velocity_correction.exec(); });
+            {   kernel_gradient_integral.exec();
+            simulation_pipeline.run_hooks(SimulationHookPoint::AfterKernelGradientIntegral);
+            transport_velocity_correction.exec(); });
     }
-}
-//=================================================================================================//
-template <class KernelGradientIntegralType>
-void FluidSimulationBuilder::addTransportVelocityCorrection(
-    KernelGradientIntegralType &kernel_gradient_integral,
-    SPHBody &sph_body, FluidSolverConfig &fluid_solver_config)
-{
-    if (fluid_solver_config.surface_type_ == "confined")
-    {
-        kernel_gradient_integral.template addPostStateDynamics<
-            TransportVelocityCorrectionCK, TruncatedLinear>(sph_body);
-        return;
-    }
-
-    if (fluid_solver_config.surface_type_ == "open_boundary")
-    {
-        kernel_gradient_integral.template addPostStateDynamics<
-            TransportVelocityCorrectionCK, TruncatedLinear, BulkParticles>(sph_body);
-        return;
-    }
-
-    if (fluid_solver_config.surface_type_ == "free_stream")
-    {
-        kernel_gradient_integral.template addPostStateDynamics<TransportVelocityCorrectionCK, NoLimiter, BulkParticles>(sph_body);
-        return;
-    }
-
-    throw std::runtime_error(
-        "FluidSimulationBuilder::addTransportVelocityCorrection: no supported flow type found!");
 }
 //=================================================================================================//
 template <class InnerRelationType, class ContactRelationType>

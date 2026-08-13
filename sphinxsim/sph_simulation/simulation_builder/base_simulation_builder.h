@@ -51,6 +51,7 @@ enum class SimulationHookPoint
     AfterUpdateConfiguration,
     UpdateConfiguration,
     AfterLinearCorrectionMatrix,
+    AfterKernelGradientIntegral,
     NumHooks
 };
 
@@ -63,6 +64,7 @@ enum class InitializationHookPoint
     UpdateConfigurationAfterRestart,
     InitialObservation,
     InitialAfterLinearCorrectionMatrix,
+    InitialAfterKernelGradientIntegral,
     PreSimulationSanityCheck,
     NumHooks
 };
