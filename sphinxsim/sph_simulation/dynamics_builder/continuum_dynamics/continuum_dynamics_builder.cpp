@@ -2,6 +2,7 @@
 
 #include "all_continuum_dynamics_ck.h"
 #include "fluid_dynamics_builder.hpp"
+#include "recording_builder.h"
 #include "sph_simulation.h"
 
 namespace SPH
@@ -235,7 +236,7 @@ void ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(
 }
 //=================================================================================================//
 void ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(
-    SPHSimulation &sim, MainMethods &main_methods, BodyStatesRecording &body_state_recorder)
+    SPHSimulation &sim, MainMethods &main_methods)
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
@@ -254,12 +255,11 @@ void ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(
                     continuum_dynamics::StressDiffusionCK>(inner_relation));
 
             auto &continuum_body = sph_system.getBodyByName<RealBody>(body_name);
-            body_state_recorder.addDerivedVariableRecording<
-                StateDynamics<execution::ParallelPolicy, continuum_dynamics::VerticalStressCK>>(
-                continuum_body);
-            body_state_recorder.addDerivedVariableRecording<
-                StateDynamics<execution::ParallelPolicy, continuum_dynamics::AccDeviatoricPlasticStrainCK>>(
-                continuum_body);
+            auto &body_state_recorder = RecordingBuilder::getBodyStatesRecording(config_manager);
+            body_state_recorder.template addDerivedVariableToWrite<
+                continuum_dynamics::VerticalStressCK>(continuum_body);
+            body_state_recorder.template addDerivedVariableToWrite<
+                continuum_dynamics::AccDeviatoricPlasticStrainCK>(continuum_body);
         }
     }
 

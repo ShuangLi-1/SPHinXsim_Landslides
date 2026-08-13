@@ -167,6 +167,8 @@ class SimulationBuilder
     void buildFluidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildContinuumRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildSolidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    void addUpdateConfigurationDynamicsToPipeline(
+        SPHSimulation &sim, EntityManager &config_manager, ParticleDynamicsGroup &configuration_dynamics);
 
     template <class IdentifierType>
     BaseDynamics<void> &addVariableAssignment(
