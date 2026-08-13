@@ -191,7 +191,7 @@ void SimulationBuilder::buildSolidRelationDynamics(
         auto &solid_body = sph_system.getBodyByName<SolidBody>(sb_src->name_);
         if (sb_src->has_dynamics_)
         {
-            auto &solid_inner = sph_system.addInnerRelation(solid_body);
+            auto &solid_inner = sph_system.addInnerRelation(solid_body, ConfigType::Lagrangian);
             total_lagrangian_relations.add(&main_methods.addRelationDynamics(solid_inner));
         }
 
@@ -203,10 +203,17 @@ void SimulationBuilder::buildSolidRelationDynamics(
                 if (sb_src->name_ != sb_tgt->name_)
                 {
                     auto &solid_body_target = sph_system.getBodyByName<SolidBody>(sb_tgt->name_);
-                    auto &solid_contact = sph_system.addContactRelation(solid_body, solid_body_target);
-                    !sb_src->is_moving_ && !sb_tgt->is_moving_
-                        ? total_lagrangian_relations.add(&main_methods.addRelationDynamics(solid_contact))
-                        : update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                    if (!sb_src->is_moving_ && !sb_tgt->is_moving_)
+                    {
+                        auto &solid_contact = sph_system.addContactRelation(
+                            solid_body, solid_body_target, ConfigType::Lagrangian);
+                        total_lagrangian_relations.add(&main_methods.addRelationDynamics(solid_contact));
+                    }
+                    else
+                    {
+                        auto &solid_contact = sph_system.addContactRelation(solid_body, solid_body_target);
+                        update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                    }
                 }
             }
 
