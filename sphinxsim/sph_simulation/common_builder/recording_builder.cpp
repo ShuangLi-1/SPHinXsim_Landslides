@@ -1,7 +1,7 @@
 #include "recording_builder.hpp"
 
-#include "sph_simulation.h"
 #include "io_base_ck.h"
+#include "sph_simulation.h"
 
 namespace SPH
 {
@@ -90,8 +90,8 @@ void RecordingBuilder::createBodyStatesRecording(
 {
     auto &state_recorder = main_methods.template addBodyStateRecorder<
         BodyStatesRecordingToVtpCK>(sph_system);
-    config_manager.addEntity<BodyStatesRecordingToVtpCK<MainExecutionPolicy>>(
-        "BodyStatesRecording", &state_recorder);
+    config_manager.removeEntity<MainBodyStatesRecording>("BodyStatesRecording");
+    config_manager.addEntity<MainBodyStatesRecording>("BodyStatesRecording", &state_recorder);
 }
 //=================================================================================================//
 void RecordingBuilder::finalizeBodyStatesRecording(
@@ -141,11 +141,9 @@ void RecordingBuilder::finalizeBodyStatesRecording(
     }
 }
 //=================================================================================================//
-BodyStatesRecordingToVtpCK<MainExecutionPolicy> &RecordingBuilder::getBodyStatesRecording(
-    EntityManager &config_manager)
+MainBodyStatesRecording &RecordingBuilder::getBodyStatesRecording(EntityManager &config_manager)
 {
-    return config_manager.getEntity<
-        BodyStatesRecordingToVtpCK<MainExecutionPolicy>>("BodyStatesRecording");
+    return config_manager.getEntity<MainBodyStatesRecording>("BodyStatesRecording");
 }
 //=================================================================================================//
 void RecordingBuilder::buildObservationIfPresent(

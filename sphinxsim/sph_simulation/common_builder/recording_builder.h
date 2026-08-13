@@ -41,6 +41,7 @@ class SPHBody;
 
 template <class ExecutionPolicy>
 class BodyStatesRecordingToVtpCK;
+using MainBodyStatesRecording = BodyStatesRecordingToVtpCK<MainExecutionPolicy>;
 
 struct ObserverConfig
 {
@@ -58,7 +59,7 @@ class RecordingBuilder
     static void buildEnergyRecordingIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     static void createBodyStatesRecording(SPHSystem &sph_system, EntityManager &config_manager, MainMethods &main_methods);
     static void finalizeBodyStatesRecording(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
-    static BodyStatesRecordingToVtpCK<MainExecutionPolicy> &getBodyStatesRecording(EntityManager &config_manager);
+    static MainBodyStatesRecording &getBodyStatesRecording(EntityManager &config_manager);
 
   private:
     static std::string getObserverRelationName(const ObserverConfig &observer_config);
