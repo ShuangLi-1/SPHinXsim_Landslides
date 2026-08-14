@@ -74,11 +74,19 @@ void SPHSimulation::generateParticles()
         exit(1);
     }
 
-    json config = loadConfig().at("particle_generation");
-    if (config.at("build_and_run").get<bool>())
+    json config = loadConfig();
+    auto &restart_config = *config_manager_.emplaceEntity<RestartConfig>("RestartConfig");
+    if (config.contains("restart"))
+    {
+        restart_config = SimulationBuilder::parseRestartConfig(config.at("restart"));
+    }
+
+    json particle_generation_config = config.at("particle_generation");
+    if (particle_generation_config.at("build_and_run").get<bool>() &&
+        restart_config.restore_step_ == 0)
     {
         ParticleGeneration particle_generation;
-        particle_generation.buildParticleGeneration(*this, config.at("settings"));
+        particle_generation.buildParticleGeneration(*this, particle_generation_config.at("settings"));
         particle_generation.runRelaxation();
     }
     particles_generated_ = true;

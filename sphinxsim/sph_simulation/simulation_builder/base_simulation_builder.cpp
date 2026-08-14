@@ -139,12 +139,6 @@ void SimulationBuilder::parseSolverParameters(EntityManager &config_manager, con
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     config_manager.emplaceEntity<
         SolverCommonConfig>("SolverCommonConfig", parseSolverCommonConfig(scaling_config, config));
-
-    if (config.contains("restart"))
-    {
-        config_manager.emplaceEntity<RestartConfig>(
-            "RestartConfig", parseRestartConfig(config.at("restart")));
-    }
 }
 //=================================================================================================//
 RestartConfig SimulationBuilder::parseRestartConfig(const json &config)

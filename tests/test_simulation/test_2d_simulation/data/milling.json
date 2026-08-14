@@ -116,11 +116,6 @@
     "end_time": 0.1,
     "output_interval": 0.01,
     "screen_interval": 100,
-    "restart": {
-      "save_interval": 400,
-      "restore_step": 0,
-      "summary_enabled": true
-    },
     "continuum_dynamics": {
       "acoustic_cfl": 0.4,
       "advection_cfl": 0.2,
@@ -129,5 +124,11 @@
       "shear_stress_damping": 1.0,
       "hourglass_factor": 2.0
     }
+  },
+
+  "restart": {
+    "save_interval": 400,
+    "restore_step": 0,
+    "summary_enabled": true
   }
 }
