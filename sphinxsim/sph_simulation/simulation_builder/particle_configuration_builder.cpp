@@ -62,28 +62,7 @@ void SimulationBuilder::buildCellLinkedListDynamics(
             { static_cell_linked_list.exec(); });
     }
 
-    if (!update_cell_linked_list.hasDynamics())
-        return;
-
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialUpdateConfiguration, [&]()
-        { update_cell_linked_list.exec(); });
-
-    auto &simulation_pipeline = sim.getSimulationPipeline();
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::UpdateConfiguration, [&]()
-        { update_cell_linked_list.exec(); });
-
-    if (!config_manager.hasEntity<RestartConfig>("RestartConfig"))
-        return;
-
-    RestartConfig &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
-    if (restart_config.restore_step_ != 0)
-    {
-        initialization_pipeline.insert_hook(
-            InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-            { update_cell_linked_list.exec(); });
-    }
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_cell_linked_list);
 }
 //=================================================================================================//
 void SimulationBuilder::buildFluidRelationDynamics(
@@ -138,29 +117,7 @@ void SimulationBuilder::buildFluidRelationDynamics(
         }
     }
 
-    if (!update_all_fluid_relations.hasDynamics())
-        return;
-
-    auto &initialization_pipeline = sim.getInitializationPipeline();
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialUpdateConfiguration, [&]()
-        { update_all_fluid_relations.exec(); });
-
-    auto &simulation_pipeline = sim.getSimulationPipeline();
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::UpdateConfiguration, [&]()
-        { update_all_fluid_relations.exec(); });
-
-    if (!config_manager.hasEntity<RestartConfig>("RestartConfig"))
-        return;
-
-    RestartConfig &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
-    if (restart_config.restore_step_ != 0)
-    {
-        initialization_pipeline.insert_hook(
-            InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-            { update_all_fluid_relations.exec(); });
-    }
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_fluid_relations);
 }
 //=================================================================================================//
 void SimulationBuilder::buildContinuumRelationDynamics(
@@ -214,29 +171,7 @@ void SimulationBuilder::buildContinuumRelationDynamics(
         }
     }
 
-    if (!update_all_continuum_relations.hasDynamics())
-        return;
-
-    auto &initialization_pipeline = sim.getInitializationPipeline();
-    initialization_pipeline.insert_hook(
-        InitializationHookPoint::InitialUpdateConfiguration, [&]()
-        { update_all_continuum_relations.exec(); });
-
-    auto &simulation_pipeline = sim.getSimulationPipeline();
-    simulation_pipeline.insert_hook(
-        SimulationHookPoint::UpdateConfiguration, [&]()
-        { update_all_continuum_relations.exec(); });
-
-    if (!config_manager.hasEntity<RestartConfig>("RestartConfig"))
-        return;
-
-    RestartConfig &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
-    if (restart_config.restore_step_ != 0)
-    {
-        initialization_pipeline.insert_hook(
-            InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-            { update_all_continuum_relations.exec(); });
-    }
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_continuum_relations);
 }
 //=================================================================================================//
 void SimulationBuilder::buildSolidRelationDynamics(
@@ -256,7 +191,7 @@ void SimulationBuilder::buildSolidRelationDynamics(
         auto &solid_body = sph_system.getBodyByName<SolidBody>(sb_src->name_);
         if (sb_src->has_dynamics_)
         {
-            auto &solid_inner = sph_system.addInnerRelation(solid_body);
+            auto &solid_inner = sph_system.addInnerRelation(solid_body, ConfigType::Lagrangian);
             total_lagrangian_relations.add(&main_methods.addRelationDynamics(solid_inner));
         }
 
@@ -268,10 +203,17 @@ void SimulationBuilder::buildSolidRelationDynamics(
                 if (sb_src->name_ != sb_tgt->name_)
                 {
                     auto &solid_body_target = sph_system.getBodyByName<SolidBody>(sb_tgt->name_);
-                    auto &solid_contact = sph_system.addContactRelation(solid_body, solid_body_target);
-                    !sb_src->is_moving_ && !sb_tgt->is_moving_
-                        ? total_lagrangian_relations.add(&main_methods.addRelationDynamics(solid_contact))
-                        : update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                    if (!sb_src->is_moving_ && !sb_tgt->is_moving_)
+                    {
+                        auto &solid_contact = sph_system.addContactRelation(
+                            solid_body, solid_body_target, ConfigType::Lagrangian);
+                        total_lagrangian_relations.add(&main_methods.addRelationDynamics(solid_contact));
+                    }
+                    else
+                    {
+                        auto &solid_contact = sph_system.addContactRelation(solid_body, solid_body_target);
+                        update_contact_relation.add(&main_methods.addRelationDynamics(solid_contact));
+                    }
                 }
             }
 
@@ -308,17 +250,24 @@ void SimulationBuilder::buildSolidRelationDynamics(
             { total_lagrangian_relations.exec(); });
     }
 
-    if (!update_all_contact_relations.hasDynamics())
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_contact_relations);
+}
+//=================================================================================================//
+void SimulationBuilder::addUpdateConfigurationDynamicsToPipeline(
+    SPHSimulation &sim, EntityManager &config_manager, ParticleDynamicsGroup &configuration_dynamics)
+{
+    if (!configuration_dynamics.hasDynamics())
         return;
 
+    auto &initialization_pipeline = sim.getInitializationPipeline();
     initialization_pipeline.insert_hook(
         InitializationHookPoint::InitialUpdateConfiguration, [&]()
-        { update_all_contact_relations.exec(); });
+        { configuration_dynamics.exec(); });
 
     auto &simulation_pipeline = sim.getSimulationPipeline();
     simulation_pipeline.insert_hook(
         SimulationHookPoint::UpdateConfiguration, [&]()
-        { update_all_contact_relations.exec(); });
+        { configuration_dynamics.exec(); });
 
     if (!config_manager.hasEntity<RestartConfig>("RestartConfig"))
         return;
@@ -328,7 +277,7 @@ void SimulationBuilder::buildSolidRelationDynamics(
     {
         initialization_pipeline.insert_hook(
             InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-            { update_all_contact_relations.exec(); });
+            { configuration_dynamics.exec(); });
     }
 }
 //=================================================================================================//
