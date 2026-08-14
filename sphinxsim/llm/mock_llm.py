@@ -160,6 +160,11 @@ _SOLID_TEMPLATE: Dict[str, Any] = {
             "hourglass_factor": 2.0,
         },
     },
+    "restart": {
+    "restore_step": 0,
+    "save_interval": 400,
+    "summary_enabled": True
+  }
 }
 
 _FSI_TEMPLATE: Dict[str, Any] = {

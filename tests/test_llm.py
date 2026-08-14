@@ -195,6 +195,7 @@ class TestExampleConfig:
 
         solver = example["solver_parameters"]["continuum_dynamics"]
         assert solver["linear_correction_matrix_coeff"] == pytest.approx(0.5)
+        assert solver["linear_correction_matrix_coeff"] == pytest.approx(0.5)
         assert solver["contact_numerical_damping"] == pytest.approx(1.0)
         assert solver["shear_stress_damping"] == pytest.approx(1.0)
         assert solver["hourglass_factor"] == pytest.approx(2.0)

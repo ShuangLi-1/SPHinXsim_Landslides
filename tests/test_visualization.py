@@ -419,7 +419,7 @@ class TestSpatialDimensionInference:
                 "angular_velocity": 2.0,
             }
         ]
-        data["solver_parameters"]["restart"] = {
+        data["restart"] = {
             "restore_step": 0,
             "save_interval": 1000,
             "summary_enabled": True,
@@ -754,8 +754,8 @@ class TestConstraintLabel:
         from sphinxsim.visualization.annotations import body_constraint_label
 
         data = copy.deepcopy(fluid_config.model_dump(exclude_none=True))
-        # Simbody constraints require solver_parameters.restart
-        data["solver_parameters"]["restart"] = {
+        # Simbody constraints require config.restart
+        data["restart"] = {
             "restore_step": 0,
             "save_interval": 1000,
             "summary_enabled": False,

@@ -869,7 +869,6 @@ class SolverParametersConfig(BaseModel):
     output_interval: Optional[float] = Field(default=None, gt=0)
     screen_interval: Optional[int] = Field(default=None, gt=0)
     observation_interval: int = Field(default=200, gt=0)
-    restart: Optional[RestartConfig] = None
     fluid_dynamics: Optional[FluidDynamicsSolverConfig] = None
     continuum_dynamics: Optional[ContinuumDynamicsSolverConfig] = None
 
@@ -915,6 +914,7 @@ class SimulationConfig(BaseModel):
     energy_recording: List[EnergyRecordingConfig] = Field(default_factory=list)
 
     solver_parameters: SolverParametersConfig
+    restart: Optional[RestartConfig] = None
 
     def _infer_spatial_dim(self) -> int | None:
         """Infer spatial dimension from available vector-valued config fields."""
@@ -1182,8 +1182,8 @@ class SimulationConfig(BaseModel):
 
         # Simbody constraints require restart section to exist at runtime.
         if any(constraint.type == BodyConstraintType.SIMBODY for constraint in self.body_constraints):
-            if self.solver_parameters.restart is None:
-                raise ValueError("simbody body_constraints require solver_parameters.restart")
+            if self.restart is None:
+                raise ValueError("simbody body_constraints require config.restart")
 
         # Dimensional consistency if system_domain is present
         if self.geometries.system_domain is not None:
