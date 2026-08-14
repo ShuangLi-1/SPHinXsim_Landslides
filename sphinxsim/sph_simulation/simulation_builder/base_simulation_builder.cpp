@@ -325,12 +325,6 @@ void SimulationBuilder::buildRestartFromFileIfPresent(
                 { 
                     time_stepper.setRestartStep(restart_config.restore_step_);
                     restart_io.readRestartFiles(restart_config.restore_step_); });
-
-            BaseDynamics<void> &update_configuration =
-                config_manager.getEntity<BaseDynamics<void>>("UpdateConfiguration");
-            initialization_pipeline.insert_hook(
-                InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-                { update_configuration.exec(); });
         }
     }
 }
