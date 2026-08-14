@@ -68,8 +68,8 @@ SimulationConfig
 ├── initial_conditions: List[InitialConditionConfig]
 ├── extra_state_recording: List[ExtraStateRecordingConfig]
 ├── energy_recording: List[EnergyRecordingConfig]
+├── restart: RestartConfig
 └── solver_parameters: SolverParametersConfig
-    ├── restart: RestartConfig
     ├── fluid_dynamics: FluidDynamicsSolverConfig
     └── continuum_dynamics: ContinuumDynamicsSolverConfig
 ```
