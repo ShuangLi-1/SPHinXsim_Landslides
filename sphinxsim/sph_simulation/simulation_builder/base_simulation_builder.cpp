@@ -139,12 +139,6 @@ void SimulationBuilder::parseSolverParameters(EntityManager &config_manager, con
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     config_manager.emplaceEntity<
         SolverCommonConfig>("SolverCommonConfig", parseSolverCommonConfig(scaling_config, config));
-
-    if (config.contains("restart"))
-    {
-        config_manager.emplaceEntity<RestartConfig>(
-            "RestartConfig", parseRestartConfig(config.at("restart")));
-    }
 }
 //=================================================================================================//
 RestartConfig SimulationBuilder::parseRestartConfig(const json &config)
@@ -325,12 +319,6 @@ void SimulationBuilder::buildRestartFromFileIfPresent(
                 { 
                     time_stepper.setRestartStep(restart_config.restore_step_);
                     restart_io.readRestartFiles(restart_config.restore_step_); });
-
-            BaseDynamics<void> &update_configuration =
-                config_manager.getEntity<BaseDynamics<void>>("UpdateConfiguration");
-            initialization_pipeline.insert_hook(
-                InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-                { update_configuration.exec(); });
         }
     }
 }

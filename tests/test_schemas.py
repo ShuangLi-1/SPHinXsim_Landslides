@@ -1504,7 +1504,7 @@ class TestSimulationConfig:
 
     def test_continuum_config_can_omit_restart(self):
         cfg = _make_minimal_continuum_config()
-        assert cfg.solver_parameters.restart is None
+        assert cfg.restart is None
 
     def test_complex_shape_disallows_intersection(self):
         with pytest.raises(ValidationError, match="only support union and subtraction"):

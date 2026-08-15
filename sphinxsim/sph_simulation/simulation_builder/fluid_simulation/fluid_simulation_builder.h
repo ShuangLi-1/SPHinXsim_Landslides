@@ -63,10 +63,8 @@ class FluidSimulationBuilder : public SimulationBuilder
         EntityManager &config_manager, MainMethods &main_methods,
         InnerRelationType &inner_relation, ContactRelationType &contact_relation);
 
-    template <class KernelGradientIntegralType>
-    void addTransportVelocityCorrection(
-        KernelGradientIntegralType &kernel_gradient_integral,
-        SPHBody &sph_body, FluidSolverConfig &fluid_solver_config);
+    BaseDynamics<void> &addTransportVelocityCorrection(
+        MainMethods &main_methods, SPHBody &sph_body, FluidSolverConfig &fluid_solver_config);
 
     template <class InnerRelationType, class ContactRelationType>
     void buildViscousForceIfPresent(

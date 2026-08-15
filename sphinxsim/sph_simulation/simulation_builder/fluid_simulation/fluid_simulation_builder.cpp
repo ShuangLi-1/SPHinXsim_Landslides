@@ -460,4 +460,29 @@ void FluidSimulationBuilder::buildParticleSortIfPresent(
     }
 }
 //=================================================================================================//
+BaseDynamics<void> &FluidSimulationBuilder::addTransportVelocityCorrection(
+    MainMethods &main_methods, SPHBody &sph_body, FluidSolverConfig &fluid_solver_config)
+{
+    if (fluid_solver_config.surface_type_ == "confined")
+    {
+        return main_methods.template addStateDynamics<
+            TransportVelocityCorrectionCK, TruncatedLinear>(sph_body);
+    }
+
+    if (fluid_solver_config.surface_type_ == "open_boundary")
+    {
+        return main_methods.template addStateDynamics<
+            TransportVelocityCorrectionCK, TruncatedLinear, BulkParticles>(sph_body);
+    }
+
+    if (fluid_solver_config.surface_type_ == "free_stream")
+    {
+        return main_methods.template addStateDynamics<
+            TransportVelocityCorrectionCK, NoLimiter, BulkParticles>(sph_body);
+    }
+
+    throw std::runtime_error(
+        "FluidSimulationBuilder::addTransportVelocityCorrection: no supported flow type found!");
+}
+//=================================================================================================//
 } // namespace SPH
