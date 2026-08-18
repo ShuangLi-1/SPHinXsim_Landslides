@@ -42,6 +42,7 @@ void ContinuumSimulationBuilder::buildSimulation(SPHSimulation &sim, const json 
     //----------------------------------------------------------------------
     ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(sim, main_methods);
     ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(sim, main_methods);
+    ContinuumDynamicsBuilder::buildDensityRegularizationIfPresent(sim, main_methods);
     ContinuumDynamicsBuilder::buildStressDiffusionIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
     // Initial condition if present.

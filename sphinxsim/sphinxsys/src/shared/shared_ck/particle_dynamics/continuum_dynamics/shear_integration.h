@@ -81,16 +81,28 @@ class ShearIntegration<Inner<OneLevel, MaterialType, Parameters...>>
       protected:
         ConstituteKernel constitute_;
         Real G_;
-        Vecd *shear_force_, *vel_, *hourglass_force_;
+        Vecd *shear_force_, *vel_, *hourglass_div_;
         Matd *vel_gradient_, *shear_stress_;
         Real *Vol_, *scale_penalty_force_;
+    };
+
+    class UpdateKernel : public BaseInteraction::InteractKernel, public ForcePriorCK::UpdateKernel
+    {
+      public:
+        template <class ExecutionPolicy, class EncloserType>
+        UpdateKernel(const ExecutionPolicy &ex_policy, EncloserType &encloser);
+        void update(size_t index_i, Real dt = 0.0);
+
+      protected:
+        Vecd *shear_force_, *hourglass_div_;
+        Real *Vol_;
     };
 
   protected:
     MaterialType &material_;
     Adaptation &adaptation_;
     Real h_ref_, shear_stress_damping_, xi_;
-    DiscreteVariable<Vecd> *dv_shear_force_, *dv_vel_, *dv_hourglass_force_;
+    DiscreteVariable<Vecd> *dv_shear_force_, *dv_vel_, *dv_hourglass_div_;
     DiscreteVariable<Matd> *dv_vel_gradient_, *dv_strain_tensor_, *dv_shear_stress_;
     DiscreteVariable<Real> *dv_Vol_, *dv_scale_penalty_force_;
 };

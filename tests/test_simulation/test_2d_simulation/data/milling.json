@@ -104,7 +104,12 @@
   "extra_state_recording": [
     {
       "name": "ProcessingPiece",
-      "variables": [{ "real_type": ["Pressure", "IntactFactor"] }]
+      "variables": [
+        {
+          "real_type": ["Pressure", "IntactFactor", "Compression"],
+          "vector_type": ["HourglassStressDivergence"]
+        }
+      ]
     },
     {
       "name": "MillingTool",
@@ -113,7 +118,7 @@
   ],
 
   "solver_parameters": {
-    "end_time": 0.1,
+    "end_time": 0.3,
     "output_interval": 0.01,
     "screen_interval": 100,
     "continuum_dynamics": {
@@ -127,7 +132,7 @@
   },
 
   "restart": {
-    "save_interval": 400,
+    "save_interval": 1000,
     "restore_step": 0,
     "summary_enabled": true
   }
