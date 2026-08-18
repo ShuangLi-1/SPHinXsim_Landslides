@@ -806,6 +806,15 @@ _SHAPE_FIELDS_BY_TYPE = {
     "expanded_box": {"name", "type", "original", "expansion"},
     "complex_shape": {"name", "type", "sub_shapes", "operations"},
     "multipolygon": {"name", "type", "polygons"},
+    "cylinder": {
+        "name",
+        "type",
+        "radius",
+        "half_height",
+        "transform",
+        "primitive",
+        "_description",
+    },
     "triangle_mesh": {"name", "type", "file_name", "translation", "scale"},
 }
 

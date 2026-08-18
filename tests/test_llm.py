@@ -234,7 +234,7 @@ class TestExampleConfig:
         assert example["geometries"]["system_domain"]["upper_bound"] == pytest.approx(
             [0.588, 0.16, 0.588]
         )
-        assert shapes["GranularBody"]["type"] == "bounding_box"
+        assert shapes["GranularBody"]["type"] == "cylinder"
         assert shapes["WallBoundary"]["type"] == "complex_shape"
 
     def test_3d_landslide_without_two_stl_files_keeps_repose_angle_fixture(self):
@@ -243,7 +243,7 @@ class TestExampleConfig:
         assert example["geometries"]["system_domain"]["upper_bound"] == pytest.approx(
             [0.588, 0.16, 0.588]
         )
-        assert example["geometries"]["shapes"][0]["type"] == "bounding_box"
+        assert example["geometries"]["shapes"][0]["type"] == "cylinder"
         assert "relaxation_parameters" not in example["particle_generation"]["settings"]
 
 
@@ -412,7 +412,7 @@ class TestSTLGeometryOverrides:
         sanitized = sanitize_config_dict(cfg)
 
         granular = sanitized["geometries"]["shapes"][0]
-        assert granular["type"] == "bounding_box"
+        assert granular["type"] == "cylinder"
         assert "file_name" not in granular
         assert "scale" not in granular
 
