@@ -853,7 +853,7 @@ class FluidDynamicsSolverConfig(BaseModel):
 class ContinuumDynamicsSolverConfig(BaseModel):
     acoustic_cfl: float = Field(default=0.4, gt=0)
     advection_cfl: float = Field(default=0.2, gt=0)
-    # These controls apply to GeneralContinuum/J2Plasticity. PlasticContinuum
+    # These controls apply to J2Plasticity. PlasticContinuum
     # removes them during cross-validation because it does not build the
     # corresponding correction, repulsion, shear, or hourglass dynamics.
     linear_correction_matrix_coeff: Optional[float] = 0.5

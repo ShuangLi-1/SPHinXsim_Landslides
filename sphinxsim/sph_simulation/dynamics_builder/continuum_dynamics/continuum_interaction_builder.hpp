@@ -17,14 +17,6 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAcousticStep1stHalfForOneBody(
     auto &config_manager = sim.getConfigManager();
     std::string body_name = inner_relation.getSPHBody().Name();
 
-    if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
-    {
-        using RiemannSolverType = RiemannSolver<GeneralContinuum, GeneralContinuum, NoLimiter>;
-        return main_methods.template addInteractionDynamics<
-            fluid_dynamics::AcousticStep1stHalf, OneLevel,
-            RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
-    }
-
     if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
     {
         using RiemannSolverType = RiemannSolver<J2Plasticity, J2Plasticity, NoLimiter>;
@@ -66,14 +58,6 @@ BaseDynamics<void> &ContinuumDynamicsBuilder::addAcousticStep2ndHalfForOneBody(
 {
     auto &config_manager = sim.getConfigManager();
     std::string body_name = inner_relation.getSPHBody().Name();
-
-    if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
-    {
-        using RiemannSolverType = RiemannSolver<GeneralContinuum, GeneralContinuum, NoLimiter>;
-        return main_methods.template addInteractionDynamics<
-            fluid_dynamics::AcousticStep2ndHalf, OneLevel,
-            RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
-    }
 
     if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
     {
