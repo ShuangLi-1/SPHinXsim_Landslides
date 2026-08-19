@@ -132,20 +132,11 @@ void ContinuumDynamicsBuilder::buildShearForceIntegrationIfPresent(
             auto &continuum_solver_parameters = config_manager.getEntity<
                 ContinuumSolverParameters>("ContinuumSolverParameters");
 
-            if (config_manager.hasEntity<GeneralContinuum>(body_name + "GeneralContinuum"))
-            {
-                continuum_shear_force
-                    .add(&main_methods.template addInteractionDynamicsOneLevel<
-                          continuum_dynamics::ShearIntegration, GeneralContinuum>(
-                        inner_relation, continuum_solver_parameters.hourglass_factor_,
-                        continuum_solver_parameters.shear_stress_damping_));
-            }
-
             if (config_manager.hasEntity<J2Plasticity>(body_name + "J2Plasticity"))
             {
                 continuum_shear_force
                     .add(&main_methods.template addInteractionDynamicsOneLevel<
-                          continuum_dynamics::ShearIntegration, J2Plasticity>(
+                          continuum_dynamics::InelasticShearIntegration, J2Plasticity>(
                         inner_relation, continuum_solver_parameters.hourglass_factor_,
                         continuum_solver_parameters.shear_stress_damping_));
             }
@@ -184,7 +175,7 @@ void ContinuumDynamicsBuilder::buildContactRepulsionIfPresent(
             {
                 std::string tgt_body_name = cb_tgt->name_;
                 if (body_name != tgt_body_name &&
-                    !config_manager.hasEntity<GeneralContinuum>(tgt_body_name + "PlasticContinuum"))
+                    !config_manager.hasEntity<PlasticContinuum>(tgt_body_name + "PlasticContinuum"))
                 {
                     std::string relation_name = body_name + tgt_body_name;
                     auto &contact_relation =
