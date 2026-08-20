@@ -61,7 +61,6 @@
       "material": {
         "type": "plastic_continuum",
         "density": 2600.0,
-        "sound_speed": 43.7797517885457,
         "youngs_modulus": 5980000.0,
         "poisson_ratio": 0.3,
         "friction_angle": 0.5235987755982988,
