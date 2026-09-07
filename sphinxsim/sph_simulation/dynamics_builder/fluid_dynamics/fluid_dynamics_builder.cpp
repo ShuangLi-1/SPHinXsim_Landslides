@@ -177,7 +177,7 @@ BaseDynamics<void> &FluidDynamicsBuilder::addLinearCorrectionMatrix(
         auto &inner_relation = sph_system.getRelationByName<Inner<Relation<FluidBody>>>(body_name);
         fluid_linear_correction_matrix.add(
             &addInteractionForOneBody<LinearCorrectionMatrix, WithUpdate>(
-            sim, main_methods, inner_relation, 0.5));
+                sim, main_methods, inner_relation, 0.5));
 
         FluidBody &fluid_body = sph_system.getBodyByName<FluidBody>(body_name);
         auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
@@ -196,28 +196,73 @@ BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
     auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
 
-    auto &fb = fluid_bodies_config.front();
-    std::string body_name = fb->name_;
-    auto &inner_relation = sph_system.getRelationByName<Inner<Relation<FluidBody>>>(body_name);
-    auto &contact_relation = sph_system.getRelationByName<Contact<Relation<FluidBody, SolidBody>>>(
-        body_name + solid_bodies_config.front()->name_);
-    SPHBody &sph_body = inner_relation.getSPHBody();
+    auto &density_regularization = main_methods.addParticleDynamicsGroup();
+    for (const auto &fb : fluid_bodies_config)
+    {
+        std::string body_name = fb->name_;
+        auto &inner_relation = sph_system.getRelationByName<Inner<Relation<FluidBody>>>(body_name);
+        auto &density_summation = addInteractionForOneBody<CompressionSummation>(
+            sim, main_methods, inner_relation);
 
-    if (sph_body.isMatterMaterial<WeaklyCompressibleFluid>())
-    {
-        return buildDensityRegularization<WeaklyCompressibleFluid>(
-            sim, main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
+        FluidBody &fluid_body = sph_system.getBodyByName<FluidBody>(body_name);
+        auto &average_compression = main_methods.template addReduceDynamics<AverageCompression>(fluid_body);
+        auto &initialization_pipeline = sim.getInitializationPipeline();
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::InitialCondition, [&]()
+            { 
+            density_summation.exec();
+            Real average_compression_value = average_compression.exec();
+            std::cout << "\n------------------------------------------------------------" << std::endl;
+            std::cout << "FluidDynamicsBuilder::buildDensityRegularization : " 
+                      << "Initial average compression of FluidBody '" << fluid_body.Name() 
+                      << "' is " << average_compression_value << std::endl; 
+            std::cout << "------------------------------------------------------------" << std::endl; });
+
+        auto &minimum_compression =
+            main_methods.template addReduceDynamics<
+                QuantityReduce, IndexedMin, SimpleEvaluation<IndexedValue<Real>>>(
+                fluid_body, "Compression");
+        auto &maximum_compression =
+            main_methods.template addReduceDynamics<
+                QuantityReduce, IndexedMax, SimpleEvaluation<IndexedValue<Real>>>(
+                fluid_body, "Compression");
+
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::PreSimulationSanityCheck, [&]()
+            { 
+            auto lower_limit = minimum_compression.exec();
+            auto upper_limit = maximum_compression.exec();
+            if (lower_limit.first < 0.95 || upper_limit.first > 1.05 ||
+                std::isnan(lower_limit.first) || std::isnan(upper_limit.first))
+            {
+                std::cout << "\n------------------------------------------------------------" << std::endl;
+                std::cout << "Error: Compression is out of range!" << std::endl;
+                std::cout << "Lower limit: " << lower_limit.first << " at particle " << lower_limit.second << std::endl;
+                std::cout << "Upper limit: " << upper_limit.first << " at particle " << upper_limit.second << std::endl;
+                std::cout << "The possible issues are the following:" << std::endl;
+                std::cout << "- Too large: overlapped bodies" << std::endl;
+                std::cout << "- Too small: insufficient resolution due to thin layer" << std::endl;
+                std::cout << "------------------------------------------------------------" << std::endl;
+                exit(1);
+            } });
+
+        density_regularization.add(&density_summation);
+        
+        if (fluid_body.isMatterMaterial<WeaklyCompressibleFluid>())
+        {
+            density_regularization.add(&addDensityRegularizationForOneBody<WeaklyCompressibleFluid>(
+                main_methods, fluid_body, fluid_solver_config.surface_type_));
+        }
+        else
+        {
+            density_regularization.add(&addDensityRegularizationForOneBody<WeaklyCompressibleMixture>(
+                main_methods, fluid_body, fluid_solver_config.surface_type_));
+        }
     }
-    if (sph_body.isMatterMaterial<WeaklyCompressibleMixture>())
-    {
-        return buildDensityRegularization<WeaklyCompressibleMixture>(
-            sim, main_methods, inner_relation, contact_relation, fluid_solver_config.surface_type_);
-    }
-    throw std::runtime_error(
-        "FluidDynamicsBuilder::addDensityRegularization: no supported fluid type found!");
+
+    return density_regularization;
 }
 //=================================================================================================//
 void FluidDynamicsBuilder::buildViscousForceIfPresent(
