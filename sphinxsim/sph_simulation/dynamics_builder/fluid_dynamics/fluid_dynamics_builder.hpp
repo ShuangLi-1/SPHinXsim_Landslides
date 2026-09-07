@@ -112,19 +112,6 @@ void FluidDynamicsBuilder::addAcousticHalfStepWithSolidBodies(
     }
 }
 //=================================================================================================//
-template <template <typename...> class InteractionMethodType, typename... PrimaryParameters,
-          class FirstRelationType, typename... OtherParemeters, typename... Args>
-BaseDynamics<void> &FluidDynamicsBuilder::addInteractionForOneBody(
-    SPHSimulation &sim, MainMethods &main_methods, FirstRelationType &first_relation, Args &&...args)
-{
-    auto &main_interaction =
-        main_methods.addInteractionDynamics<InteractionMethodType, PrimaryParameters...>(
-            first_relation, std::forward<Args>(args)...);
-    auto &fluid_identifier = first_relation.getDynamicsIdentifier();
-    addInteractionWithSolidBodies<OtherParemeters...>(sim, main_interaction, fluid_identifier);
-    return main_interaction;
-}
-//=================================================================================================//
 template <typename... Parameters, class MainInteractionType, class FluidIdentifier>
 void FluidDynamicsBuilder::addInteractionWithSolidBodies(
     SPHSimulation &sim, MainInteractionType &main_interaction, FluidIdentifier &fluid_identifier)
