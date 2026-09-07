@@ -169,5 +169,35 @@ void FluidDynamicsBuilder::addAcousticHalfStepWithSolidBodies(
     }
 }
 //=================================================================================================//
+template <template <typename...> class InteractionMethodType, typename... PrimaryParameters,
+          class FirstRelationType, typename... OtherParemeters, typename... Args>
+BaseDynamics<void> &FluidDynamicsBuilder::addInteractionForOneBody(
+    SPHSimulation &sim, MainMethods &main_methods, FirstRelationType &first_relation, Args &&...args)
+{
+    auto &main_interaction =
+        main_methods.addInteractionDynamics<InteractionMethodType, PrimaryParameters...>(
+            first_relation, std::forward<Args>(args)...);
+    auto &fluid_identifier = first_relation.getDynamicsIdentifier();
+    addInteractionWithSolidBodies<OtherParemeters...>(sim, main_interaction, fluid_identifier);
+    return main_interaction;
+}
+//=================================================================================================//
+template <typename... Parameters, class MainInteractionType, class FluidIdentifier>
+void FluidDynamicsBuilder::addInteractionWithSolidBodies(
+    SPHSimulation &sim, MainInteractionType &main_interaction, FluidIdentifier &fluid_identifier)
+{
+    auto &config_manager = sim.getConfigManager();
+    auto &sph_system = sim.getSPHSystem();
+
+    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
+    for (const auto &sb_tgt : solid_bodies_config)
+    {
+        std::string relation_name = fluid_identifier.Name() + sb_tgt->name_;
+        auto &contact_relation = sph_system.getRelationByName<
+            Contact<Relation<FluidIdentifier, SolidBody>>>(relation_name);
+        main_interaction.template addPostContactInteraction<Parameters...>(contact_relation);
+    }
+}
+//=================================================================================================//
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_HPP

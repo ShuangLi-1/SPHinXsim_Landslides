@@ -169,23 +169,22 @@ BaseDynamics<void> &FluidDynamicsBuilder::addLinearCorrectionMatrix(
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
     auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
-    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+
     auto &fluid_linear_correction_matrix = main_methods.addParticleDynamicsGroup();
     for (const auto &fb : fluid_bodies_config)
     {
         std::string body_name = fb->name_;
         auto &inner_relation = sph_system.getRelationByName<Inner<Relation<FluidBody>>>(body_name);
-        auto &contact_relation = sph_system.getRelationByName<Contact<Relation<FluidBody, SolidBody>>>(
-            body_name + solid_bodies_config.front()->name_);
         fluid_linear_correction_matrix.add(
-            &main_methods.addInteractionDynamicsWithUpdate<LinearCorrectionMatrix>(inner_relation, 0.5)
-                 .addPostContactInteraction(contact_relation));
+            &addInteractionForOneBody<LinearCorrectionMatrix, WithUpdate>(
+            sim, main_methods, inner_relation, 0.5));
+
+        FluidBody &fluid_body = sph_system.getBodyByName<FluidBody>(body_name);
+        auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
         if (fluid_solver_config.surface_type_ == "open_boundary")
         {
             fluid_linear_correction_matrix.add(
-                &main_methods.addStateDynamics<LinearCorrectionMatrixScope, BulkParticles>(
-                    inner_relation.getSPHBody()));
+                &main_methods.addStateDynamics<LinearCorrectionMatrixScope, BulkParticles>(fluid_body));
         }
     }
     return fluid_linear_correction_matrix;

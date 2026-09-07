@@ -101,6 +101,15 @@ class FluidDynamicsBuilder
 
     static BaseDynamics<Real> &addAcousticTimeStepForOneBody(
         SPHSimulation &sim, FluidBody &fluid_body, MainMethods &main_methods);
+
+    template <template <typename...> class InteractionMethodType, typename... PrimaryParameters,
+              class FirstRelationType, typename... OtherParemeters, typename... Args>
+    static BaseDynamics<void> &addInteractionForOneBody(
+        SPHSimulation &sim, MainMethods &main_methods, FirstRelationType &first_relation, Args &&...args);
+
+    template <typename... Parameters, class MainInteractionType, class FluidIdentifier>
+    static void addInteractionWithSolidBodies(
+        SPHSimulation &sim, MainInteractionType &main_interaction, FluidIdentifier &fluid_identifier);
 };
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_H
