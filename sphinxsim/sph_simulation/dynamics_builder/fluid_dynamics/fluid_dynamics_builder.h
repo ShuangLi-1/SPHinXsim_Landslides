@@ -70,11 +70,6 @@ class FluidDynamicsBuilder
     static void buildSurfaceIndicationIfOpenBoundary(SPHSimulation &sim, MainMethods &main_methods);
     static void buildTransportVelocityFormulationIfNotFreeSurface(SPHSimulation &sim, MainMethods &main_methods);
 
-    template <class FluidType, class InnerRelationType, class ContactRelationType>
-    static BaseDynamics<void> &buildDensityRegularization(
-        SPHSimulation &sim, MainMethods &main_methods, InnerRelationType &inner_relation,
-        ContactRelationType &contact_relation, const std::string &surface_type);
-
     static void buildBoundaryConditionsIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, const json &config);
     static BaseDynamics<Real> &addAdvectionTimeStep(SPHSimulation &sim, MainMethods &main_methods);
@@ -101,6 +96,14 @@ class FluidDynamicsBuilder
 
     static BaseDynamics<Real> &addAcousticTimeStepForOneBody(
         SPHSimulation &sim, FluidBody &fluid_body, MainMethods &main_methods);
+
+    template <typename... Parameters, class MainInteractionType, class FluidIdentifier>
+    static void addInteractionWithSolidBodies(
+        SPHSimulation &sim, MainInteractionType &main_interaction, FluidIdentifier &fluid_identifier);
+
+    template <class FluidType, class FluidBodyType>
+    static BaseDynamics<void> &addDensityRegularizationForOneBody(
+        MainMethods &main_methods, FluidBodyType &fluid_body, const std::string &surface_type);
 };
 } // namespace SPH
 #endif // FLUID_DYNAMICS_BUILDER_H
