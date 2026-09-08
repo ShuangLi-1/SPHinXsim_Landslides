@@ -42,12 +42,6 @@ class FluidSimulationBuilder : public SimulationBuilder
 
   private:
     FluidSolverConfig parseFluidSolverConfig(const ScalingConfig &scaling_config, const json &config);
-
-    void buildParticleDeletionIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body);
-
-    void buildParticleSortIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body);
 };
 } // namespace SPH
 #endif // FLUID_SIMULATION_BUILDER_H

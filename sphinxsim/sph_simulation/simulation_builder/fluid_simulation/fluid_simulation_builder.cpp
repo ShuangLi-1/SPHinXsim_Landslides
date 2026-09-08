@@ -182,11 +182,10 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Define initial and boundary conditions, particle deletion and sorting.
     //----------------------------------------------------------------------
     ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
-    auto &fluid_body = *sph_system.collectBodies<FluidBody>().front();
     buildInitialConditionIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(sim, main_methods, config);
-    buildParticleDeletionIfPresent(sim, main_methods, fluid_body);
-    buildParticleSortIfPresent(sim, main_methods, fluid_body);
+    FluidDynamicsBuilder::buildParticleDeletionIfPresent(sim, main_methods);
+    FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------
@@ -311,45 +310,6 @@ FluidSolverConfig FluidSimulationBuilder::parseFluidSolverConfig(
         params.sort_frequency_ = config.at("particle_sort_frequency").get<UnsignedInt>();
     }
     return params;
-}
-//=================================================================================================//
-void FluidSimulationBuilder::buildParticleDeletionIfPresent(
-    SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body)
-{
-    auto &config_manager = sim.getConfigManager();
-    StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    if (fluid_solver_config.particle_deletion_)
-    {
-        auto &particle_deletion = main_methods.template addStateDynamics<
-            OutflowParticleDeletion>(real_body);
-
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleDeletion, [&]()
-            { particle_deletion.exec(); });
-    }
-}
-//=================================================================================================//
-void FluidSimulationBuilder::buildParticleSortIfPresent(
-    SPHSimulation &sim, MainMethods &main_methods, RealBody &real_body)
-{
-    auto &config_manager = sim.getConfigManager();
-    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
-    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
-
-    if (fluid_solver_config.particle_sorting_)
-    {
-        auto &particle_sort = main_methods.addSortDynamics(real_body);
-
-        auto &simulation_pipeline = sim.getSimulationPipeline();
-        simulation_pipeline.insert_hook(
-            SimulationHookPoint::ParticleSort, [&]()
-            {
-                if (time_stepper.getIterationStep() % fluid_solver_config.sort_frequency_ == 0)
-                {
-                    particle_sort.exec();
-                } });
-    }
 }
 //=================================================================================================//
 } // namespace SPH
