@@ -69,6 +69,8 @@ class FluidDynamicsBuilder
     static void buildViscousForceIfPresent(SPHSimulation &sim, MainMethods &main_methods);
     static void buildSurfaceIndicationIfOpenBoundary(SPHSimulation &sim, MainMethods &main_methods);
     static void buildTransportVelocityFormulationIfNotFreeSurface(SPHSimulation &sim, MainMethods &main_methods);
+    static void buildParticleDeletionIfPresent(SPHSimulation &sim, MainMethods &main_methods);
+    static void buildParticleSortIfPresent(SPHSimulation &sim, MainMethods &main_methods);
 
     static void buildBoundaryConditionsIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, const json &config);
@@ -89,10 +91,6 @@ class FluidDynamicsBuilder
     template <template <typename...> class AcousticHalfStepForOneBody, class InnerRelationType>
     static BaseDynamics<void> &addAcousticHalfStepForOneBody(
         SPHSimulation &sim, InnerRelationType &inner_relation, MainMethods &main_methods);
-
-    template <class RiemannSolverType, class KernelCorrectionType, class AcousticHalfStepType>
-    static void addAcousticHalfStepWithSolidBodies(
-        SPHSimulation &sim, AcousticHalfStepType &interaction, std::string body_name);
 
     static BaseDynamics<Real> &addAcousticTimeStepForOneBody(
         SPHSimulation &sim, FluidBody &fluid_body, MainMethods &main_methods);

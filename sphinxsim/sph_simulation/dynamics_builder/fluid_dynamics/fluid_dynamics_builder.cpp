@@ -406,4 +406,68 @@ void FluidDynamicsBuilder::buildTransportVelocityFormulationIfNotFreeSurface(
     }
 }
 //=================================================================================================//
+void FluidDynamicsBuilder::buildParticleDeletionIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods)
+{
+    auto &config_manager = sim.getConfigManager();
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+    if (!fluid_solver_config.particle_deletion_)
+        return;
+
+    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+    auto &sph_system = sim.getSPHSystem();
+    auto &all_particle_deletion = main_methods.addParticleDynamicsGroup();
+
+    for (const auto &fb : fluid_bodies_config)
+    {
+        std::string body_name = fb->name_;
+        auto &fluid_body = sph_system.getBodyByName<FluidBody>(body_name);
+        all_particle_deletion.add(&main_methods.template addStateDynamics<
+                                   OutflowParticleDeletion>(fluid_body));
+    }
+
+    if (all_particle_deletion.hasDynamics())
+    {
+        StagePipeline<SimulationHookPoint> &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ParticleDeletion, [&]()
+            { all_particle_deletion.exec(); });
+    }
+}
+//=================================================================================================//
+void FluidDynamicsBuilder::buildParticleSortIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods)
+{
+
+    auto &config_manager = sim.getConfigManager();
+    auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
+    if (!fluid_solver_config.particle_sorting_)
+        return;
+
+    auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
+    auto &sph_system = sim.getSPHSystem();
+    TimeStepper &time_stepper = sim.getSPHSolver().getTimeStepper();
+    auto &all_particle_sort = main_methods.addParticleDynamicsGroup();
+
+    for (const auto &fb : fluid_bodies_config)
+    {
+        std::string body_name = fb->name_;
+        auto &fluid_body = sph_system.getBodyByName<FluidBody>(body_name);
+        all_particle_sort.add(&main_methods.addSortDynamics(fluid_body));
+    }
+
+    if (all_particle_sort.hasDynamics())
+    {
+        auto &simulation_pipeline = sim.getSimulationPipeline();
+        simulation_pipeline.insert_hook(
+            SimulationHookPoint::ParticleSort, [&]()
+            {
+                if (time_stepper.getIterationStep() % fluid_solver_config.sort_frequency_ == 0)
+                {
+                    all_particle_sort.exec();
+                } });
+    }
+}
+
+//=================================================================================================//
 } // namespace SPH
