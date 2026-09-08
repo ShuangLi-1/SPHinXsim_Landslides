@@ -46,11 +46,11 @@ BaseDynamics<void> &FluidDynamicsBuilder::addAcousticHalfStepForOneBody(
     SPHSimulation &sim, InnerRelationType &inner_relation, MainMethods &main_methods)
 {
     auto &config_manager = sim.getConfigManager();
-    auto &sph_body = inner_relation.getSPHBody();
-    std::string body_name = sph_body.Name();
+    auto &fluid_body = inner_relation.getDynamicsIdentifier();
+    std::string body_name = fluid_body.Name();
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
 
-    if (sph_body.template isMatterMaterial<WeaklyCompressibleFluid>())
+    if (fluid_body.template isMatterMaterial<WeaklyCompressibleFluid>())
     {
         using RiemannSolverType =
             RiemannSolver<WeaklyCompressibleFluid, WeaklyCompressibleFluid, TruncatedLinear>;
@@ -61,8 +61,8 @@ BaseDynamics<void> &FluidDynamicsBuilder::addAcousticHalfStepForOneBody(
             auto &complex_dynamics = main_methods.template addInteractionDynamicsOneLevel<
                 AcousticHalfStepForOneBodyType, RiemannSolverType, NoKernelCorrectionCK>(inner_relation);
 
-            addAcousticHalfStepWithSolidBodies<RiemannSolverType, NoKernelCorrectionCK>(
-                sim, complex_dynamics, body_name);
+            addInteractionWithSolidBodies<Wall, RiemannSolverType, NoKernelCorrectionCK>(
+                sim, complex_dynamics, fluid_body);
 
             return complex_dynamics;
         }
@@ -71,13 +71,13 @@ BaseDynamics<void> &FluidDynamicsBuilder::addAcousticHalfStepForOneBody(
             auto &complex_dynamics = main_methods.template addInteractionDynamicsOneLevel<
                 AcousticHalfStepForOneBodyType, RiemannSolverType, LinearCorrectionCK>(inner_relation);
 
-            addAcousticHalfStepWithSolidBodies<RiemannSolverType, LinearCorrectionCK>(
-                sim, complex_dynamics, body_name);
+            addInteractionWithSolidBodies<Wall, RiemannSolverType, LinearCorrectionCK>(
+                sim, complex_dynamics, fluid_body);
             return complex_dynamics;
         }
     }
 
-    if (sph_body.template isMatterMaterial<WeaklyCompressibleMixture>())
+    if (fluid_body.template isMatterMaterial<WeaklyCompressibleMixture>())
     {
         using RiemannSolverType =
             RiemannSolver<WeaklyCompressibleMixture, WeaklyCompressibleMixture, TruncatedLinear>;
@@ -85,31 +85,14 @@ BaseDynamics<void> &FluidDynamicsBuilder::addAcousticHalfStepForOneBody(
         auto &complex_dynamics = main_methods.template addInteractionDynamicsOneLevel<
             AcousticHalfStepForOneBodyType, RiemannSolverType, LinearCorrectionCK>(inner_relation);
 
-        addAcousticHalfStepWithSolidBodies<RiemannSolverType, LinearCorrectionCK>(
-            sim, complex_dynamics, body_name);
+        addInteractionWithSolidBodies<Wall, RiemannSolverType, LinearCorrectionCK>(
+            sim, complex_dynamics, fluid_body);
 
         return complex_dynamics;
     }
 
     throw std::runtime_error(
         "FluidDynamicsBuilder::addAcousticHalfStepForOneBody: no supported material type found!");
-}
-//=================================================================================================//
-template <class RiemannSolverType, class KernelCorrectionType, class AcousticHalfStepType>
-void FluidDynamicsBuilder::addAcousticHalfStepWithSolidBodies(
-    SPHSimulation &sim, AcousticHalfStepType &complex_dynamics, std::string body_name)
-{
-    auto &sph_system = sim.getSPHSystem();
-    auto &config_manager = sim.getConfigManager();
-    auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
-    for (const auto &sb_tgt : solid_bodies_config)
-    {
-        std::string relation_name = body_name + sb_tgt->name_;
-        auto &contact_relation = sph_system.getRelationByName<
-            Contact<Relation<FluidBody, SolidBody>>>(relation_name);
-        complex_dynamics.template addPostContactInteraction<
-            Wall, RiemannSolverType, KernelCorrectionType>(contact_relation);
-    }
 }
 //=================================================================================================//
 template <typename... Parameters, class MainInteractionType, class FluidIdentifier>

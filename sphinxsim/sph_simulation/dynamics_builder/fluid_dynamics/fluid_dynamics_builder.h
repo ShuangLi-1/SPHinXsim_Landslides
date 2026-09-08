@@ -92,10 +92,6 @@ class FluidDynamicsBuilder
     static BaseDynamics<void> &addAcousticHalfStepForOneBody(
         SPHSimulation &sim, InnerRelationType &inner_relation, MainMethods &main_methods);
 
-    template <class RiemannSolverType, class KernelCorrectionType, class AcousticHalfStepType>
-    static void addAcousticHalfStepWithSolidBodies(
-        SPHSimulation &sim, AcousticHalfStepType &interaction, std::string body_name);
-
     static BaseDynamics<Real> &addAcousticTimeStepForOneBody(
         SPHSimulation &sim, FluidBody &fluid_body, MainMethods &main_methods);
 
