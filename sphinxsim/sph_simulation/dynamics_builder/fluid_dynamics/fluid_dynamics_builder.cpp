@@ -246,6 +246,9 @@ BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
         initialization_pipeline.insert_hook(
             InitializationHookPoint::PreSimulationSanityCheck, [&]()
             { 
+            if (config_manager.hasEntity<RestartConfig>("RestartConfig") &&
+                config_manager.getEntity<RestartConfig>("RestartConfig").restore_step_ > 0)
+                return;
             auto lower_limit = minimum_compression.exec();
             auto upper_limit = maximum_compression.exec();
             if (lower_limit.first < 0.95 || upper_limit.first > 1.05 ||
@@ -333,6 +336,9 @@ void FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(
         auto &initialization_pipeline = sim.getInitializationPipeline();
         initialization_pipeline.insert_hook(
             InitializationHookPoint::AfterInitialCondition, [&]()
+            { all_surface_indication.exec(); });
+        initialization_pipeline.insert_hook(
+            InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
             { all_surface_indication.exec(); });
         auto &simulation_pipeline = sim.getSimulationPipeline();
         simulation_pipeline.insert_hook(
