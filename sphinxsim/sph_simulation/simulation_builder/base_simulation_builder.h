@@ -39,6 +39,7 @@ struct UpdateConfigurationHandles
 {
     ParticleDynamicsGroup *cell_linked_list = nullptr;
     ParticleDynamicsGroup *fluid_relations = nullptr;
+    ParticleDynamicsGroup *solid_contact_relations = nullptr;
 };
 
 // Enum for hook points for fast O(1) access
@@ -163,7 +164,7 @@ class SimulationBuilder
     void buildFluidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildContinuumBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
-    UpdateConfigurationHandles buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    UpdateConfigurationHandles buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_cll_restart_hook = false);
 
     void buildExternalForceIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildInitialConditionIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
@@ -173,10 +174,10 @@ class SimulationBuilder
     std::unique_ptr<MaterialBuilder> material_builder_ptr_;
     SolverCommonConfig parseSolverCommonConfig(const ScalingConfig &scaling_config, const json &config);
 
-    ParticleDynamicsGroup *buildCellLinkedListDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    ParticleDynamicsGroup *buildCellLinkedListDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_cll_restart_hook = false);
     ParticleDynamicsGroup *buildFluidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildContinuumRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
-    void buildSolidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    ParticleDynamicsGroup *buildSolidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void addUpdateConfigurationDynamicsToPipeline(
         SPHSimulation &sim, EntityManager &config_manager, ParticleDynamicsGroup &configuration_dynamics, bool register_restart_hook = true);
 

@@ -35,7 +35,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Relations (inner + contacts, fluid and solid) are built by the shared
     // update-configuration step and registered for per-step updates, then
     // retrieved by name where needed below.
-    UpdateConfigurationHandles config_handles = buildUpdateConfiguration(sim, main_methods, config);
+    UpdateConfigurationHandles config_handles = buildUpdateConfiguration(sim, main_methods, config, /*suppress_cll_restart_hook=*/true);
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
@@ -214,6 +214,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                     config_handles.cell_linked_list->exec();
                 if (config_handles.fluid_relations)
                     config_handles.fluid_relations->exec();
+                if (config_handles.solid_contact_relations)
+                    config_handles.solid_contact_relations->exec();
                 if (surface_indication)
                     surface_indication->exec();
             });
