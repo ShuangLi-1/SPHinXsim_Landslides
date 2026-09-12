@@ -35,11 +35,11 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Relations (inner + contacts, fluid and solid) are built by the shared
     // update-configuration step and registered for per-step updates, then
     // retrieved by name where needed below.
-    buildUpdateConfiguration(sim, main_methods, config);
+    UpdateConfigurationHandles config_handles = buildUpdateConfiguration(sim, main_methods, config);
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-    FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(sim, main_methods);
+    ParticleDynamicsGroup *surface_indication = FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(sim, main_methods);
     //----------------------------------------------------------------------
     // The essential main methods used for the simulation.
     //----------------------------------------------------------------------
@@ -121,7 +121,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
 
         sim.getInitializationPipeline().insert_hook(
             InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-            { std::cout << "[RESTART] B-matrix resync firing\n"; elastic_correction_matrix.exec(); });
+            { elastic_correction_matrix.exec(); });
     }
 
     auto &fluid_advection_step_setup = FluidDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
@@ -190,7 +190,34 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     buildRestartFromFileIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildParticleDeletionIfPresent(sim, main_methods);
-    FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
+    ParticleDynamicsGroup *particle_sort = FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
+    //----------------------------------------------------------------------
+    // Consolidated post-restart resync in explicit order: rebuild cell-linked
+    // list, sort particles, rebuild cell-linked list again (sort invalidates
+    // it), rebuild fluid relations, then refresh the free-surface indicator.
+    // This runs after the inflow region is set up so the sort picks it up.
+    // Only registered when restoring, so fresh runs are unaffected.
+    //----------------------------------------------------------------------
+    bool is_restoring = config_manager.hasEntity<RestartConfig>("RestartConfig") &&
+                        config_manager.getEntity<RestartConfig>("RestartConfig").restore_step_ > 0;
+    if (is_restoring)
+    {
+        sim.getInitializationPipeline().insert_hook(
+            InitializationHookPoint::UpdateConfigurationAfterRestart,
+            [config_handles, surface_indication, particle_sort]()
+            {
+                if (config_handles.cell_linked_list)
+                    config_handles.cell_linked_list->exec();
+                if (particle_sort)
+                    particle_sort->exec();
+                if (config_handles.cell_linked_list)
+                    config_handles.cell_linked_list->exec();
+                if (config_handles.fluid_relations)
+                    config_handles.fluid_relations->exec();
+                if (surface_indication)
+                    surface_indication->exec();
+            });
+    }
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------

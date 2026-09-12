@@ -85,15 +85,8 @@ auto &SolidDynamicsBuilder::buildSolidDynamics(
         SimulationHookPoint::CouplingSynchronization, [&, pre_substep_hook]()
         {
             Real dt = time_stepper.getGlobalTimeStepSize();
-
-            std::cout << "[SolidDynamicsBuilder] CouplingSynchronization: dt = " << dt
-                      << ", physical_time = " << time_stepper.getPhysicalTime()
-                      << ", iteration_step = " << time_stepper.getIterationStep() << std::endl;
             if (!(dt > 0.0))
             {
-                    std::cout << "[SolidDynamicsBuilder] dt is not positive at throw: dt = " << dt
-                              << ", physical_time = " << time_stepper.getPhysicalTime()
-                              << ", iteration_step = " << time_stepper.getIterationStep() << std::endl;
                 throw std::runtime_error(
                     "SolidDynamicsBuilder: coupling interval is not a positive number.");
             }
