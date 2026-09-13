@@ -5,13 +5,13 @@
 namespace SPH
 {
 //=================================================================================================//
-UpdateConfigurationHandles SimulationBuilder::buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_cll_restart_hook)
+UpdateConfigurationHandles SimulationBuilder::buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_restart_hooks)
 {
     UpdateConfigurationHandles handles;
-    handles.cell_linked_list = buildCellLinkedListDynamics(sim, main_methods, config, suppress_cll_restart_hook);
+    handles.cell_linked_list = buildCellLinkedListDynamics(sim, main_methods, config, suppress_restart_hooks);
     handles.fluid_relations = buildFluidRelationDynamics(sim, main_methods, config);
     buildContinuumRelationDynamics(sim, main_methods, config);
-    handles.solid_contact_relations = buildSolidRelationDynamics(sim, main_methods, config);
+    handles.solid_contact_relations = buildSolidRelationDynamics(sim, main_methods, config, suppress_restart_hooks);
     return handles;
 }
 //=================================================================================================//
@@ -161,7 +161,7 @@ void SimulationBuilder::buildContinuumRelationDynamics(
 }
 //=================================================================================================//
 ParticleDynamicsGroup *SimulationBuilder::buildSolidRelationDynamics(
-    SPHSimulation &sim, MainMethods &main_methods, const json &config)
+    SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_contact_restart_hook)
 {
     auto &config_manager = sim.getConfigManager();
     auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
@@ -231,7 +231,7 @@ ParticleDynamicsGroup *SimulationBuilder::buildSolidRelationDynamics(
             { total_lagrangian_relations.exec(); });
     }
 
-    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_contact_relations, false);
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_contact_relations, !suppress_contact_restart_hook);
     return &update_all_contact_relations;
 }
 //=================================================================================================//

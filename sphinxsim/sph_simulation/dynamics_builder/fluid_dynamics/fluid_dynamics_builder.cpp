@@ -334,7 +334,7 @@ ParticleDynamicsGroup *FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundar
     if (all_surface_indication.hasDynamics())
     {
         auto &initialization_pipeline = sim.getInitializationPipeline();
-                initialization_pipeline.insert_hook(
+        initialization_pipeline.insert_hook(
             InitializationHookPoint::AfterInitialCondition, [&]()
             { all_surface_indication.exec(); });
         auto &simulation_pipeline = sim.getSimulationPipeline();

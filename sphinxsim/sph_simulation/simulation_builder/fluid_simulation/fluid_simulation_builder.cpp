@@ -35,8 +35,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Relations (inner + contacts, fluid and solid) are built by the shared
     // update-configuration step and registered for per-step updates, then
     // retrieved by name where needed below.
-    UpdateConfigurationHandles config_handles = buildUpdateConfiguration(sim, main_methods, config, /*suppress_cll_restart_hook=*/true);
-    //----------------------------------------------------------------------
+    UpdateConfigurationHandles config_handles = buildUpdateConfiguration(sim, main_methods, config, /*suppress_restart_hooks=*/true);    //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
     ParticleDynamicsGroup *surface_indication = FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(sim, main_methods);
@@ -47,6 +46,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     SolidDynamicsBuilder::buildMaterialIdAssignmentIfPresent(sim, main_methods, config);
     // Elastic solid bodies get their own stress relaxation and coupling wiring.
     // Bodies declared rigid are skipped, so purely rigid cases are unaffected.
+    std::vector<BaseDynamics<void> *> elastic_correction_matrices;
     for (const auto &solid_config : config.at("solid_bodies"))
     {
         const std::string material_type =
@@ -101,6 +101,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             SolidDynamicsBuilder::buildSolidDynamics<CompositeSolidMaterial>(
                 sim, main_methods, elastic_inner, active_strain_pre_substep_hook);
 
+        elastic_correction_matrices.push_back(&elastic_correction_matrix);
+
         // Recover the averaged surface motion the fluid sees over the interval.
         sim.getSimulationPipeline().insert_hook(
             SimulationHookPoint::CouplingSynchronization, [&]()
@@ -118,10 +120,6 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
             {
                 elastic_correction_matrix.exec();
                 elastic_normal_direction.exec(); });
-
-        sim.getInitializationPipeline().insert_hook(
-            InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
-            { elastic_correction_matrix.exec(); });
     }
 
     auto &fluid_advection_step_setup = FluidDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
@@ -192,9 +190,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     FluidDynamicsBuilder::buildParticleDeletionIfPresent(sim, main_methods);
     ParticleDynamicsGroup *particle_sort = FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
     //----------------------------------------------------------------------
-    // Consolidated post-restart resync in explicit order: rebuild cell-linked
-    // list, sort particles, rebuild cell-linked list again (sort invalidates
-    // it), rebuild fluid relations, then refresh the free-surface indicator.
+    // Consolidated post-restart resync in explicit order: rebuild cell-linked list, sort particles,
+    // rebuild cell-linked list again (sort invalidates it), rebuild fluid and solid-contact relations,
+    // recompute the solid correction matrix against the rebuilt relations, then refresh the open-boundary inflow surface indicator.
     // This runs after the inflow region is set up so the sort picks it up.
     // Only registered when restoring, so fresh runs are unaffected.
     //----------------------------------------------------------------------
@@ -204,7 +202,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     {
         sim.getInitializationPipeline().insert_hook(
             InitializationHookPoint::UpdateConfigurationAfterRestart,
-            [config_handles, surface_indication, particle_sort]()
+            [config_handles, surface_indication, particle_sort, elastic_correction_matrices]()
             {
                 if (config_handles.cell_linked_list)
                     config_handles.cell_linked_list->exec();
@@ -216,6 +214,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                     config_handles.fluid_relations->exec();
                 if (config_handles.solid_contact_relations)
                     config_handles.solid_contact_relations->exec();
+                for (auto *correction_matrix : elastic_correction_matrices)
+                    correction_matrix->exec();
                 if (surface_indication)
                     surface_indication->exec();
             });

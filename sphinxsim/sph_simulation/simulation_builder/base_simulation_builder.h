@@ -164,8 +164,7 @@ class SimulationBuilder
     void buildFluidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildContinuumBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
     void buildSolidBodies(SPHSystem &sph_system, EntityManager &config_manager, const json &config);
-    UpdateConfigurationHandles buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_cll_restart_hook = false);
-
+    UpdateConfigurationHandles buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_restart_hooks = false);
     void buildExternalForceIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildInitialConditionIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildRestartFromFileIfPresent(SPHSimulation &sim, MainMethods &main_methods, const json &config);
@@ -177,7 +176,7 @@ class SimulationBuilder
     ParticleDynamicsGroup *buildCellLinkedListDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_cll_restart_hook = false);
     ParticleDynamicsGroup *buildFluidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
     void buildContinuumRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
-    ParticleDynamicsGroup *buildSolidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config);
+    ParticleDynamicsGroup *buildSolidRelationDynamics(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_contact_restart_hook = false);
     void addUpdateConfigurationDynamicsToPipeline(
         SPHSimulation &sim, EntityManager &config_manager, ParticleDynamicsGroup &configuration_dynamics, bool register_restart_hook = true);
 
