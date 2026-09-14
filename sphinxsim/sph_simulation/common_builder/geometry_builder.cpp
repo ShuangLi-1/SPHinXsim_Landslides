@@ -105,13 +105,10 @@ void GeometryBuilder::createGeometries(EntityManager &config_manager, const json
         Shape *shape = addShape(scaling_config, config_manager, geo);
         config_manager.addEntity<Shape>(shape->Name(), shape);
         BoundingBoxd shape_bounds = shape->getBounds();
+        system_domain_config.updateSystemDomain(shape_bounds);
         if (shape_count == 0)
         {
             system_domain_config = parseSystemDomainConfig(shape_bounds, scaling_config, config);
-        }
-        else
-        {
-            system_domain_config.updateSystemDomain(shape_bounds);
         }
         shape_count++;
     }
