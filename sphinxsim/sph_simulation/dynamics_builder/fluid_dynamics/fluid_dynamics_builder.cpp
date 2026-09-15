@@ -246,6 +246,10 @@ BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
         initialization_pipeline.insert_hook(
             InitializationHookPoint::PreSimulationSanityCheck, [&]()
             { 
+            if (config_manager.hasEntity<RestartConfig>("RestartConfig") &&
+                config_manager.getEntity<RestartConfig>("RestartConfig").restore_step_ > 0 &&
+                config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig").surface_type_ == "free_stream")
+                return;
             auto lower_limit = minimum_compression.exec();
             auto upper_limit = maximum_compression.exec();
             if (lower_limit.first < 0.95 || upper_limit.first > 1.05 ||
@@ -302,7 +306,7 @@ void FluidDynamicsBuilder::buildViscousForceIfPresent(
     }
 }
 //=================================================================================================//
-void FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(
+ParticleDynamicsGroup *FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(
     SPHSimulation &sim, MainMethods &main_methods)
 {
     auto &sph_system = sim.getSPHSystem();
@@ -314,7 +318,7 @@ void FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(
     if (fluid_solver_config.surface_type_ != "open_boundary" &&
         fluid_solver_config.surface_type_ != "free_stream")
     {
-        return;
+        return nullptr;
     }
 
     for (const auto &fb : fluid_bodies_config)
@@ -339,6 +343,7 @@ void FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(
             SimulationHookPoint::AfterUpdateConfiguration, [&]()
             { all_surface_indication.exec(); });
     }
+    return &all_surface_indication;
 }
 //=================================================================================================//
 BaseDynamics<void> &FluidDynamicsBuilder::addTransportVelocityCorrection(
@@ -435,14 +440,14 @@ void FluidDynamicsBuilder::buildParticleDeletionIfPresent(
     }
 }
 //=================================================================================================//
-void FluidDynamicsBuilder::buildParticleSortIfPresent(
+ParticleDynamicsGroup *FluidDynamicsBuilder::buildParticleSortIfPresent(
     SPHSimulation &sim, MainMethods &main_methods)
 {
 
     auto &config_manager = sim.getConfigManager();
     auto &fluid_solver_config = config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig");
     if (!fluid_solver_config.particle_sorting_)
-        return;
+        return nullptr;
 
     auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
     auto &sph_system = sim.getSPHSystem();
@@ -466,7 +471,9 @@ void FluidDynamicsBuilder::buildParticleSortIfPresent(
                 {
                     all_particle_sort.exec();
                 } });
+        return &all_particle_sort;
     }
+    return nullptr;
 }
 
 //=================================================================================================//

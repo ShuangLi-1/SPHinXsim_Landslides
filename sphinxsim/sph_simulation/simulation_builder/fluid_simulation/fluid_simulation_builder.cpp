@@ -5,11 +5,8 @@
 #include "solid_dynamics_builder.hpp"
 #include "constraint_builder.h"
 
-#include "composite_solid.h"
 #include "force_on_structure.h"
-#include "structure_surface_motion.h"
 #include "thermal_dynamics_builder.hpp"
-#include "traveling_wave_active_strain.h"
 namespace SPH
 {
 using namespace fluid_dynamics;
@@ -35,91 +32,18 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     // Relations (inner + contacts, fluid and solid) are built by the shared
     // update-configuration step and registered for per-step updates, then
     // retrieved by name where needed below.
-    buildUpdateConfiguration(sim, main_methods, config);
-    //----------------------------------------------------------------------
+    UpdateConfigurationHandles config_handles = buildUpdateConfiguration(sim, main_methods, config, /*suppress_restart_hooks=*/true);    //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
-    FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(sim, main_methods);
+    ParticleDynamicsGroup *surface_indication = FluidDynamicsBuilder::buildSurfaceIndicationIfOpenBoundary(sim, main_methods);
     //----------------------------------------------------------------------
     // The essential main methods used for the simulation.
     //----------------------------------------------------------------------
-    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     SolidDynamicsBuilder::buildMaterialIdAssignmentIfPresent(sim, main_methods, config);
     // Elastic solid bodies get their own stress relaxation and coupling wiring.
     // Bodies declared rigid are skipped, so purely rigid cases are unaffected.
-    for (const auto &solid_config : config.at("solid_bodies"))
-    {
-        const std::string material_type =
-            solid_config.at("material").at("type").get<std::string>();
-
-        if (material_type != "composite_solid")
-            continue;
-
-        std::string body_name = solid_config.at("name").get<std::string>();
-        RealBody &elastic_body = sph_system.getBodyByName<RealBody>(body_name);
-        auto &elastic_inner =
-            sph_system.getRelationByName<Inner<Relation<SolidBody>>>(body_name);
-
-        auto &initialize_displacement =
-            main_methods.addStateDynamics<InitializeDisplacementCK>(elastic_body);
-
-        auto &update_average_velocity =
-            main_methods.addStateDynamics<UpdateAverageVelocityAndAccelerationCK>(elastic_body);
-
-        // Snapshot the surface before the structure advances.
-        sim.getSimulationPipeline().insert_hook(
-            SimulationHookPoint::CouplingSynchronization, [&]()
-            { initialize_displacement.exec(); });
-
-        const json &material_config = solid_config.at("material");
-        std::function<void()> active_strain_pre_substep_hook = nullptr;
-        if (material_config.contains("active_strain"))
-        {
-            const json &wave_config = material_config.at("active_strain");
-
-            Vecd wave_center = Vecd::Zero();
-            for (int k = 0; k != wave_center.size(); ++k)
-            {
-                wave_center[k] = scaling_config.jsonToReal(wave_config.at("center").at(k), "Length");
-            }
-            Real wave_span = scaling_config.jsonToReal(wave_config.at("region_span"), "Length");
-            Real wave_core = scaling_config.jsonToReal(wave_config.at("core_thickness"), "Length");
-            Real amplitude = wave_config.at("amplitude").get<Real>();
-            Real frequency = wave_config.at("frequency").get<Real>();
-            Real wavelength_factor = wave_config.at("wavelength_factor").get<Real>();
-            Real start_time = wave_config.at("start_time").get<Real>();
-
-            auto &active_strain = main_methods.addStateDynamics<TravelingWaveActiveStrain>(
-                elastic_body, wave_center, wave_span, wave_core,
-                amplitude, frequency, wavelength_factor, start_time);
-
-            active_strain_pre_substep_hook = [&active_strain]()
-            { active_strain.exec(); };
-        }
-
-        auto &elastic_correction_matrix =
-            SolidDynamicsBuilder::buildSolidDynamics<CompositeSolidMaterial>(
-                sim, main_methods, elastic_inner, active_strain_pre_substep_hook);
-
-        // Recover the averaged surface motion the fluid sees over the interval.
-        sim.getSimulationPipeline().insert_hook(
-            SimulationHookPoint::CouplingSynchronization, [&]()
-            { update_average_velocity.exec(sph_solver.getTimeStepper().getGlobalTimeStepSize()); });
-
-        auto &elastic_normal_direction =
-            main_methods.addStateDynamics<solid_dynamics::UpdateElasticNormalDirectionCK>(elastic_body);
-
-        sim.getSimulationPipeline().insert_hook(
-            SimulationHookPoint::AfterLinearCorrectionMatrix, [&]()
-            { elastic_normal_direction.exec(); });
-
-        sim.getInitializationPipeline().insert_hook(
-            InitializationHookPoint::InitialCondition, [&]()
-            {
-                elastic_correction_matrix.exec();
-                elastic_normal_direction.exec(); });
-    }
-
+    std::vector<BaseDynamics<void> *> elastic_correction_matrices =
+        SolidDynamicsBuilder::buildCompositeSolidsIfPresent(sim, main_methods, config);
     auto &fluid_advection_step_setup = FluidDynamicsBuilder::addAdvectionStepSetup(sim, main_methods);
     auto &fluid_particle_position = FluidDynamicsBuilder::addUpdateParticlePosition(sim, main_methods);
 
@@ -183,9 +107,41 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
     buildInitialConditionIfPresent(sim, main_methods, config);
+    buildRestartFromFileIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildParticleDeletionIfPresent(sim, main_methods);
-    FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
+    ParticleDynamicsGroup *particle_sort = FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
+    //----------------------------------------------------------------------
+    // Consolidated post-restart resync in explicit order: rebuild cell-linked list, sort particles,
+    // rebuild cell-linked list again (sort invalidates it), rebuild fluid and solid-contact relations,
+    // recompute the solid correction matrix against the rebuilt relations, then refresh the open-boundary inflow surface indicator.
+    // This runs after the inflow region is set up so the sort picks it up.
+    // Only registered when restoring, so fresh runs are unaffected.
+    //----------------------------------------------------------------------
+    bool is_restoring = config_manager.hasEntity<RestartConfig>("RestartConfig") &&
+                        config_manager.getEntity<RestartConfig>("RestartConfig").restore_step_ > 0;
+    if (is_restoring)
+    {
+        sim.getInitializationPipeline().insert_hook(
+            InitializationHookPoint::UpdateConfigurationAfterRestart,
+            [config_handles, surface_indication, particle_sort, elastic_correction_matrices]()
+            {
+                if (config_handles.cell_linked_list)
+                    config_handles.cell_linked_list->exec();
+                if (particle_sort)
+                    particle_sort->exec();
+                if (config_handles.cell_linked_list)
+                    config_handles.cell_linked_list->exec();
+                if (config_handles.fluid_relations)
+                    config_handles.fluid_relations->exec();
+                if (config_handles.solid_contact_relations)
+                    config_handles.solid_contact_relations->exec();
+                for (auto *correction_matrix : elastic_correction_matrices)
+                    correction_matrix->exec();
+                if (surface_indication)
+                    surface_indication->exec();
+            });
+    }
     //----------------------------------------------------------------------
     // Define state recording for visualization the simulation results.
     //----------------------------------------------------------------------
@@ -204,6 +160,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::RestartFromFile);
+            initialization_pipeline.run_hooks(InitializationHookPoint::UpdateConfigurationAfterRestart);
 
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
@@ -265,6 +224,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletionTagging);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletion);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleSort);
+                simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::UpdateConfiguration);
                 simulation_pipeline.run_hooks(SimulationHookPoint::AfterUpdateConfiguration);

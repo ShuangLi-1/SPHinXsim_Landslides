@@ -53,7 +53,11 @@ class UpdateAverageVelocityAndAccelerationCK : public LocalDynamics
           dv_pos_(particles_->getVariableByName<Vecd>("Position")),
           dv_pos_temp_(particles_->getVariableByName<Vecd>("TemporaryPosition")),
           dv_vel_ave_(particles_->registerStateVariable<Vecd>("AverageVelocity")),
-          dv_acc_ave_(particles_->registerStateVariable<Vecd>("AverageAcceleration")) {}
+          dv_acc_ave_(particles_->registerStateVariable<Vecd>("AverageAcceleration"))
+    {
+        particles_->addEvolvingVariable<Vecd>("AverageVelocity");
+        particles_->addEvolvingVariable<Vecd>("AverageAcceleration");
+    }
 
     struct UpdateKernel
     {
