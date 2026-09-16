@@ -758,12 +758,32 @@ class MultiSpeciesPhaseBoundaryConfig(BaseModel):
         return self
 
 
+class VelocityStartupConfig(BaseModel):
+    type: Literal["exponential"]
+    time_constant: float = Field(gt=0, allow_inf_nan=False)
+
+
+class ParabolicVelocityConfig(BaseModel):
+    profile: Literal["parabolic"]
+    max_speed: float = Field(allow_inf_nan=False)
+    channel_height: float = Field(gt=0, allow_inf_nan=False)
+    relaxation_rate: float = Field(default=1.0, ge=0, le=1, allow_inf_nan=False)
+    startup: VelocityStartupConfig
+
+
+class StartupAccelerationConfig(BaseModel):
+    body_name: str = Field(min_length=1)
+    target_velocity: List[float] = Field(min_length=2, max_length=3)
+    duration: float = Field(gt=0, allow_inf_nan=False)
+
+
 class FluidBoundaryConditionConfig(BaseModel):
     body_name: str = Field(..., min_length=1)
     oriented_box: str = Field(..., min_length=1)
     type: FluidBoundaryConditionType
     inflow_speed: Optional[float] = Field(default=None, gt=0)
     pressure: Optional[float] = None
+    velocity: Optional[ParabolicVelocityConfig] = None
     mass_fractions: Optional[List[float]] = None
     multi_species_phases: Optional[List[MultiSpeciesPhaseBoundaryConfig]] = None
     volume_fractions: Optional[List[float]] = None
@@ -784,8 +804,11 @@ class FluidBoundaryConditionConfig(BaseModel):
             raise ValueError("free_stream boundary condition requires buffer_box, disposer_box, target_speed and t_ref")
         if self.type == FluidBoundaryConditionType.EMITTER and self.inflow_speed is None:
             raise ValueError("emitter boundary condition requires inflow_speed")
-        if self.type == FluidBoundaryConditionType.BI_DIRECTIONAL and self.pressure is None:
-            raise ValueError("bi_directional boundary condition requires pressure")
+        if self.type == FluidBoundaryConditionType.BI_DIRECTIONAL:
+            if (self.pressure is None) == (self.velocity is None):
+                raise ValueError("bi_directional boundary condition requires exactly one of pressure or velocity")
+        elif self.velocity is not None:
+            raise ValueError("velocity is only supported for bi_directional boundary conditions")
         if self.mass_fractions is not None:
             if self.type != FluidBoundaryConditionType.BI_DIRECTIONAL:
                 raise ValueError("mass_fractions are only supported for bi_directional boundary conditions")
@@ -905,6 +928,7 @@ class SimulationConfig(BaseModel):
     solid_bodies: List[SolidBodyConfig] = Field(default_factory=list)
 
     gravity: Optional[List[float]] = Field(default=None, min_length=2, max_length=3)
+    startup_acceleration: Optional[StartupAccelerationConfig] = None
     observers: List[ObserverConfig] = Field(default_factory=list)
     fluid_boundary_conditions: List[FluidBoundaryConditionConfig] = Field(default_factory=list)
     body_constraints: List[BodyConstraintConfig] = Field(default_factory=list)
@@ -918,9 +942,14 @@ class SimulationConfig(BaseModel):
     def _infer_spatial_dim(self) -> int | None:
         """Infer spatial dimension from available vector-valued config fields."""
         if self.geometries.system_domain is not None:
-            return len(self.geometries.system_domain.lower_bound)
+            dim = len(self.geometries.system_domain.lower_bound)
+            if self.startup_acceleration is not None and len(self.startup_acceleration.target_velocity) != dim:
+                raise ValueError("startup_acceleration target_velocity dimensionality must match geometries.system_domain")
+            return dim
 
         dims: set[int] = set()
+        if self.startup_acceleration is not None:
+            dims.add(len(self.startup_acceleration.target_velocity))
         if self.gravity is not None:
             dims.add(len(self.gravity))
 
@@ -1102,11 +1131,21 @@ class SimulationConfig(BaseModel):
         # Boundary condition references
         fluid_names = {body.name for body in self.fluid_bodies}
         fluid_body_map = {body.name: body for body in self.fluid_bodies}
+        if self.startup_acceleration is not None:
+            if self.simulation_type != SimulationType.FLUID_DYNAMICS:
+                raise ValueError("startup_acceleration requires fluid_dynamics simulation")
+            if self.gravity is not None:
+                raise ValueError("gravity and startup_acceleration cannot be combined")
+            if self.startup_acceleration.body_name not in fluid_names:
+                raise ValueError("startup_acceleration body_name must reference an existing fluid body")
         for bc in self.fluid_boundary_conditions:
             if bc.body_name not in fluid_names:
                 raise ValueError("fluid_boundary_conditions body_name must reference an existing fluid body")
             if bc.oriented_box not in oriented_box_names:
                 raise ValueError("fluid_boundary_conditions oriented_box must exist in geometries.oriented_boxes")
+            if bc.velocity is not None:
+                if fluid_body_map[bc.body_name].material.type != MaterialType.WEAKLY_COMPRESSIBLE_FLUID:
+                    raise ValueError("velocity boundary requires weakly_compressible_fluid material")
             if bc.mass_fractions is not None:
                 fluid_body = fluid_body_map[bc.body_name]
                 if fluid_body.material.type not in (
