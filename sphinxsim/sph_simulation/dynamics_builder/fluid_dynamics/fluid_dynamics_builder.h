@@ -82,6 +82,10 @@ class FluidDynamicsBuilder
     static fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
         OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
         MainMethods &main_methods, const json &config);
+    
+    static fluid_dynamics::AbstractBidirectionalBoundary &createVelocityBiDirectionBoundary(
+        OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
+        MainMethods &main_methods, const json &config);
 
     template <template <typename...> class AcousticHalfStepForOneBody, class InnerRelationType>
     static BaseDynamics<void> &addAcousticHalfStepForOneBody(
