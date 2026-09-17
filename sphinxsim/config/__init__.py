@@ -10,10 +10,13 @@ from sphinxsim.config.schemas import (
     MaterialConfig,
     ObserverConfig,
     ParticleGenerationConfig,
+    ParabolicVelocityConfig,
     ShapeConfig,
     SimulationConfig,
     SimulationType,
     SolverParametersConfig,
+    StartupAccelerationConfig,
+    VelocityStartupConfig,
 )
 
 __all__ = [
@@ -26,8 +29,11 @@ __all__ = [
     "MaterialConfig",
     "ObserverConfig",
     "ParticleGenerationConfig",
+    "ParabolicVelocityConfig",
     "ShapeConfig",
     "SimulationConfig",
     "SimulationType",
     "SolverParametersConfig",
+    "StartupAccelerationConfig",
+    "VelocityStartupConfig",
 ]

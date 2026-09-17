@@ -174,6 +174,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     // Define dependent optional methods using hooking point in stage pipelines.
     //----------------------------------------------------------------------
+    buildStartupAccelerationIfPresent(sim, main_methods, config);
     buildExternalForceIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildTransportVelocityFormulationIfNotFreeSurface(sim, main_methods);
     FluidDynamicsBuilder::buildViscousForceIfPresent(sim, main_methods);

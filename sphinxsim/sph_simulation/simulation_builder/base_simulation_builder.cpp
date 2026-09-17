@@ -349,4 +349,60 @@ void SimulationBuilder::buildRestartFromFileIfPresent(
     }
 }
 //=================================================================================================//
+void SimulationBuilder::buildStartupAccelerationIfPresent(
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
+{
+    if (!config.contains("startup_acceleration"))
+        return;
+
+    // Both implementations use the same gravity force storage.
+    if (config.contains("gravity"))
+    {
+        throw std::runtime_error(
+            "Combining gravity and startup_acceleration is not supported.");
+    }
+
+    const auto &startup = config.at("startup_acceleration");
+    auto &config_manager = sim.getConfigManager();
+    auto &scaling_config =
+        config_manager.getEntity<ScalingConfig>("ScalingConfig");
+
+    const std::string body_name =
+        startup.at("body_name").get<std::string>();
+
+    Vecd target_velocity = scaling_config.jsonToVecd(
+        startup.at("target_velocity"), "Speed");
+    Real duration = scaling_config.jsonToReal(
+        startup.at("duration"), "Time");
+
+    if (!(duration > 0.0))
+    {
+        throw std::runtime_error(
+            "Startup acceleration duration must be positive.");
+    }
+
+    auto &fluid_body =
+        sim.getSPHSystem().getBodyByName<FluidBody>(body_name);
+
+    auto &startup_force =
+        main_methods.addStateDynamics<GravityForceCK<StartupAcceleration>>(
+            fluid_body, StartupAcceleration(target_velocity, duration));
+
+    auto *startup_force_ptr = &startup_force;
+
+    sim.getInitializationPipeline().insert_hook(
+        InitializationHookPoint::AfterInitialCondition,
+        [startup_force_ptr]()
+        {
+            startup_force_ptr->exec();
+        });
+
+    sim.getSimulationPipeline().insert_hook(
+        SimulationHookPoint::AfterLinearCorrectionMatrix,
+        [startup_force_ptr]()
+        {
+            startup_force_ptr->exec();
+        });
+}
+//=================================================================================================//
 } // namespace SPH

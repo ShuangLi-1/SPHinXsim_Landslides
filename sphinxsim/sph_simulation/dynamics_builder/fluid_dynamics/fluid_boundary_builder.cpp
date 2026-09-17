@@ -275,6 +275,12 @@ AbstractBidirectionalBoundary &FluidDynamicsBuilder::createBiDirectionBoundary(
     OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
     MainMethods &main_methods, const json &config)
 {
+    if (config.contains("pressure") && config.contains("velocity"))
+    {
+        throw std::runtime_error(
+        "Specify either pressure or velocity for a bidirectional boundary.");
+    }
+    
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     if (config.contains("pressure"))
     {
@@ -297,8 +303,118 @@ AbstractBidirectionalBoundary &FluidDynamicsBuilder::createBiDirectionBoundary(
         }
     }
 
+    if (config.contains("velocity"))
+    {
+        return createVelocityBiDirectionBoundary(
+            oriented_box_by_cell, config_manager, main_methods, config);
+    }
+
     throw std::runtime_error(
         "FluidDynamicsBuilder::createBiDirectionBoundary: unsupported boundary condition type");
+}
+//=================================================================================================//
+class ParabolicInflowVelocityPrescribed
+    : public VelocityPrescribed<WeaklyCompressibleFluid>
+{
+  public:
+    ParabolicInflowVelocityPrescribed(
+        Real channel_height, Real max_speed, Real startup_time, Real relaxation_rate)
+        : channel_height_(channel_height),
+          max_speed_(max_speed),
+          startup_time_(startup_time),
+          relaxation_rate_(relaxation_rate)
+    {
+    }
+
+    Real getAxisVelocity(
+        const Vecd &input_position,
+        const Real &input_axis_velocity,
+        Real time)
+    {
+        Real y = input_position[1];
+        Real eta = 2.0 * y / channel_height_;
+
+        Real steady_velocity = max_speed_ * (1.0 - eta * eta);
+        Real startup_factor =
+            1.0 - math::exp(-time / startup_time_);
+
+        Real target_velocity = steady_velocity * startup_factor;
+        if (relaxation_rate_ == 1.0)
+            return target_velocity;
+        return input_axis_velocity +
+               relaxation_rate_ * (target_velocity - input_axis_velocity);
+    }
+
+  private:
+    Real channel_height_;
+    Real max_speed_;
+    Real startup_time_;
+    Real relaxation_rate_;
+};
+//=================================================================================================//
+AbstractBidirectionalBoundary &
+FluidDynamicsBuilder::createVelocityBiDirectionBoundary(
+    OrientedBoxByCell &oriented_box_by_cell,
+    EntityManager &config_manager,
+    MainMethods &main_methods,
+    const json &config)
+{
+    auto &scaling_config =
+        config_manager.getEntity<ScalingConfig>("ScalingConfig");
+
+    SPHBody &sph_body = oriented_box_by_cell.getSPHBody();
+    const std::string body_name = sph_body.Name();
+
+    if (!config_manager.hasEntity<WeaklyCompressibleFluid>(
+            body_name + "WeaklyCompressibleFluid"))
+    {
+        throw std::runtime_error(
+            "Velocity boundary requires WeaklyCompressibleFluid.");
+    }
+
+    const auto &velocity = config.at("velocity");
+    Real relaxation_rate = velocity.value("relaxation_rate", Real(1.0));
+    if (!(relaxation_rate >= 0.0 && relaxation_rate <= 1.0))
+    {
+        throw std::runtime_error(
+            "Velocity boundary relaxation_rate must be in [0, 1].");
+    }
+
+    if (velocity.at("profile").get<std::string>() != "parabolic")
+    {
+        throw std::runtime_error(
+            "Velocity boundary currently supports only a parabolic profile.");
+    }
+
+    Real channel_height = scaling_config.jsonToReal(
+        velocity.at("channel_height"), "Length");
+    Real max_speed = scaling_config.jsonToReal(
+        velocity.at("max_speed"), "Speed");
+
+    const auto &startup = velocity.at("startup");
+
+    if (startup.at("type").get<std::string>() != "exponential")
+    {
+        throw std::runtime_error(
+            "Velocity boundary currently supports only exponential startup.");
+    }
+
+    Real startup_time = scaling_config.jsonToReal(
+        startup.at("time_constant"), "Time");
+
+    if (!(channel_height > 0.0) || !(startup_time > 0.0))
+    {
+        throw std::runtime_error(
+            "Channel height and startup time must be positive.");
+    }
+
+    auto &boundary = main_methods.template addGeneralDynamics<
+        BidirectionalBoundaryCK,
+        LinearCorrectionCK,
+        ParabolicInflowVelocityPrescribed>(
+        oriented_box_by_cell, channel_height, max_speed, startup_time, relaxation_rate);
+
+    return boundary;
 }
 //=================================================================================================//
 } // namespace SPH
