@@ -106,6 +106,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
     buildInitialConditionIfPresent(sim, main_methods, config);
+    buildRestartFromFileIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildParticleDeletionIfPresent(sim, main_methods);
     FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
@@ -127,6 +128,21 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::RestartFromFile);
+            if (sph_system.RestartStep() != 0)
+            {
+                // Sort the restored particles before the configuration is rebuilt: SortedID 
+                // and the emitter's particle list are derived from the restored OriginalID.
+                sim.getSimulationPipeline().run_hooks(SimulationHookPoint::ParticleSort);
+            }
+            initialization_pipeline.run_hooks(InitializationHookPoint::UpdateConfigurationAfterRestart);
+            if (sph_system.RestartStep() != 0)
+            {
+                // The surface indicator was computed before the restore, so it
+                // describes the pre-restart layout; recompute it.
+                initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
+            }
 
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
@@ -183,6 +199,8 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 {
                     body_state_recorder.writeToFile();
                 }
+
+                simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleCreation);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletionTagging);

@@ -245,7 +245,14 @@ BaseDynamics<void> &FluidDynamicsBuilder::addDensityRegularization(
 
         initialization_pipeline.insert_hook(
             InitializationHookPoint::PreSimulationSanityCheck, [&]()
-            { 
+            {
+            // This bound is calibrated for freshly relaxed particles. A developed free-stream
+            // flow legitimately carries values outside it near the open boundary, so a restored
+            // state would fail a check the continuous run at the same step would also fail. See issue #170.
+            if (config_manager.hasEntity<RestartConfig>("RestartConfig") &&
+                config_manager.getEntity<RestartConfig>("RestartConfig").restore_step_ > 0 &&
+                config_manager.getEntity<FluidSolverConfig>("FluidSolverConfig").surface_type_ == "free_stream")
+                return; 
             auto lower_limit = minimum_compression.exec();
             auto upper_limit = maximum_compression.exec();
             if (lower_limit.first < 0.95 || upper_limit.first > 1.05 ||
