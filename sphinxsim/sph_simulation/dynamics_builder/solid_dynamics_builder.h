@@ -55,12 +55,6 @@ class SolidDynamicsBuilder
     static void buildMaterialIdAssignmentIfPresent(
         SPHSimulation &sim, MainMethods &main_methods, const json &config);
 
-    // Builds stress relaxation, active strain, corrected configuration and the
-    // surface-motion coupling for each composite_solid body. Returns the
-    // corrected-configuration dynamics so the caller can rebuild them on restart.
-    static std::vector<BaseDynamics<void> *> buildCompositeSolidsIfPresent(
-        SPHSimulation &sim, MainMethods &main_methods, const json &config);
-
   private:
 };
 } // namespace SPH

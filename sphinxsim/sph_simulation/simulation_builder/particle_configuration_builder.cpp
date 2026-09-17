@@ -5,18 +5,16 @@
 namespace SPH
 {
 //=================================================================================================//
-UpdateConfigurationHandles SimulationBuilder::buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_restart_hooks)
+void SimulationBuilder::buildUpdateConfiguration(SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
-    UpdateConfigurationHandles handles;
-    handles.cell_linked_list = buildCellLinkedListDynamics(sim, main_methods, config, suppress_restart_hooks);
-    handles.fluid_relations = buildFluidRelationDynamics(sim, main_methods, config);
+    buildCellLinkedListDynamics(sim, main_methods, config);
+    buildFluidRelationDynamics(sim, main_methods, config);
     buildContinuumRelationDynamics(sim, main_methods, config);
-    handles.solid_contact_relations = buildSolidRelationDynamics(sim, main_methods, config, suppress_restart_hooks);
-    return handles;
+    buildSolidRelationDynamics(sim, main_methods, config);
 }
 //=================================================================================================//
-ParticleDynamicsGroup *SimulationBuilder::buildCellLinkedListDynamics(
-    SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_cll_restart_hook)
+void SimulationBuilder::buildCellLinkedListDynamics(
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     auto &sph_system = sim.getSPHSystem();
     auto &config_manager = sim.getConfigManager();
@@ -55,17 +53,16 @@ ParticleDynamicsGroup *SimulationBuilder::buildCellLinkedListDynamics(
             { static_cell_linked_list.exec(); });
     }
 
-    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_cell_linked_list, !suppress_cll_restart_hook);
-    return &update_cell_linked_list;
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_cell_linked_list);
 }
 //=================================================================================================//
-ParticleDynamicsGroup *SimulationBuilder::buildFluidRelationDynamics(
+void SimulationBuilder::buildFluidRelationDynamics(
     SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     auto &config_manager = sim.getConfigManager();
     auto &fluid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("FluidBodiesConfig");
     if (fluid_bodies_config.empty())
-        return nullptr;
+        return;
 
     auto &sph_system = sim.getSPHSystem();
     auto &update_all_fluid_relations = main_methods.addParticleDynamicsGroup();
@@ -106,8 +103,7 @@ ParticleDynamicsGroup *SimulationBuilder::buildFluidRelationDynamics(
         update_all_fluid_relations.add(&update_fluid_relation);
     }
 
-    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_fluid_relations, false);
-    return &update_all_fluid_relations;
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_fluid_relations);
 }
 //=================================================================================================//
 void SimulationBuilder::buildContinuumRelationDynamics(
@@ -160,13 +156,13 @@ void SimulationBuilder::buildContinuumRelationDynamics(
     addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_continuum_relations);
 }
 //=================================================================================================//
-ParticleDynamicsGroup *SimulationBuilder::buildSolidRelationDynamics(
-    SPHSimulation &sim, MainMethods &main_methods, const json &config, bool suppress_contact_restart_hook)
+void SimulationBuilder::buildSolidRelationDynamics(
+    SPHSimulation &sim, MainMethods &main_methods, const json &config)
 {
     auto &config_manager = sim.getConfigManager();
     auto &solid_bodies_config = config_manager.getEntity<SPHBodiesConfig>("SolidBodiesConfig");
     if (solid_bodies_config.empty())
-        return nullptr;
+        return;
 
     auto &sph_system = sim.getSPHSystem();
     auto &update_all_contact_relations = main_methods.addParticleDynamicsGroup();
@@ -231,12 +227,11 @@ ParticleDynamicsGroup *SimulationBuilder::buildSolidRelationDynamics(
             { total_lagrangian_relations.exec(); });
     }
 
-    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_contact_relations, !suppress_contact_restart_hook);
-    return &update_all_contact_relations;
+    addUpdateConfigurationDynamicsToPipeline(sim, config_manager, update_all_contact_relations);
 }
 //=================================================================================================//
 void SimulationBuilder::addUpdateConfigurationDynamicsToPipeline(
-    SPHSimulation &sim, EntityManager &config_manager, ParticleDynamicsGroup &configuration_dynamics, bool register_restart_hook)
+    SPHSimulation &sim, EntityManager &config_manager, ParticleDynamicsGroup &configuration_dynamics)
 {
     if (!configuration_dynamics.hasDynamics())
         return;
@@ -255,7 +250,7 @@ void SimulationBuilder::addUpdateConfigurationDynamicsToPipeline(
         return;
 
     RestartConfig &restart_config = config_manager.getEntity<RestartConfig>("RestartConfig");
-    if (restart_config.restore_step_ != 0 && register_restart_hook)
+    if (restart_config.restore_step_ != 0)
     {
         initialization_pipeline.insert_hook(
             InitializationHookPoint::UpdateConfigurationAfterRestart, [&]()
