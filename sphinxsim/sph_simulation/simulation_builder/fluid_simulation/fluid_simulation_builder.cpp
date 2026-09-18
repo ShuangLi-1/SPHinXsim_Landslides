@@ -106,6 +106,7 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
     //----------------------------------------------------------------------
     ConstraintBuilder::buildConstraintsIfPresent(sim, main_methods, config);
     buildInitialConditionIfPresent(sim, main_methods, config);
+    buildRestartFromFileIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildBoundaryConditionsIfPresent(sim, main_methods, config);
     FluidDynamicsBuilder::buildParticleDeletionIfPresent(sim, main_methods);
     FluidDynamicsBuilder::buildParticleSortIfPresent(sim, main_methods);
@@ -127,6 +128,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
 
             initialization_pipeline.run_hooks(InitializationHookPoint::InitialCondition);
             initialization_pipeline.run_hooks(InitializationHookPoint::AfterInitialCondition);
+
+            initialization_pipeline.run_hooks(InitializationHookPoint::RestartFromFile);
+            initialization_pipeline.run_hooks(InitializationHookPoint::UpdateConfigurationAfterRestart);
 
             fluid_density_regularization.exec();
             fluid_advection_step_setup.exec();
@@ -187,6 +191,9 @@ void FluidSimulationBuilder::buildSimulation(SPHSimulation &sim, const json &con
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleCreation);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletionTagging);
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleDeletion);
+
+                simulation_pipeline.run_hooks(SimulationHookPoint::ExtraOutput);
+
                 simulation_pipeline.run_hooks(SimulationHookPoint::ParticleSort);
 
                 simulation_pipeline.run_hooks(SimulationHookPoint::UpdateConfiguration);
