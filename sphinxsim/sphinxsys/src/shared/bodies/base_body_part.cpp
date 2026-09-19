@@ -82,7 +82,13 @@ void BodyPartByParticle::rebuildFromParticleGroups()
             particle_list[list_size++] = i;
         }
     }
-    sv_range_size_->setValue(list_size);
+
+    if (list_size != sv_range_size_->getValue())
+    {
+        std::cout << "\n Error: rebuild BodyPartByParticle should be the same size as before. \n";
+        std::cout << __FILE__ << ':' << __LINE__ << std::endl;
+        exit(1);
+    }
 }
 //=================================================================================================//
 BodyPartByCell::BodyPartByCell(RealBody &real_body)
