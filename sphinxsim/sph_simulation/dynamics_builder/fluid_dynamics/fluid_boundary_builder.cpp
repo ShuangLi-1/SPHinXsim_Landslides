@@ -61,39 +61,8 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         {
             auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
                 body_name + "WeaklyCompressibleMultiPhase");
-
-            if (config.contains("multi_species_phases"))
-            {
-                for (const auto &phase : config.at("multi_species_phases"))
-                {
-                    std::string phase_name = phase.at("phase_name").get<std::string>();
-                    auto &multi_species_phase = mixture.getMultiSpeciesPhaseByName(phase_name);
-                    StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                        scaling_config, phase.at("mass_fractions"));
-
-                    inflow_condition.add(
-                        &main_methods.template addStateDynamics<
-                            VariableAssignment,
-                            ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                            emitter, multi_species_phase, mass_fractions));
-                }
-            }
-
-            if (config.contains("volume_fractions"))
-            {
-                StdVec<Real> volume_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("volume_fractions"));
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        ConstantMixtureFraction<WeaklyCompressibleMultiPhase>>(
-                        emitter, mixture, volume_fractions));
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        UpdateReferenceDensity<WeaklyCompressibleMultiPhase>>(
-                        emitter, mixture));
-            }
+            assignWeaklyCompressibleMultiPhase(
+                inflow_condition, emitter, mixture, scaling_config, main_methods, config);
         }
 
         if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
@@ -101,22 +70,8 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         {
             auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
                 body_name + "WeaklyCompressibleMultiSpecies");
-            if (config.contains("mass_fractions"))
-            {
-                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("mass_fractions"));
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                        emitter, mixture, mass_fractions));
-
-                inflow_condition.add(
-                    &main_methods.template addStateDynamics<
-                        VariableAssignment,
-                        UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
-                        emitter, mixture));
-            }
+            assignWeaklyCompressibleMultiSpecies(
+                inflow_condition, emitter, mixture, scaling_config, main_methods, config);
         }
 
         initialization_pipeline.insert_hook(
@@ -163,23 +118,9 @@ void FluidDynamicsBuilder::addBoundaryCondition(
         {
             auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
                 body_name + "WeaklyCompressibleMultiSpecies");
-            if (config.contains("mass_fractions"))
-            {
-                StdVec<Real> mass_fractions = MaterialBuilder::parseMixtureFractions(
-                    scaling_config, config.at("mass_fractions"));
-
-                supplementary_conditions.add(
-                    &main_methods.template addStateDynamics<
-                        SupplementaryCondition,
-                        ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
-                        oriented_box_by_cell, mixture, mass_fractions));
-
-                supplementary_conditions.add(
-                    &main_methods.template addStateDynamics<
-                        SupplementaryCondition,
-                        UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
-                        oriented_box_by_cell, mixture));
-            }
+            assignWeaklyCompressibleMultiSpecies(
+                supplementary_conditions, oriented_box_by_cell, mixture,
+                scaling_config, main_methods, config);
         }
         // applied to initialization
         initialization_pipeline.insert_hook(
@@ -280,9 +221,9 @@ AbstractBidirectionalBoundary &FluidDynamicsBuilder::createBiDirectionBoundary(
     if (config.contains("pressure") && config.contains("velocity"))
     {
         throw std::runtime_error(
-        "Specify either pressure or velocity for a bidirectional boundary.");
+            "Specify either pressure or velocity for a bidirectional boundary.");
     }
-    
+
     auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
     if (config.contains("pressure"))
     {
