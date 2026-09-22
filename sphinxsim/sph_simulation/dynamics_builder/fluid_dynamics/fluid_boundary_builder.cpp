@@ -170,12 +170,14 @@ void FluidDynamicsBuilder::addBoundaryCondition(
 
                 supplementary_conditions.add(
                     &main_methods.template addStateDynamics<
-                        SupplementaryCondition<ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>>(
+                        SupplementaryCondition,
+                        ConstantMixtureFraction<WeaklyCompressibleMultiSpecies>>(
                         oriented_box_by_cell, mixture, mass_fractions));
 
                 supplementary_conditions.add(
                     &main_methods.template addStateDynamics<
-                        SupplementaryCondition<UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>>(
+                        SupplementaryCondition,
+                        UpdateReferenceDensity<WeaklyCompressibleMultiSpecies>>(
                         oriented_box_by_cell, mixture));
             }
         }
