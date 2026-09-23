@@ -10,9 +10,9 @@ namespace SPH
 //=================================================================================================//
 using namespace fluid_dynamics;
 //=================================================================================================//
-template <class ParticleDynamicsGroupType, class DynamicsIdentifier>
+template <class DynamicsIdentifier>
 void FluidDynamicsBuilder::assignWeaklyCompressibleMultiSpecies(
-    ParticleDynamicsGroupType &particle_dynamics_group, DynamicsIdentifier &identifier,
+    ParticleDynamicsGroup &particle_dynamics_group, DynamicsIdentifier &identifier,
     WeaklyCompressibleMultiSpecies &mixture, ScalingConfig &scaling_config,
     MainMethods &main_methods, const json &config)
 {
@@ -34,9 +34,9 @@ void FluidDynamicsBuilder::assignWeaklyCompressibleMultiSpecies(
     }
 }
 //=================================================================================================//
-template <class ParticleDynamicsGroupType, class DynamicsIdentifier>
+template <class DynamicsIdentifier>
 void FluidDynamicsBuilder::assignWeaklyCompressibleMultiPhase(
-    ParticleDynamicsGroupType &particle_dynamics_group, DynamicsIdentifier &identifier,
+    ParticleDynamicsGroup &particle_dynamics_group, DynamicsIdentifier &identifier,
     WeaklyCompressibleMultiPhase &mixture, ScalingConfig &scaling_config,
     MainMethods &main_methods, const json &config)
 {
@@ -71,6 +71,49 @@ void FluidDynamicsBuilder::assignWeaklyCompressibleMultiPhase(
                 VariableAssignment,
                 UpdateReferenceDensity<WeaklyCompressibleMultiPhase>>(
                 identifier, mixture));
+    }
+}
+//=================================================================================================//
+template <class DynamicsIdentifier>
+void FluidDynamicsBuilder::assignSupplementaryConditions(
+    DynamicsIdentifier &identifier, ParticleDynamicsGroup &particle_dynamics_group,
+    EntityManager &config_manager, MainMethods &main_methods, const json &config)
+{
+    const std::string &body_name = identifier.getSPHBody().Name();
+    auto &scaling_config = config_manager.getEntity<ScalingConfig>("ScalingConfig");
+
+    if (config_manager.hasEntity<WeaklyCompressibleMultiPhase>(
+            body_name + "WeaklyCompressibleMultiPhase"))
+    {
+        auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
+            body_name + "WeaklyCompressibleMultiPhase");
+        assignWeaklyCompressibleMultiPhase(
+            particle_dynamics_group, identifier,
+            mixture, scaling_config, main_methods, config);
+    }
+
+    if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
+            body_name + "WeaklyCompressibleMultiSpecies"))
+    {
+        auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
+            body_name + "WeaklyCompressibleMultiSpecies");
+        assignWeaklyCompressibleMultiSpecies(
+            particle_dynamics_group, identifier,
+            mixture, scaling_config, main_methods, config);
+    }
+
+    if (config_manager.hasEntity<IsotropicDiffusion>(
+            body_name + "ThermalDiffusion"))
+    {
+        if (config.contains("temperature"))
+        {
+            Real temperature = scaling_config.jsonToReal(
+                config.at("temperature"), "Temperature");
+            particle_dynamics_group.add(
+                &main_methods.template addStateDynamics<
+                    VariableAssignment, ConstantValue<Real>>(
+                    identifier, "Temperature", temperature));
+        }
     }
 }
 //=================================================================================================//

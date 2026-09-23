@@ -56,23 +56,8 @@ void FluidDynamicsBuilder::addBoundaryCondition(
                 sim, config.at("on_schedule"), fluid_solver_config.emitter_on_);
         }
 
-        if (config_manager.hasEntity<WeaklyCompressibleMultiPhase>(
-                body_name + "WeaklyCompressibleMultiPhase"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiPhase>(
-                body_name + "WeaklyCompressibleMultiPhase");
-            assignWeaklyCompressibleMultiPhase(
-                inflow_condition, emitter, mixture, scaling_config, main_methods, config);
-        }
-
-        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies");
-            assignWeaklyCompressibleMultiSpecies(
-                inflow_condition, emitter, mixture, scaling_config, main_methods, config);
-        }
+        assignSupplementaryConditions(
+            emitter, inflow_condition, config_manager, main_methods, config);
 
         initialization_pipeline.insert_hook(
             InitializationHookPoint::InitialCondition, [&]()
@@ -113,15 +98,10 @@ void FluidDynamicsBuilder::addBoundaryCondition(
             oriented_box_by_cell, config_manager, main_methods, config);
 
         auto &supplementary_conditions = main_methods.addParticleDynamicsGroup();
-        if (config_manager.hasEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies"))
-        {
-            auto &mixture = config_manager.getEntity<WeaklyCompressibleMultiSpecies>(
-                body_name + "WeaklyCompressibleMultiSpecies");
-            assignWeaklyCompressibleMultiSpecies(
-                supplementary_conditions, oriented_box_by_cell, mixture,
-                scaling_config, main_methods, config);
-        }
+        assignSupplementaryConditions(
+            oriented_box_by_cell, supplementary_conditions,
+            config_manager, main_methods, config);
+
         // applied to initialization
         initialization_pipeline.insert_hook(
             InitializationHookPoint::AfterInitialCondition, [&]()
