@@ -39,6 +39,8 @@ class OrientedBoxByParticle;
 class OrientedBoxByCell;
 class RealBody;
 class FluidBody;
+class WeaklyCompressibleMultiSpecies;
+class WeaklyCompressibleMultiPhase;
 namespace fluid_dynamics
 {
 class AbstractBidirectionalBoundary;
@@ -87,10 +89,27 @@ class FluidDynamicsBuilder
     static fluid_dynamics::AbstractBidirectionalBoundary &createBiDirectionBoundary(
         OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
         MainMethods &main_methods, const json &config);
-    
+
     static fluid_dynamics::AbstractBidirectionalBoundary &createVelocityBiDirectionBoundary(
         OrientedBoxByCell &oriented_box_by_cell, EntityManager &config_manager,
         MainMethods &main_methods, const json &config);
+
+    template <class DynamicsIdentifier>
+    static void assignWeaklyCompressibleMultiSpecies(
+        ParticleDynamicsGroup &particle_dynamics_group, DynamicsIdentifier &identifier,
+        WeaklyCompressibleMultiSpecies &mixture, ScalingConfig &scaling_config,
+        MainMethods &main_methods, const json &config);
+
+    template <class DynamicsIdentifier>
+    static void assignWeaklyCompressibleMultiPhase(
+        ParticleDynamicsGroup &particle_dynamics_group, DynamicsIdentifier &identifier,
+        WeaklyCompressibleMultiPhase &mixture, ScalingConfig &scaling_config,
+        MainMethods &main_methods, const json &config);
+
+    template <class DynamicsIdentifier>
+    static void assignSupplementaryConditions(
+        DynamicsIdentifier &identifier, ParticleDynamicsGroup &particle_dynamics_group,
+        EntityManager &config_manager, MainMethods &main_methods, const json &config);
 
     template <template <typename...> class AcousticHalfStepForOneBody, class InnerRelationType>
     static BaseDynamics<void> &addAcousticHalfStepForOneBody(
